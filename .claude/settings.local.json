@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev:*)",
+      "Bash(npx supabase db pull:*)",
+      "WebFetch(domain:localhost)",
+      "Bash(psql:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(supabase:*)",
+      "Bash(npm run build:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
