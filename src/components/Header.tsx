@@ -29,6 +29,11 @@ const Header = () => {
     navigate('/');
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
       {/* Top bar */}
@@ -125,7 +130,7 @@ const Header = () => {
                 >
                   <User className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={signOut}>
+                <Button variant="ghost" size="icon" onClick={handleSignOut}>
                   <LogOut className="h-5 w-5" />
                 </Button>
               </div>
@@ -177,7 +182,7 @@ const Header = () => {
                           <User className="h-4 w-4 mr-2" />
                           Profile
                         </Button>
-                        <Button className="w-full" variant="outline" size="sm" onClick={signOut}>
+                        <Button className="w-full" variant="outline" size="sm" onClick={handleSignOut}>
                           <LogOut className="h-4 w-4 mr-2" />
                           Sign Out
                         </Button>

@@ -39,7 +39,7 @@ export default function AdminLayout() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/auth');
+    navigate('/');
   };
 
   const isCurrentPath = (href: string, exact = false) => {
