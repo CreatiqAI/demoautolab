@@ -21,8 +21,14 @@ export default defineConfig(({ mode }) => ({
     extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json']
   },
   build: {
+    target: 'esnext',
     rollupOptions: {
-      external: [],
+      output: {
+        format: 'es'
+      }
     },
+  },
+  optimizeDeps: {
+    include: ['@supabase/supabase-js'],
   },
 }));
