@@ -176,6 +176,10 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
     }, 0);
   };
 
+  const getLocalCartTotalQuantity = () => {
+    return localCart.reduce((total, item) => total + item.quantity, 0);
+  };
+
   const handleAddToCart = () => {
     if (!user) {
       toast({
@@ -210,7 +214,7 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
 
     toast({
       title: 'Added to Cart!',
-      description: `${localCart.length} item${localCart.length > 1 ? 's' : ''} added to your cart`,
+      description: `${getLocalCartTotalQuantity()} item${getLocalCartTotalQuantity() > 1 ? 's' : ''} added to your cart`,
     });
 
     // Clear local cart and close modal
@@ -222,17 +226,17 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl">{product.name}</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="w-[95vw] max-w-7xl h-[95vh] max-h-[900px] flex flex-col p-3 sm:p-6">
+        <DialogHeader className="flex-shrink-0 pb-2">
+          <DialogTitle className="text-xl sm:text-2xl line-clamp-1">{product.name}</DialogTitle>
+          <DialogDescription className="text-sm">
             {product.brand} {product.model} - View product details and available components
           </DialogDescription>
         </DialogHeader>
         
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Product Images */}
-          <div className="space-y-4">
+        <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4 flex-1 overflow-hidden">
+          {/* Product Images - Responsive sizing */}
+          <div className="lg:col-span-2 flex flex-col space-y-3">
             <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
               <img
                 src={product.product_images[selectedImage]?.url || primaryImage?.url || '/placeholder.svg'}
@@ -247,12 +251,12 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
               />
             </div>
             {product.product_images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto">
+              <div className="flex gap-2 overflow-x-auto pb-2">
                 {product.product_images.map((image, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
-                    className={`w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-colors flex items-center justify-center ${
+                    className={`w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-colors flex items-center justify-center ${
                       index === selectedImage ? 'border-primary' : 'border-gray-200'
                     }`}
                   >
@@ -269,164 +273,165 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
             )}
           </div>
 
-          {/* Product Info */}
-          <div className="space-y-6">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
+          {/* Product Info and Components - Better space allocation */}
+          <div className="lg:col-span-3 flex flex-col min-h-0">
+            {/* Compact Product Header */}
+            <div className="flex-shrink-0 space-y-3 pb-3 border-b">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="default">Available</Badge>
                 {product.featured && (
                   <Badge variant="secondary">⭐ Featured</Badge>
                 )}
+                {product.screen_size && product.screen_size.length > 0 && (
+                  <>
+                    {product.screen_size.map((size) => (
+                      <Badge key={size} variant="outline" className="text-xs">
+                        {size}" Screen
+                      </Badge>
+                    ))}
+                  </>
+                )}
               </div>
-              <p className="text-lg text-muted-foreground">
-                {product.brand} {product.model}
-                {product.year_from && product.year_to && ` (${product.year_from}-${product.year_to})`}
-              </p>
-              {product.screen_size && product.screen_size.length > 0 && (
-                <div className="flex gap-1 mt-2">
-                  {product.screen_size.map((size) => (
-                    <Badge key={size} variant="outline">
-                      {size}" Screen
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {product.description && (
               <div>
-                <h3 className="font-medium mb-2">Description</h3>
-                <p className="text-muted-foreground">{product.description}</p>
+                <p className="text-sm sm:text-base text-muted-foreground">
+                  {product.brand} {product.model}
+                  {product.year_from && product.year_to && ` (${product.year_from}-${product.year_to})`}
+                </p>
+                {product.description && (
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-2 line-clamp-2">
+                    {product.description}
+                  </p>
+                )}
               </div>
-            )}
-
-            {/* Available Components */}
-            <div>
-              <h3 className="font-medium mb-4">Available Components</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Select the components you want and specify quantities
-              </p>
-              {loading ? (
-                <div className="text-center py-8">Loading components...</div>
-              ) : components.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Package className="h-12 w-12 mx-auto mb-2" />
-                  <p>No components available for this product</p>
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-80 overflow-y-auto">
-                  {components.map((component) => {
-                    const quantity = getLocalCartQuantity(component.id);
-                    return (
-                      <Card key={component.id} className="p-4">
-                        <div className="flex items-center gap-4">
-                          {component.default_image_url && (
-                            <button
-                              onClick={() => setViewingComponentImage(component.default_image_url!)}
-                              className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-primary transition-all"
-                              title="Click to view larger image"
-                            >
-                              <img
-                                src={component.default_image_url}
-                                alt={component.name}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                decoding="async"
-                              />
-                            </button>
-                          )}
-                          <div className="flex-1">
-                            <h4 className="font-medium">{component.name}</h4>
-                            <p className="text-sm text-muted-foreground">{component.component_sku}</p>
-                            {component.description && (
-                              <p className="text-sm text-muted-foreground mt-1">{component.description}</p>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Stock: {component.stock_level} available
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <p className="font-medium">{formatPrice(getDisplayPrice(component.normal_price, component.merchant_price))}</p>
-                              {customerType === 'merchant' && component.normal_price !== component.merchant_price && (
-                                <p className="text-xs text-muted-foreground line-through">
-                                  {formatPrice(component.normal_price)}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => updateLocalQuantity(component, quantity - 1)}
-                                disabled={!user || quantity === 0}
-                                title={!user ? "Please sign in to add items to cart" : ""}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className="w-12 text-center border rounded px-2 py-1">
-                                {quantity}
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => updateLocalQuantity(component, quantity + 1)}
-                                disabled={!user || quantity >= component.stock_level}
-                                title={!user ? "Please sign in to add items to cart" : ""}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
-            {/* Cart Summary */}
-            <div className="bg-blue-50 p-4 rounded-lg space-y-4">
-              <h4 className="font-medium">Items Selected</h4>
-              {localCart.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No items selected</p>
-              ) : (
-                <div className="space-y-2">
-                  {localCart.map((item, index) => {
-                    const displayPrice = getDisplayPrice(item.component.normal_price, item.component.merchant_price);
-                    return (
-                      <div key={index} className="flex justify-between text-sm">
-                        <span>{item.component.name} × {item.quantity}</span>
-                        <span>{formatPrice(displayPrice * item.quantity)}</span>
-                      </div>
-                    );
-                  })}
-                  <div className="border-t pt-2 flex justify-between font-medium">
-                    <span>Total:</span>
-                    <span>{formatPrice(getLocalCartTotal())}</span>
-                  </div>
+            {/* Cart Summary - More responsive */}
+            <div className="flex-shrink-0 bg-blue-50 p-2 sm:p-3 rounded-lg border border-blue-200 my-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                  <span className="text-xs sm:text-sm font-medium">Selected:</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground">
+                    {getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''}
+                  </span>
+                  {localCart.length > 0 && (
+                    <span className="font-medium text-xs sm:text-sm">
+                      {formatPrice(getLocalCartTotal())}
+                    </span>
+                  )}
                 </div>
-              )}
-              {!user ? (
-                <div className="space-y-3">
-                  <div className="text-center p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-sm text-amber-700 mb-2">Please sign in to add items to cart</p>
-                    <Button variant="default" asChild className="w-full">
-                      <a href="/auth">Sign In / Register</a>
-                    </Button>
+                {!user ? (
+                  <Button variant="default" size="sm" asChild className="w-full sm:w-auto">
+                    <a href="/auth">Sign In</a>
+                  </Button>
+                ) : (
+                  <Button 
+                    size="sm"
+                    onClick={handleAddToCart}
+                    disabled={localCart.length === 0 || cartLoading}
+                    className="w-full sm:w-auto"
+                  >
+                    <ShoppingCart className="h-3 w-3 mr-1 sm:mr-2" />
+                    {cartLoading ? 'Adding...' : 'Add to Cart'}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Components Section - Optimized */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-shrink-0 mb-3">
+                <h3 className="font-medium text-sm sm:text-base mb-1">Available Components</h3>
+                <p className="text-xs text-muted-foreground">
+                  Select components and quantities
+                </p>
+              </div>
+              
+              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                {loading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="text-center text-sm">Loading components...</div>
                   </div>
-                </div>
-              ) : (
-                <Button 
-                  className="w-full" 
-                  onClick={handleAddToCart}
-                  disabled={localCart.length === 0 || cartLoading}
-                >
-                  <ShoppingCart className="h-4 w-4 mr-2" />
-                  {cartLoading ? 'Adding...' : 'Add to Cart'}
-                </Button>
-              )}
+                ) : components.length === 0 ? (
+                  <div className="flex items-center justify-center h-32 text-muted-foreground">
+                    <div className="text-center">
+                      <Package className="h-8 w-8 mx-auto mb-2" />
+                      <p className="text-sm">No components available</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {components.map((component) => {
+                      const quantity = getLocalCartQuantity(component.id);
+                      return (
+                        <Card key={component.id} className="p-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              {component.default_image_url && (
+                                <button
+                                  onClick={() => setViewingComponentImage(component.default_image_url!)}
+                                  className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-primary transition-all"
+                                  title="Click to view larger image"
+                                >
+                                  <img
+                                    src={component.default_image_url}
+                                    alt={component.name}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
+                                </button>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-sm line-clamp-1">{component.name}</h4>
+                                <p className="text-xs text-muted-foreground">{component.component_sku}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Stock: {component.stock_level}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
+                              <div className="text-right">
+                                <p className="font-medium text-sm">{formatPrice(getDisplayPrice(component.normal_price, component.merchant_price))}</p>
+                                {customerType === 'merchant' && component.normal_price !== component.merchant_price && (
+                                  <p className="text-xs text-muted-foreground line-through">
+                                    {formatPrice(component.normal_price)}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => updateLocalQuantity(component, quantity - 1)}
+                                  disabled={!user || quantity === 0}
+                                  className="h-8 w-8 p-0"
+                                  title={!user ? "Please sign in to add items to cart" : ""}
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                <span className="w-10 text-center text-sm border rounded px-1 py-1">
+                                  {quantity}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => updateLocalQuantity(component, quantity + 1)}
+                                  disabled={!user || quantity >= component.stock_level}
+                                  className="h-8 w-8 p-0"
+                                  title={!user ? "Please sign in to add items to cart" : ""}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
