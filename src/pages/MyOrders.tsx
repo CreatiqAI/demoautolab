@@ -243,7 +243,7 @@ export default function MyOrders() {
               Track your order history and status
             </p>
           </div>
-          <Link to="/">
+          <Link to="/catalog">
             <Button variant="outline">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Shop

@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import ProductCard from '@/components/ProductCard';
 import Header from '@/components/Header';
 import { 
   Search, 
@@ -18,64 +16,15 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import heroImage from '@/assets/hero-automotive.jpg';
-import { supabase } from '@/lib/supabase';
 
 const Home = () => {
-  const [featuredProducts, setFeaturedProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch featured products
-        const { data: products, error } = await supabase
-          .from('products_new')
-          .select(`
-            *,
-            product_images_new (
-              url,
-              alt_text,
-              is_primary,
-              sort_order
-            )
-          `)
-          .eq('active', true)
-          .eq('featured', true)
-          .limit(8);
-
-        if (!error && products) {
-          // Map the data to match the expected structure
-          const mappedProducts = products.map(product => ({
-            ...product,
-            product_images: product.product_images_new || []
-          }));
-          setFeaturedProducts(mappedProducts);
-        } else {
-          console.warn('Featured products query failed:', error);
-          setFeaturedProducts([]);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setFeaturedProducts([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  const handleAddToCart = (productId: string) => {
-    // TODO: Implement cart functionality
-    console.log('Add to cart:', productId);
-  };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white">
       <Header />
       
       {/* Hero Section */}
-      <section className="relative bg-gradient-hero overflow-hidden">
+      <section className="relative bg-white overflow-hidden">
         <div className="absolute inset-0">
           <img 
             src={heroImage} 
@@ -85,27 +34,21 @@ const Home = () => {
         </div>
         <div className="relative container mx-auto px-4 py-20">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="text-primary-foreground space-y-6">
-              <Badge className="bg-accent text-accent-foreground">
+            <div className="text-black space-y-6">
+              <Badge className="bg-gray-800 text-white">
                 Malaysia's #1 Car Parts Store
               </Badge>
-              <h1 className="text-4xl lg:text-6xl font-bold leading-tight">
+              <h1 className="text-4xl lg:text-6xl font-bold leading-tight text-black">
                 Premium Car Parts
                 <br />
-                <span className="text-accent-glow">Delivered Fast</span>
+                <span className="text-gray-700">Delivered Fast</span>
               </h1>
-              <p className="text-lg text-primary-foreground/90 max-w-lg">
+              <p className="text-lg text-black/90 max-w-lg">
                 Quality automotive parts for all makes and models. From brake pads to engine components, 
                 we've got everything you need to keep your vehicle running smoothly.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button variant="accent" size="xl" asChild>
-                  <Link to="/catalog">
-                    Shop Now
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-                <Button variant="accent" size="xl" asChild>
+                <Button variant="default" size="xl" asChild>
                   <Link to="/catalog">Browse Categories</Link>
                 </Button>
               </div>
@@ -114,30 +57,30 @@ const Home = () => {
             {/* Hero Features */}
             <div className="grid gap-6">
               <div className="grid grid-cols-2 gap-4">
-                <Card className="bg-background/10 backdrop-blur border-primary-foreground/20">
-                  <CardContent className="p-6 text-center text-primary-foreground">
-                    <Zap className="h-8 w-8 mx-auto mb-2 text-accent" />
+                <Card className="bg-white/90 backdrop-blur border-gray-200">
+                  <CardContent className="p-6 text-center text-black">
+                    <Zap className="h-8 w-8 mx-auto mb-2 text-gray-700" />
                     <h3 className="font-semibold">Fast Delivery</h3>
                     <p className="text-sm opacity-90">Same day shipping</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-background/10 backdrop-blur border-primary-foreground/20">
-                  <CardContent className="p-6 text-center text-primary-foreground">
-                    <Shield className="h-8 w-8 mx-auto mb-2 text-accent" />
+                <Card className="bg-white/90 backdrop-blur border-gray-200">
+                  <CardContent className="p-6 text-center text-black">
+                    <Shield className="h-8 w-8 mx-auto mb-2 text-gray-700" />
                     <h3 className="font-semibold">Quality Parts</h3>
                     <p className="text-sm opacity-90">OEM & premium brands</p>
                   </CardContent>
                 </Card>
               </div>
-              <Card className="bg-background/10 backdrop-blur border-primary-foreground/20">
-                <CardContent className="p-6 text-center text-primary-foreground">
+              <Card className="bg-white/90 backdrop-blur border-gray-200">
+                <CardContent className="p-6 text-center text-black">
                   <div className="flex items-center justify-center gap-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-accent">10,000+</div>
+                      <div className="text-2xl font-bold text-gray-700">10,000+</div>
                       <div className="text-sm opacity-90">Parts Available</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-accent">5,000+</div>
+                      <div className="text-2xl font-bold text-gray-700">5,000+</div>
                       <div className="text-sm opacity-90">Happy Customers</div>
                     </div>
                   </div>
@@ -149,25 +92,25 @@ const Home = () => {
       </section>
 
       {/* Search Bar Section */}
-      <section className="py-12 bg-secondary">
+      <section className="py-12 bg-gray-100">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center space-y-6">
-            <h2 className="text-2xl font-bold text-foreground">
+            <h2 className="text-2xl font-bold text-black">
               Find the Right Parts for Your Vehicle
             </h2>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" />
                 <Input 
                   placeholder="Search by part name, brand, or vehicle model..." 
-                  className="pl-12 h-14 text-lg"
+                  className="pl-12 h-14 text-lg border-gray-300"
                 />
               </div>
-              <Button variant="hero" size="xl">
+              <Button variant="default" size="xl">
                 Search
               </Button>
             </div>
-            <p className="text-muted-foreground">
+            <p className="text-gray-600">
               Try searching: "brake pads", "oil filter", "Honda Civic", "Toyota Camry"
             </p>
           </div>
@@ -175,48 +118,6 @@ const Home = () => {
       </section>
 
 
-      {/* Featured Products */}
-      <section className="py-16 bg-muted/30">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center mb-12">
-            <div>
-              <h2 className="text-3xl font-bold text-foreground">Featured Products</h2>
-              <p className="text-muted-foreground">Best selling parts this month</p>
-            </div>
-            <Button variant="outline" asChild>
-              <Link to="/catalog">
-                View All Products
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
-
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[...Array(8)].map((_, i) => (
-                <Card key={i} className="animate-pulse">
-                  <div className="aspect-square bg-muted"></div>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="h-4 bg-muted rounded"></div>
-                    <div className="h-6 bg-muted rounded"></div>
-                    <div className="h-4 bg-muted rounded w-2/3"></div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {featuredProducts.map((product: any) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onAddToCart={handleAddToCart}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* Why Choose Us */}
       <section className="py-16">
@@ -282,25 +183,15 @@ const Home = () => {
       </section>
 
       {/* Call to Action */}
-      <section className="py-16 bg-gradient-hero">
+      <section className="py-16 bg-gray-900">
         <div className="container mx-auto px-4 text-center">
-          <div className="max-w-3xl mx-auto text-primary-foreground space-y-6">
+          <div className="max-w-3xl mx-auto text-white space-y-6">
             <h2 className="text-3xl font-bold">
               Ready to Get Your Car Back on the Road?
             </h2>
             <p className="text-lg opacity-90">
               Join thousands of satisfied customers who trust Autolab for their automotive parts needs
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="accent" size="xl" asChild>
-                <Link to="/catalog">
-                  Start Shopping Now
-                </Link>
-              </Button>
-              <Button variant="outline" size="xl" className="text-primary-foreground border-primary-foreground hover:bg-primary-foreground hover:text-primary">
-                Contact Expert
-              </Button>
-            </div>
           </div>
         </div>
       </section>
