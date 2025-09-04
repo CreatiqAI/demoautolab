@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/index';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
 interface PricingContext {

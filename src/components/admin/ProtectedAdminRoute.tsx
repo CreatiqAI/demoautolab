@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/index';
+import { supabase } from '@/lib/supabase';
 import type { Enums } from '@/integrations/supabase/types';
 
 interface ProtectedAdminRouteProps {
