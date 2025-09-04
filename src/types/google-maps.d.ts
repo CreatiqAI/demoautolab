@@ -4,6 +4,7 @@ declare global {
       maps: {
         places: {
           AutocompleteService: new() => google.maps.places.AutocompleteService;
+          AutocompleteSuggestion: new() => google.maps.places.AutocompleteSuggestion;
           PlacesService: new(map: google.maps.Map) => google.maps.places.PlacesService;
           PlacesServiceStatus: {
             OK: string;
@@ -23,6 +24,18 @@ declare global {
 
 declare namespace google.maps.places {
   interface AutocompleteService {
+    getPlacePredictions(
+      request: {
+        input: string;
+        componentRestrictions?: { country: string };
+        types?: string[];
+        fields?: string[];
+      },
+      callback: (predictions: AutocompletePrediction[] | null, status: string) => void
+    ): void;
+  }
+
+  interface AutocompleteSuggestion {
     getPlacePredictions(
       request: {
         input: string;
