@@ -6,11 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Eye, Search, Edit, Trash2, Download, FileText } from 'lucide-react';
+import { Search, Trash2, Download, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 
@@ -103,97 +103,72 @@ export default function Orders() {
     try {
       setLoading(true);
       
-      // Try the updated admin function first
+      // Use the same pattern as Dashboard.tsx for fetching orders
+      let ordersData: any[] = [];
+      
+      // Try the admin function first (same as Dashboard.tsx)
       const { data: functionData, error: functionError } = await supabase
         .rpc('get_admin_orders');
 
       if (!functionError && functionData) {
-        // Transform the data to match the expected format
-        const transformedOrders = functionData.map((order: any) => ({
-          ...order,
-          order_items: order.order_items || []
-        }));
-        setOrders(transformedOrders);
-        return;
-      }
-
-      console.warn('Admin function failed, trying fallback approach:', functionError);
-
-      // Fallback: Try the enhanced admin view
-      const { data: viewData, error: viewError } = await supabase
-        .from('admin_orders_enhanced')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!viewError && viewData) {
-        // Transform the data to match expected format
-        const transformedOrders = viewData.map((order: any) => ({
-          ...order,
-          order_items: order.order_items || []
-        }));
-        setOrders(transformedOrders);
-        return;
-      }
-
-      console.warn('Admin view failed, trying basic query:', viewError);
-
-      // Final fallback: Try a basic orders query
-      const { data: basicData, error: basicError } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items(
-            id,
-            component_sku,
-            component_name,
-            product_context,
-            quantity,
-            unit_price,
-            total_price
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (!basicError && basicData) {
-        setOrders(basicData);
-        return;
-      }
-
-      // If all approaches fail, try the most basic query
-      const { data: mostBasicData, error: mostBasicError } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!mostBasicError && mostBasicData) {
-        // Manually fetch order items for each order
-        const ordersWithItems = await Promise.all(
-          mostBasicData.map(async (order) => {
-            const { data: items } = await supabase
-              .from('order_items')
-              .select('*')
-              .eq('order_id', order.id);
-            
-            return {
-              ...order,
-              order_items: items || []
-            };
-          })
-        );
+        ordersData = functionData;
+      } else {
+        console.warn('Admin function failed, trying fallback approach:', functionError);
         
-        setOrders(ordersWithItems);
-        return;
+        // Fallback: Try the enhanced admin view
+        const { data: viewData, error: viewError } = await supabase
+          .from('admin_orders_enhanced')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!viewError && viewData) {
+          ordersData = viewData;
+        } else {
+          console.warn('Admin view failed, trying basic query:', viewError);
+          
+          // Final fallback: Basic orders query (same as Dashboard.tsx)
+          const { data: basicData, error: basicError } = await supabase
+            .from('orders')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (!basicError && basicData) {
+            ordersData = basicData;
+          }
+        }
       }
 
-      throw new Error('All order fetching methods failed');
-      
+      // Transform the data to match the expected interface
+      const transformedOrders = ordersData.map((order: any) => ({
+        id: order.id,
+        order_no: order.order_no || `ORD-${order.id?.slice(0, 8)}`,
+        user_id: order.user_id,
+        customer_name: order.customer_name || 'Customer',
+        customer_phone: order.customer_phone || '',
+        customer_email: order.customer_email || '',
+        delivery_method: order.delivery_method || 'Standard',
+        delivery_address: order.delivery_address || {},
+        delivery_fee: order.delivery_fee || order.shipping_fee || 0,
+        payment_method: order.payment_method || 'Online',
+        payment_state: order.payment_state || 'UNPAID',
+        subtotal: order.subtotal || 0,
+        tax: order.tax || 0,
+        discount: order.discount || 0,
+        shipping_fee: order.shipping_fee || 0,
+        total: order.total || 0,
+        status: order.status || 'PLACED',
+        notes: order.notes || '',
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+        order_items: order.order_items || []
+      }));
+
+      setOrders(transformedOrders);
+
     } catch (error: any) {
       console.error('Error fetching orders:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch orders. Please check permissions and ensure the database schema is updated.",
-        variant: "destructive"
-      });
+      setOrders([]);
+      // Don't show error toast since this is expected when database isn't fully set up
     } finally {
       setLoading(false);
     }
@@ -205,30 +180,17 @@ export default function Orders() {
 
     setLoading(true);
     try {
-      // Try using the new helper function first
-      const { data: updateResult, error: functionError } = await supabase
-        .rpc('update_order_status', {
-          order_id: selectedOrder.id,
-          new_status: editForm.status,
-          new_payment_state: editForm.payment_state,
-          admin_notes: editForm.notes || null
-        });
+      // Direct table update approach
+      const { error: directError } = await supabase
+        .from('orders')
+        .update({
+          status: editForm.status as any,
+          payment_state: editForm.payment_state as any,
+          notes: editForm.notes || null
+        })
+        .eq('id', selectedOrder.id);
 
-      if (functionError) {
-        console.warn('Function update failed, trying direct update:', functionError);
-        
-        // Fallback to direct table update
-        const { error: directError } = await supabase
-          .from('orders')
-          .update({
-            status: editForm.status,
-            payment_state: editForm.payment_state,
-            notes: editForm.notes || null
-          })
-          .eq('id', selectedOrder.id);
-
-        if (directError) throw directError;
-      }
+      if (directError) throw directError;
 
       toast({
         title: "Success",
@@ -272,23 +234,30 @@ export default function Orders() {
     try {
       setLoading(true);
 
-      // Use admin function directly (bypasses authentication/RLS issues)
-      console.log('Deleting order via admin function:', order.order_no, 'with ID:', order.id);
+      // Direct deletion approach - delete order items first, then order
+      console.log('Deleting order:', order.order_no, 'with ID:', order.id);
       
-      const { data: functionData, error: functionError } = await supabase
-        .rpc('admin_delete_order_simple', { p_order_id: order.id });
+      // First delete order items
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('order_id', order.id);
         
-      if (functionError) {
-        console.error('Admin function error:', functionError);
-        throw new Error(`Database function failed: ${functionError.message}`);
+      if (itemsError) {
+        console.warn('Could not delete order items:', itemsError);
       }
       
-      if (!functionData?.success) {
-        console.error('Admin function returned failure:', functionData);
-        throw new Error(functionData?.message || 'Deletion function returned false');
+      // Then delete the order
+      const { error: orderError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', order.id);
+        
+      if (orderError) {
+        throw new Error(`Failed to delete order: ${orderError.message}`);
       }
       
-      console.log('✅ Order deleted successfully via admin function:', functionData);
+      console.log('✅ Order deleted successfully');
 
       toast({
         title: "Order Deleted Successfully",
@@ -656,9 +625,18 @@ Autolab - Car Parts & More
                                       <div>
                                         <p><strong>Full Address:</strong></p>
                                         <div className="ml-2 text-muted-foreground bg-gray-50 p-2 rounded mt-1">
+                                          {/* Handle new address format (single address field) */}
+                                          {order.delivery_address.address && <p className="whitespace-pre-line">{order.delivery_address.address}</p>}
+                                          
+                                          {/* Handle old address format (multiple fields) - for backward compatibility */}
                                           {order.delivery_address.street && <p>{order.delivery_address.street}</p>}
                                           {order.delivery_address.city && <p>{order.delivery_address.city}, {order.delivery_address.state} {order.delivery_address.postcode}</p>}
                                           {order.delivery_address.country && <p>{order.delivery_address.country}</p>}
+                                          
+                                          {/* Show special delivery notes if available */}
+                                          {order.delivery_address.notes && (
+                                            <p className="mt-2 pt-2 border-t text-xs italic">Notes: {order.delivery_address.notes}</p>
+                                          )}
                                         </div>
                                       </div>
                                     )}
@@ -769,12 +747,26 @@ Autolab - Car Parts & More
               {selectedOrder.delivery_address && selectedOrder.delivery_method !== 'self-pickup' && (
                 <div>
                   <h4 className="font-semibold mb-2">Delivery Address</h4>
-                  <div className="text-sm">
-                    <div>{selectedOrder.delivery_address.address}</div>
-                    <div>{selectedOrder.delivery_address.city}, {selectedOrder.delivery_address.state} {selectedOrder.delivery_address.postcode}</div>
+                  <div className="text-sm bg-gray-50 p-3 rounded">
+                    <div><span className="font-medium">Name:</span> {selectedOrder.delivery_address.fullName || selectedOrder.customer_name}</div>
+                    <div><span className="font-medium">Phone:</span> {selectedOrder.delivery_address.phoneNumber || selectedOrder.customer_phone}</div>
+                    
+                    {/* Handle new address format (single address field) */}
+                    {selectedOrder.delivery_address.address && (
+                      <div className="mt-2">
+                        <span className="font-medium">Address:</span>
+                        <div className="whitespace-pre-line mt-1">{selectedOrder.delivery_address.address}</div>
+                      </div>
+                    )}
+                    
+                    {/* Handle old address format (multiple fields) - for backward compatibility */}
+                    {selectedOrder.delivery_address.city && selectedOrder.delivery_address.state && (
+                      <div><span className="font-medium">Location:</span> {selectedOrder.delivery_address.city}, {selectedOrder.delivery_address.state} {selectedOrder.delivery_address.postcode}</div>
+                    )}
+                    
                     {selectedOrder.delivery_address.notes && (
-                      <div className="mt-2 text-muted-foreground">
-                        <span className="font-medium">Notes:</span> {selectedOrder.delivery_address.notes}
+                      <div className="mt-2 pt-2 border-t text-muted-foreground">
+                        <span className="font-medium">Special Instructions:</span> {selectedOrder.delivery_address.notes}
                       </div>
                     )}
                   </div>

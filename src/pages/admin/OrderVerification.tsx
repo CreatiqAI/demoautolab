@@ -142,10 +142,10 @@ export default function OrderVerification() {
   const handleVerification = async (approved: boolean) => {
     if (!selectedOrder) return;
 
-    if (approved && (!verificationData.estimatedDeliveryDate || !verificationData.processingNotes.trim())) {
+    if (approved && !verificationData.estimatedDeliveryDate) {
       toast({
         title: "Missing Information",
-        description: "Please provide estimated delivery date and processing notes before approving",
+        description: "Please provide estimated delivery date before approving",
         variant: "destructive"
       });
       return;
@@ -163,7 +163,7 @@ export default function OrderVerification() {
           p_approved: approved,
           p_verification_notes: verificationNotes,
           p_estimated_delivery_date: approved ? verificationData.estimatedDeliveryDate : null,
-          p_processing_notes: approved ? verificationData.processingNotes : null
+          p_processing_notes: approved ? (verificationData.processingNotes || null) : null
         });
 
       if (error) {
@@ -358,11 +358,19 @@ export default function OrderVerification() {
                                     <CardContent>
                                       {selectedOrder.delivery_address ? (
                                         <div className="bg-gray-50 p-3 rounded-md text-sm">
-                                          <p className="font-medium">{selectedOrder.customer_name}</p>
-                                          {selectedOrder.customer_phone && (
-                                            <p className="text-muted-foreground">{selectedOrder.customer_phone}</p>
-                                          )}
+                                          <p className="font-medium">
+                                            {selectedOrder.delivery_address.fullName || selectedOrder.customer_name}
+                                          </p>
+                                          <p className="text-muted-foreground">
+                                            {selectedOrder.delivery_address.phoneNumber || selectedOrder.customer_phone}
+                                          </p>
                                           <div className="mt-2 space-y-1">
+                                            {/* Handle new address format (single address field) */}
+                                            {selectedOrder.delivery_address.address && (
+                                              <p className="whitespace-pre-line">{selectedOrder.delivery_address.address}</p>
+                                            )}
+                                            
+                                            {/* Handle old address format (multiple fields) - for backward compatibility */}
                                             {selectedOrder.delivery_address.address_line_1 && (
                                               <p>{selectedOrder.delivery_address.address_line_1}</p>
                                             )}
@@ -375,10 +383,18 @@ export default function OrderVerification() {
                                             {selectedOrder.delivery_address.state && (
                                               <p>{selectedOrder.delivery_address.state}</p>
                                             )}
+                                            
+                                            {/* Show special delivery notes if available */}
+                                            {selectedOrder.delivery_address.notes && (
+                                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                                <p className="text-xs font-medium text-gray-600">Special Instructions:</p>
+                                                <p className="text-xs text-gray-700 italic">{selectedOrder.delivery_address.notes}</p>
+                                              </div>
+                                            )}
                                           </div>
                                         </div>
                                       ) : (
-                                        <p className="text-sm text-muted-foreground">No address provided</p>
+                                        <p className="text-sm text-muted-foreground">No address provided (Self-pickup)</p>
                                       )}
                                     </CardContent>
                                   </Card>
@@ -500,7 +516,7 @@ export default function OrderVerification() {
                                     </div>
 
                                     <div>
-                                      <Label htmlFor="processingNotes">Processing Notes *</Label>
+                                      <Label htmlFor="processingNotes">Processing Notes</Label>
                                       <Textarea
                                         id="processingNotes"
                                         placeholder="Enter processing instructions, delivery notes, or special requirements..."

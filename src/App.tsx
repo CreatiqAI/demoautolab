@@ -10,7 +10,6 @@ import { PricingProvider } from "@/hooks/usePricing";
 import Home from './pages/Home';
 import Auth from './pages/Auth';
 import Catalog from './pages/Catalog';
-import ComponentCatalog from './pages/ComponentCatalog';
 import Cart from './pages/Cart';
 import MyOrders from './pages/MyOrders';
 import PaymentGateway from './pages/PaymentGateway';
@@ -36,7 +35,6 @@ import UserManagement from './pages/admin/UserManagement';
 import OrderVerification from './pages/admin/OrderVerification';
 import WarehouseOperations from './pages/admin/WarehouseOperations';
 import AdminRegister from './pages/AdminRegister';
-import SetupDatabase from './pages/SetupDatabase';
 
 const queryClient = new QueryClient();
 
@@ -52,7 +50,6 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/catalog" element={<Catalog />} />
-            <Route path="/components" element={<ComponentCatalog />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/my-orders" element={<MyOrders />} />
             <Route path="/payment-gateway" element={<PaymentGateway />} />
@@ -61,7 +58,6 @@ const App = () => (
             <Route path="/create-admin" element={<CreateAdmin />} />
             <Route path="/create-first-admin" element={<CreateFirstAdmin />} />
             <Route path="/direct-admin-setup" element={<DirectAdminSetup />} />
-            <Route path="/setup-database" element={<SetupDatabase />} />
             
             {/* Admin Routes */}
             <Route path="/admin/*" element={

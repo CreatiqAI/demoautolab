@@ -22,6 +22,7 @@ const Auth = () => {
   });
 
   const [signupForm, setSignupForm] = useState({
+    username: '',
     phone: '',
     password: '',
     confirmPassword: ''
@@ -70,6 +71,16 @@ const Auth = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!signupForm.username.trim()) {
+      toast.error('Please enter a username');
+      return;
+    }
+
+    if (signupForm.username.length < 3) {
+      toast.error('Username must be at least 3 characters long');
+      return;
+    }
+
     if (!validatePhone(signupForm.phone)) {
       toast.error('Please enter a valid Malaysian phone number (8-10 digits)');
       return;
@@ -88,11 +99,13 @@ const Auth = () => {
     setLoading(true);
     const normalizedPhone = normalizePhone(signupForm.phone);
     
-    const { error } = await signUp(normalizedPhone, signupForm.password);
+    const { error } = await signUp(normalizedPhone, signupForm.password, signupForm.username);
     
     if (error) {
       if (error.message?.includes('already registered')) {
         toast.error('This phone number is already registered. Try signing in instead.');
+      } else if (error.message?.includes('username')) {
+        toast.error('This username is already taken. Please choose a different one.');
       } else {
         toast.error(error.message || 'Failed to create account');
       }
@@ -114,25 +127,28 @@ const Auth = () => {
     setLoading(true);
     
     try {
+      // Try the admin login function first
       const { data, error } = await supabase.rpc('admin_login', {
         p_username: adminForm.username,
         p_password: adminForm.password
       });
 
-      if (error) throw error;
-
-      if (data.success) {
+      if (!error && data && data.success) {
         toast.success(`Welcome back, ${data.admin.username}!`);
         // Store admin session data
         localStorage.setItem('admin_user', JSON.stringify(data.admin));
         // Redirect to admin panel
         navigate('/admin');
-      } else {
+      } else if (!error && data) {
         toast.error(data.message || 'Invalid username or password');
+      } else {
+        // Fallback: Show message about database setup
+        console.warn('Admin login function failed:', error);
+        toast.error('Admin login is not yet configured. Please set up the admin authentication system.');
       }
     } catch (error: any) {
       console.error('Admin login error:', error);
-      toast.error('Failed to sign in. Please try again.');
+      toast.error('Admin login is not yet configured. Please set up the admin authentication system.');
     }
     
     setLoading(false);
@@ -281,6 +297,22 @@ const Auth = () => {
 
               <TabsContent value="signup">
                 <form onSubmit={handleSignup} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-username">Username</Label>
+                    <Input
+                      id="signup-username"
+                      type="text"
+                      placeholder="Enter your username"
+                      value={signupForm.username}
+                      onChange={(e) => setSignupForm({...signupForm, username: e.target.value})}
+                      required
+                      minLength={3}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Choose a unique username (minimum 3 characters)
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="signup-phone">Phone Number</Label>
                     <div className="flex">

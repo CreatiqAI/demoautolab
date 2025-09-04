@@ -28,7 +28,7 @@ const Home = () => {
     const fetchData = async () => {
       try {
         // Fetch featured products
-        const { data: products } = await supabase
+        const { data: products, error } = await supabase
           .from('products_new')
           .select(`
             *,
@@ -43,14 +43,20 @@ const Home = () => {
           .eq('featured', true)
           .limit(8);
 
-        // Map the data to match the expected structure
-        const mappedProducts = (products || []).map(product => ({
-          ...product,
-          product_images: product.product_images_new || []
-        }));
-        setFeaturedProducts(mappedProducts);
+        if (!error && products) {
+          // Map the data to match the expected structure
+          const mappedProducts = products.map(product => ({
+            ...product,
+            product_images: product.product_images_new || []
+          }));
+          setFeaturedProducts(mappedProducts);
+        } else {
+          console.warn('Featured products query failed:', error);
+          setFeaturedProducts([]);
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
+        setFeaturedProducts([]);
       } finally {
         setLoading(false);
       }

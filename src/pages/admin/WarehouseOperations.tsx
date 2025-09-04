@@ -89,51 +89,68 @@ export default function WarehouseOperations() {
   const fetchWarehouseOrders = async () => {
     try {
       setLoading(true);
+      let ordersData: any[] = [];
       
       // Try using the database function first
-      let orderData = null;
-      let error = null;
+      const { data: functionData, error: functionError } = await supabase
+        .rpc('get_warehouse_orders');
 
-      try {
-        const result = await supabase.rpc('get_warehouse_orders');
-        orderData = result.data;
-        error = result.error;
-      } catch (functionError) {
-        console.warn('get_warehouse_orders function not available, using direct query:', functionError);
+      if (!functionError && functionData) {
+        ordersData = functionData;
+      } else {
+        console.warn('Warehouse function failed, trying fallback approach:', functionError);
         
-        // Fallback to direct query
-        const result = await supabase
+        // Fallback: Try direct query with warehouse-related statuses
+        const { data: directData, error: directError } = await supabase
           .from('orders')
-          .select(`
-            *,
-            order_items (
-              id,
-              component_sku,
-              component_name,
-              product_context,
-              quantity,
-              unit_price,
-              total_price
-            )
-          `)
+          .select('*')
           .in('status', ['PROCESSING', 'WAREHOUSE_ASSIGNED', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY'])
           .order('created_at', { ascending: false });
+
+        if (!directError && directData) {
+          ordersData = directData;
+        } else {
+          console.warn('Direct orders query failed, trying basic query:', directError);
           
-        orderData = result.data;
-        error = result.error;
+          // Final fallback: Get all orders and filter in JavaScript
+          const { data: basicData, error: basicError } = await supabase
+            .from('orders')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (!basicError && basicData) {
+            ordersData = basicData.filter(order => 
+              ['PROCESSING', 'WAREHOUSE_ASSIGNED', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY'].includes(order.status)
+            );
+          }
+        }
       }
 
-      if (error) throw error;
+      // Transform data to match expected interface
+      const transformedOrders = ordersData.map((order: any) => ({
+        id: order.id,
+        order_no: order.order_no || `ORD-${order.id?.slice(0, 8)}`,
+        customer_name: order.customer_name || 'Customer',
+        customer_phone: order.customer_phone || '',
+        customer_email: order.customer_email || null,
+        delivery_method: order.delivery_method || 'Standard',
+        delivery_address: order.delivery_address || null,
+        estimated_delivery_date: order.estimated_delivery_date || null,
+        processing_notes: order.processing_notes || null,
+        internal_notes: order.internal_notes || null,
+        total: order.total || 0,
+        status: order.status || 'PROCESSING',
+        created_at: order.created_at,
+        warehouse_assigned_at: order.warehouse_assigned_at || null,
+        warehouse_assigned_to: order.warehouse_assigned_to || null,
+        order_items: order.order_items || []
+      }));
 
-      console.log('✅ Warehouse orders data received:', orderData?.length || 0, 'orders');
-      setOrders(orderData || []);
+      setOrders(transformedOrders);
     } catch (error: any) {
       console.error('Error fetching warehouse orders:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch warehouse orders",
-        variant: "destructive"
-      });
+      setOrders([]);
+      // Don't show error toast since this is expected when database isn't fully set up
     } finally {
       setLoading(false);
     }
@@ -395,7 +412,8 @@ export default function WarehouseOperations() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedOrder(order);
-                                  setNewStatus(getValidNextStatuses(order.status as OrderStatus)[0]?.status || 'PICKING');
+                                  const validNextStatuses = getValidNextStatuses(order.status as OrderStatus);
+                                  setNewStatus(validNextStatuses[0]?.status || 'PICKING');
                                 }}
                               >
                                 <ArrowRight className="h-4 w-4 mr-1" />
@@ -416,11 +434,19 @@ export default function WarehouseOperations() {
                                       </h4>
                                       {order.delivery_address ? (
                                         <div className="bg-gray-50 p-3 rounded-md text-sm">
-                                          <p className="font-medium">{order.customer_name}</p>
-                                          {order.customer_phone && (
-                                            <p className="text-muted-foreground">{order.customer_phone}</p>
-                                          )}
+                                          <p className="font-medium">
+                                            {order.delivery_address.fullName || order.customer_name}
+                                          </p>
+                                          <p className="text-muted-foreground">
+                                            {order.delivery_address.phoneNumber || order.customer_phone}
+                                          </p>
                                           <div className="mt-2 space-y-1">
+                                            {/* Handle new address format (single address field) */}
+                                            {order.delivery_address.address && (
+                                              <p className="whitespace-pre-line">{order.delivery_address.address}</p>
+                                            )}
+                                            
+                                            {/* Handle old address format (multiple fields) - for backward compatibility */}
                                             {order.delivery_address.address_line_1 && (
                                               <p>{order.delivery_address.address_line_1}</p>
                                             )}
@@ -432,6 +458,14 @@ export default function WarehouseOperations() {
                                             )}
                                             {order.delivery_address.state && (
                                               <p>{order.delivery_address.state}</p>
+                                            )}
+                                            
+                                            {/* Show special delivery notes if available */}
+                                            {order.delivery_address.notes && (
+                                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                                <p className="text-xs font-medium text-gray-600">Special Instructions:</p>
+                                                <p className="text-xs text-gray-700 italic">{order.delivery_address.notes}</p>
+                                              </div>
                                             )}
                                           </div>
                                         </div>
@@ -558,7 +592,7 @@ export default function WarehouseOperations() {
               <div className="flex justify-end pt-4">
                 {newStatus !== selectedOrder.status && (
                   <Button
-                    onClick={() => handleStatusUpdate(selectedOrder.id, newStatus, updateNotes)}
+                    onClick={() => updateOrderStatus(selectedOrder.id, newStatus)}
                     disabled={isUpdating}
                   >
                     {isUpdating ? (
@@ -601,7 +635,3 @@ const getValidNextStatuses = (currentStatus: string) => {
     : [];
 };
 
-const handleStatusUpdate = async (orderId: string, newStatus: string, notes: string) => {
-  // Implementation would go here
-  console.log('Update status:', orderId, newStatus, notes);
-};

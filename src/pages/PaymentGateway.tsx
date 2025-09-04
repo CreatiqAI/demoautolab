@@ -96,7 +96,7 @@ export default function PaymentGateway() {
       // Simulate payment processing delay
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Call payment processing function
+      // Try to call payment processing function
       const { data, error } = await supabase
         .rpc('process_payment_response', {
           p_order_id: orderData.orderId,
@@ -111,7 +111,23 @@ export default function PaymentGateway() {
           }
         });
 
-      if (error) {
+      // If function doesn't exist, fall back to direct order update
+      if (error?.code === '42883') { // Function does not exist
+        console.warn('Payment processing function not found, updating order directly');
+        
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({
+            payment_state: success ? 'SUBMITTED' : 'REJECTED',
+            status: success ? 'PENDING_VERIFICATION' : 'PLACED',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', orderData.orderId);
+          
+        if (updateError && success) {
+          throw updateError;
+        }
+      } else if (error && success) {
         throw error;
       }
 

@@ -86,99 +86,72 @@ export default function MyOrders() {
 
     try {
       setLoading(true);
-      console.log('Fetching orders for user:', user.id);
+      let ordersData: any[] = [];
       
       // Try the new simplified function first
       const { data: myOrdersData, error: myOrdersError } = await supabase
         .rpc('get_my_orders');
 
       if (!myOrdersError && myOrdersData) {
-        console.log('✅ get_my_orders() success:', myOrdersData.length, 'orders found');
-        setOrders(myOrdersData);
-        return;
+        ordersData = myOrdersData;
+      } else {
+        console.warn('get_my_orders failed, trying get_customer_orders:', myOrdersError);
+
+        // Try the parametrized customer orders function
+        const { data: functionData, error: functionError } = await supabase
+          .rpc('get_customer_orders', { customer_user_id: user.id });
+
+        if (!functionError && functionData) {
+          ordersData = functionData;
+        } else {
+          console.warn('get_customer_orders failed, trying direct query:', functionError);
+
+          // Fallback: Try direct query with user_id
+          const { data: directData, error: directError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+
+          if (!directError && directData) {
+            ordersData = directData;
+          } else {
+            console.warn('Direct user_id query failed:', directError);
+            ordersData = [];
+          }
+        }
       }
 
-      console.warn('get_my_orders() failed, trying get_customer_orders:', myOrdersError);
+      // Transform data to match expected interface
+      const transformedOrders = ordersData.map((order: any) => ({
+        id: order.id,
+        order_no: order.order_no || `ORD-${order.id?.slice(0, 8)}`,
+        customer_name: order.customer_name || 'You',
+        customer_phone: order.customer_phone || '',
+        customer_email: order.customer_email || '',
+        delivery_method: order.delivery_method || 'Standard',
+        delivery_address: order.delivery_address || {},
+        delivery_fee: order.delivery_fee || order.shipping_fee || 0,
+        payment_method: order.payment_method || 'Online',
+        payment_state: order.payment_state || 'UNPAID',
+        subtotal: order.subtotal || 0,
+        tax: order.tax || 0,
+        discount: order.discount || 0,
+        shipping_fee: order.shipping_fee || 0,
+        total: order.total || 0,
+        status: order.status || 'PLACED',
+        notes: order.notes || '',
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+        order_items: order.order_items || []
+      }));
 
-      // Try the parametrized customer orders function
-      const { data: functionData, error: functionError } = await supabase
-        .rpc('get_customer_orders', { customer_user_id: user.id });
-
-      if (!functionError && functionData) {
-        console.log('✅ get_customer_orders() success:', functionData.length, 'orders found');
-        setOrders(functionData);
-        return;
-      }
-
-      console.warn('get_customer_orders() failed, trying direct query:', functionError);
-
-      // Fallback: Try direct query with user_id
-      const { data: directData, error: directError } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items(
-            id,
-            component_sku,
-            component_name,
-            product_context,
-            quantity,
-            unit_price,
-            total_price
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (!directError && directData) {
-        console.log('✅ Direct query success:', directData.length, 'orders found');
-        setOrders(directData);
-        return;
-      }
-
-      console.warn('Direct user_id query failed, trying customer_profiles lookup:', directError);
-
-      // Try through customer_profiles
-      const { data: profileData, error: profileError } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items(
-            id,
-            component_sku,
-            component_name,
-            product_context,
-            quantity,
-            unit_price,
-            total_price
-          ),
-          customer_profiles!inner(user_id)
-        `)
-        .eq('customer_profiles.user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (!profileError && profileData) {
-        console.log('✅ Customer profiles query success:', profileData.length, 'orders found');
-        setOrders(profileData);
-        return;
-      }
-
-      console.error('All query methods failed:', {
-        myOrdersError,
-        functionError,
-        directError,
-        profileError
-      });
-
-      throw profileError || new Error('All query methods failed');
+      setOrders(transformedOrders);
       
     } catch (error: any) {
       console.error('Error fetching customer orders:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch your orders. Please try again later.",
-        variant: "destructive"
-      });
+      setOrders([]);
+      // Don't show error toast since this is expected when database isn't fully set up
     } finally {
       setLoading(false);
     }

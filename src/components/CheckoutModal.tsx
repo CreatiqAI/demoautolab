@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import AddressAutocompleteSimple from './AddressAutocompleteSimple';
 import { 
   Truck, 
   MapPin, 
@@ -138,12 +139,7 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
   const { user } = useAuth();
   const navigate = useNavigate();
   const [deliveryAddress, setDeliveryAddress] = useState({
-    fullName: '',
-    phoneNumber: '',
     address: '',
-    city: '',
-    state: '',
-    postcode: '',
     notes: ''
   });
 
@@ -154,9 +150,9 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
       
       try {
         const { data: profile, error } = await supabase
-          .from('profiles')
+          .from('customer_profiles')
           .select('*')
-          .eq('id', user.id)
+          .eq('user_id', user.id)
           .single();
           
         if (error) {
@@ -166,15 +162,10 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         
         setCustomerProfile(profile);
         
-        // Auto-fill delivery address from profile
+        // Reset delivery address
         if (profile) {
           setDeliveryAddress({
-            fullName: profile.full_name || '',
-            phoneNumber: profile.phone_e164 || '',
             address: '',
-            city: '',
-            state: '',
-            postcode: '',
             notes: ''
           });
         }
@@ -213,24 +204,26 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
 
   const needsDeliveryAddress = selectedDelivery !== 'self-pickup';
 
-  const handleAddressChange = (field: string, value: string) => {
+  const handleAddressChange = (address: string, components?: any) => {
     setDeliveryAddress(prev => ({
       ...prev,
-      [field]: value
+      address: address
+    }));
+  };
+
+  const handleNotesChange = (value: string) => {
+    setDeliveryAddress(prev => ({
+      ...prev,
+      notes: value
     }));
   };
 
   const isAddressComplete = () => {
     if (!needsDeliveryAddress) {
       // Even for self-pickup, we need customer profile with phone
-      return customerProfile && customerProfile.phone;
+      return customerProfile && (customerProfile.phone || customerProfile.phone_e164);
     }
-    return deliveryAddress.fullName && 
-           deliveryAddress.phoneNumber && 
-           deliveryAddress.address && 
-           deliveryAddress.city && 
-           deliveryAddress.state && 
-           deliveryAddress.postcode;
+    return deliveryAddress.address.trim().length > 0;
   };
 
   const handlePlaceOrder = async () => {
@@ -265,7 +258,7 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
 
       // Use customer profile information
       const customerName = customerProfile.full_name;
-      const customerPhone = customerProfile.phone;
+      const customerPhone = customerProfile.phone || customerProfile.phone_e164;
       const customerEmail = customerProfile.email || user?.email || '';
 
       // Prepare order data - user_id will be used to link with customer_profiles in the database function
@@ -276,12 +269,9 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         customer_email: customerEmail,
         delivery_method: selectedDelivery,
         delivery_address: needsDeliveryAddress ? {
-          fullName: deliveryAddress.fullName || customerName,
-          phoneNumber: deliveryAddress.phoneNumber || customerPhone,
+          fullName: customerName,
+          phoneNumber: customerPhone,
           address: deliveryAddress.address,
-          city: deliveryAddress.city,
-          state: deliveryAddress.state,
-          postcode: deliveryAddress.postcode,
           notes: deliveryAddress.notes
         } : null,
         delivery_fee: deliveryFee,
@@ -292,7 +282,7 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         discount: 0,
         shipping_fee: deliveryFee,
         total: total,
-        status: 'PLACED'
+        status: 'PENDING_PAYMENT'
       };
 
       // Prepare order items - the SQL function will look up component_id by SKU
@@ -305,32 +295,23 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         total_price: item.normal_price * item.quantity
       }));
 
-      // Create order (simplified approach - you may need to adjust this based on your database functions)
+      // Use the database function to create order with automatic inventory deduction
       const { data: orderResult, error: orderError } = await supabase
-        .from('orders')
-        .insert(orderData)
-        .select()
-        .single();
+        .rpc('create_order_with_items', {
+          order_data: orderData,
+          items_data: orderItems
+        });
 
       if (orderError) throw orderError;
 
-      // Create order items
-      if (orderResult) {
-        const orderItemsWithOrderId = orderItems.map(item => ({
-          ...item,
-          order_id: orderResult.id
-        }));
-
-        const { error: itemsError } = await supabase
-          .from('order_items')
-          .insert(orderItemsWithOrderId);
-
-        if (itemsError) throw itemsError;
+      // Check if order creation was successful
+      if (!orderResult?.success) {
+        throw new Error(orderResult?.message || 'Order creation failed');
       }
 
       // Success! Order created, now redirect to payment gateway
-      const orderNumber = orderResult?.order_no || 'N/A';
-      const orderId = orderResult?.id;
+      const orderNumber = orderResult?.order_number || 'N/A';
+      const orderId = orderResult?.order_id;
       
       toast({
         title: "Order Created!",
@@ -374,6 +355,9 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl">Checkout</DialogTitle>
+          <DialogDescription>
+            Complete your purchase by providing delivery and payment information
+          </DialogDescription>
         </DialogHeader>
         
         <div className="grid md:grid-cols-2 gap-8">
@@ -457,78 +441,43 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="fullName">Full Name *</Label>
+                      <Label htmlFor="fullName">Full Name</Label>
                       <Input
                         id="fullName"
-                        value={deliveryAddress.fullName}
-                        onChange={(e) => handleAddressChange('fullName', e.target.value)}
-                        placeholder="Enter your full name"
-                        className={customerProfile && customerProfile.full_name ? "bg-muted" : ""}
+                        value={customerProfile?.full_name || 'Not set'}
+                        readOnly
+                        className="bg-muted cursor-not-allowed"
                       />
-                      {customerProfile && customerProfile.full_name && (
-                        <p className="text-xs text-muted-foreground mt-1">From your profile</p>
-                      )}
+                      <p className="text-xs text-muted-foreground mt-1">From your profile (fixed)</p>
                     </div>
                     <div>
-                      <Label htmlFor="phoneNumber">Phone Number *</Label>
+                      <Label htmlFor="phoneNumber">Phone Number</Label>
                       <Input
                         id="phoneNumber"
-                        value={deliveryAddress.phoneNumber}
-                        onChange={(e) => handleAddressChange('phoneNumber', e.target.value)}
-                        placeholder="01X-XXX XXXX"
-                        className={customerProfile && customerProfile.phone ? "bg-muted" : ""}
-                        readOnly={customerProfile && customerProfile.phone}
+                        value={customerProfile?.phone || customerProfile?.phone_e164 || 'Not set'}
+                        readOnly
+                        className="bg-muted cursor-not-allowed"
                       />
-                      {customerProfile && customerProfile.phone && (
-                        <p className="text-xs text-muted-foreground mt-1">Phone from your profile (required)</p>
-                      )}
+                      <p className="text-xs text-muted-foreground mt-1">From your profile (fixed)</p>
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="address">Address *</Label>
-                    <Textarea
-                      id="address"
+                    <AddressAutocompleteSimple
                       value={deliveryAddress.address}
-                      onChange={(e) => handleAddressChange('address', e.target.value)}
-                      placeholder="Enter your full address"
-                      rows={3}
+                      onChange={handleAddressChange}
+                      placeholder="Type address like 'Nadayu28', 'KLCC', or '1 Utama'..."
+                      required
                     />
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="city">City *</Label>
-                      <Input
-                        id="city"
-                        value={deliveryAddress.city}
-                        onChange={(e) => handleAddressChange('city', e.target.value)}
-                        placeholder="City"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="state">State *</Label>
-                      <Input
-                        id="state"
-                        value={deliveryAddress.state}
-                        onChange={(e) => handleAddressChange('state', e.target.value)}
-                        placeholder="State"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="postcode">Postcode *</Label>
-                      <Input
-                        id="postcode"
-                        value={deliveryAddress.postcode}
-                        onChange={(e) => handleAddressChange('postcode', e.target.value)}
-                        placeholder="12345"
-                      />
-                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Search will find Malaysian addresses automatically. Try typing building names, areas, or landmarks.
+                    </p>
                   </div>
                   <div>
                     <Label htmlFor="notes">Special Instructions</Label>
                     <Textarea
                       id="notes"
                       value={deliveryAddress.notes}
-                      onChange={(e) => handleAddressChange('notes', e.target.value)}
+                      onChange={(e) => handleNotesChange(e.target.value)}
                       placeholder="Any special delivery instructions..."
                       rows={2}
                     />

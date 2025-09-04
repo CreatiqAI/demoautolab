@@ -89,23 +89,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('💾 Synced to localStorage');
       } else {
         console.log('📭 No items in database cart');
-        // Check if there are items in localStorage to migrate
-        const localItems = localStorage.getItem('cart');
-        if (localItems) {
-          try {
-            const parsedItems = JSON.parse(localItems);
-            if (parsedItems.length > 0) {
-              console.log('🔄 Found localStorage items, migrating to database:', parsedItems);
-              // Migrate localStorage items to database
-              for (const item of parsedItems) {
-                await addToCart(item);
-              }
-              return; // addToCart will reload the cart
-            }
-          } catch (e) {
-            console.error('Error parsing localStorage items:', e);
-          }
-        }
+        // Clear any old localStorage cart data to prevent unwanted auto-migration
+        console.log('🧹 Clearing old localStorage cart data');
+        localStorage.removeItem('cart');
         setCartItems([]);
       }
     } catch (error) {

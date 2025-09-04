@@ -77,76 +77,58 @@ const Catalog = () => {
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ['products', searchTerm, selectedBrand, user?.id],
     queryFn: async () => {
-      try {
-        // Try to use the database function to get products with correct pricing
-        const { data, error } = await supabase
-          .rpc('get_products_with_pricing', { 
-            customer_user_id: user?.id || null 
-          });
+      // Direct query to get products
+      const { data: directData, error: directError } = await supabase
+        .from('products_new')
+        .select(`
+          *,
+          product_images_new (
+            url,
+            alt_text,
+            is_primary,
+            sort_order
+          )
+        `)
+        .eq('active', true)
+        .order('created_at', { ascending: false });
 
-        if (error) throw error;
-        
-        // Filter products based on search and brand
-        let filteredData = data || [];
-        
-        if (searchTerm) {
-          const searchLower = searchTerm.toLowerCase();
-          filteredData = filteredData.filter(item =>
-            item.name?.toLowerCase().includes(searchLower) ||
-            item.description?.toLowerCase().includes(searchLower) ||
-            item.brand?.toLowerCase().includes(searchLower) ||
-            item.model?.toLowerCase().includes(searchLower)
-          );
-        }
-
-        if (selectedBrand !== 'all') {
-          filteredData = filteredData.filter(item => item.brand === selectedBrand);
-        }
-        
-        // Map the data to match interface
-        return filteredData.map(item => ({
-          ...item,
-          product_images: Array.isArray(item.product_images) ? item.product_images : []
-        })) as Product[];
-      } catch (funcError) {
-        console.log('Function not found, falling back to old query method');
-        
-        // Fallback to old method if function doesn't exist
-        let query = supabase
-          .from('products_new')
-          .select(`
-            *,
-            product_images_new (
-              url,
-              alt_text,
-              is_primary,
-              sort_order
-            )
-          `)
-          .eq('active', true)
-          .order('created_at', { ascending: false });
-
-        if (searchTerm) {
-          query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,brand.ilike.%${searchTerm}%,model.ilike.%${searchTerm}%`);
-        }
-
-        if (selectedBrand !== 'all') {
-          query = query.eq('brand', selectedBrand);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-        
-        // Map the data to match interface with fallback pricing
-        return data.map(item => ({
-          ...item,
-          product_images: item.product_images_new || [],
-          price: item.normal_price || 299, // Fallback price
-          normal_price: item.normal_price || 299,
-          merchant_price: item.merchant_price || 249,
-          customer_type: 'normal'
-        })) as Product[];
+      if (directError) {
+        console.error('Error fetching products:', directError);
+        return [];
       }
+
+      // Map the data to match interface with fallback pricing
+      const productsData = directData.map(item => ({
+        ...item,
+        product_images: item.product_images_new || [],
+        price: item.normal_price || 299, // Fallback price
+        normal_price: item.normal_price || 299,
+        merchant_price: item.merchant_price || 249,
+        customer_type: 'normal'
+      }));
+      
+      // Filter products based on search and brand
+      let filteredData = productsData;
+      
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        filteredData = filteredData.filter(item =>
+          item.name?.toLowerCase().includes(searchLower) ||
+          item.description?.toLowerCase().includes(searchLower) ||
+          item.brand?.toLowerCase().includes(searchLower) ||
+          item.model?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      if (selectedBrand !== 'all') {
+        filteredData = filteredData.filter(item => item.brand === selectedBrand);
+      }
+      
+      // Ensure product_images is always an array
+      return filteredData.map(item => ({
+        ...item,
+        product_images: Array.isArray(item.product_images) ? item.product_images : []
+      })) as Product[];
     },
   });
 
@@ -154,14 +136,23 @@ const Catalog = () => {
   const { data: brands = [] } = useQuery({
     queryKey: ['brands'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products_new')
-        .select('brand')
-        .eq('active', true);
-      
-      if (error) throw error;
-      const uniqueBrands = [...new Set(data.map(item => item.brand).filter(Boolean))];
-      return uniqueBrands.map(brand => ({ id: brand, name: brand }));
+      try {
+        const { data, error } = await supabase
+          .from('products_new')
+          .select('brand')
+          .eq('active', true);
+        
+        if (!error && data) {
+          const uniqueBrands = [...new Set(data.map(item => item.brand).filter(Boolean))];
+          return uniqueBrands.map(brand => ({ id: brand, name: brand }));
+        } else {
+          console.warn('Brands query failed:', error);
+          return [];
+        }
+      } catch (error) {
+        console.warn('Brands query failed:', error);
+        return [];
+      }
     },
   });
 
