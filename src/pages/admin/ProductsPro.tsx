@@ -761,7 +761,6 @@ export default function ProductsPro() {
                                   <div>
                                     <div className="font-mono text-sm text-blue-600">{component.component_sku}</div>
                                     <div className="font-medium">{component.name}</div>
-                                    <div className="text-sm text-muted-foreground">{component.description}</div>
                                     <div className="flex gap-2 mt-1">
                                       <Badge variant="secondary">{component.component_type}</Badge>
                                       <Badge variant="outline">Stock: {component.stock_level}</Badge>
@@ -1172,9 +1171,6 @@ export default function ProductsPro() {
                           <div className="flex-1">
                             <h4 className="font-medium">{comp.name}</h4>
                             <p className="text-sm text-muted-foreground">{comp.component_sku}</p>
-                            {comp.description && (
-                              <p className="text-sm text-muted-foreground mt-1">{comp.description}</p>
-                            )}
                             <p className="text-xs text-muted-foreground mt-1">
                               Stock: {comp.stock_level} available
                             </p>

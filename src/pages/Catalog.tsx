@@ -46,7 +46,7 @@ interface Category {
 
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,13 +54,19 @@ const Catalog = () => {
   const { user } = useAuth();
   const { customerType, pricingMode, getPriceLabel } = usePricing();
 
-  // Update selected brand when URL changes
+  // Update search term and selected brand when URL changes
   useEffect(() => {
+    const searchFromUrl = searchParams.get('search');
     const brandFromUrl = searchParams.get('brand');
+    
+    if (searchFromUrl !== searchTerm) {
+      setSearchTerm(searchFromUrl || '');
+    }
+    
     if (brandFromUrl && brandFromUrl !== selectedBrand) {
       setSelectedBrand(brandFromUrl);
     }
-  }, [searchParams, selectedBrand]);
+  }, [searchParams]);
 
   // Update URL when brand changes
   const handleBrandChange = (brand: string) => {
@@ -69,6 +75,19 @@ const Catalog = () => {
       searchParams.delete('brand');
     } else {
       searchParams.set('brand', brand);
+    }
+    setSearchParams(searchParams);
+  };
+
+  // Handle search term changes with debounced URL updates
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    
+    // Update URL parameters
+    if (value.trim()) {
+      searchParams.set('search', value.trim());
+    } else {
+      searchParams.delete('search');
     }
     setSearchParams(searchParams);
   };
@@ -182,74 +201,74 @@ const Catalog = () => {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <div className="bg-gradient-to-br from-background to-muted/20 pt-8">
-        <div className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex-1">
-                <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-                  Product Catalog
-                </h1>
-                <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                  Discover our extensive range of high-quality automotive parts and accessories
-                </p>
+      <div className="bg-gradient-to-br from-background to-muted/20">
+        <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+          {/* Header - Responsive */}
+          <div className="text-center mb-6 sm:mb-8 lg:mb-12">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 sm:mb-4 bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+              Product Catalog
+            </h1>
+            <p className="text-sm sm:text-base lg:text-xl text-muted-foreground max-w-2xl mx-auto px-4">
+              Discover our extensive range of high-quality automotive parts and accessories
+            </p>
+          </div>
+
+          {/* Filters - Mobile First Design */}
+          <div className="mb-6 sm:mb-8">
+            <div className="bg-card rounded-lg shadow-sm border p-3 sm:p-4 lg:p-6">
+              <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-4">
+                {/* Search Input */}
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Search products, brands, or parts..."
+                    value={searchTerm}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="pl-10 h-10 sm:h-9"
+                  />
+                </div>
+                {/* Brand Filter */}
+                <div className="w-full sm:w-48">
+                  <Select value={selectedBrand} onValueChange={handleBrandChange}>
+                    <SelectTrigger className="w-full h-10 sm:h-9">
+                      <Filter className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="All Brands" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Brands</SelectItem>
+                      {brands.map((brand) => (
+                        <SelectItem key={brand.id} value={brand.id}>
+                          {brand.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              
             </div>
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-col md:flex-row gap-4 mb-8 p-6 bg-card rounded-lg shadow-sm border">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search products, brands, or parts..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={selectedBrand} onValueChange={handleBrandChange}>
-              <SelectTrigger className="w-full md:w-[200px]">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="All Brands" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Brands</SelectItem>
-                {brands.map((brand) => (
-                  <SelectItem key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {/* Products Grid - Improved Responsive Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
             {productsLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <Card key={i} className="overflow-hidden">
                   <CardHeader className="p-0">
-                    <Skeleton className="h-48 w-full" />
+                    <Skeleton className="aspect-square w-full" />
                   </CardHeader>
-                  <CardContent className="p-4">
+                  <CardContent className="p-3 sm:p-4">
                     <Skeleton className="h-4 w-3/4 mb-2" />
                     <Skeleton className="h-3 w-full mb-2" />
-                    <Skeleton className="h-3 w-1/2 mb-4" />
-                    <div className="flex justify-between items-center">
-                      <Skeleton className="h-6 w-20" />
-                      <Skeleton className="h-8 w-16" />
-                    </div>
+                    <Skeleton className="h-3 w-1/2 mb-3" />
+                    <Skeleton className="h-6 w-24 mx-auto" />
                   </CardContent>
                 </Card>
               ))
             ) : products.length === 0 ? (
-              <div className="col-span-full text-center py-12">
-                <div className="text-6xl mb-4">🔍</div>
-                <h3 className="text-xl font-semibold mb-2">No products found</h3>
-                <p className="text-muted-foreground">Try adjusting your search criteria</p>
+              <div className="col-span-full text-center py-8 sm:py-12">
+                <div className="text-4xl sm:text-6xl mb-4">🔍</div>
+                <h3 className="text-lg sm:text-xl font-semibold mb-2">No products found</h3>
+                <p className="text-muted-foreground text-sm sm:text-base">Try adjusting your search criteria</p>
               </div>
             ) : (
               products.map((product) => {
@@ -259,52 +278,78 @@ const Catalog = () => {
                 return (
                   <Card 
                     key={product.id} 
-                    className="overflow-hidden hover:shadow-lg transition-all duration-300 group cursor-pointer"
+                    className="overflow-hidden hover:shadow-lg transition-all duration-300 group cursor-pointer bg-white"
                     onClick={() => handleQuickView(product)}
                   >
+                    {/* Product Image */}
                     <CardHeader className="p-0 relative">
                       <div className="aspect-square overflow-hidden bg-muted flex items-center justify-center">
                         <img
                           src={primaryImage}
                           alt={product.name}
                           className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/placeholder.svg';
+                          }}
                         />
                       </div>
-                      <div className="absolute top-2 right-2">
-                        <Badge variant={productStatus.variant}>
+                      {/* Status Badges */}
+                      <div className="absolute top-2 right-2 flex flex-col gap-1">
+                        <Badge variant={productStatus.variant} className="text-xs">
                           {productStatus.label}
                         </Badge>
                         {product.featured && (
-                          <Badge className="ml-1" variant="secondary">⭐ Featured</Badge>
+                          <Badge variant="secondary" className="text-xs">⭐</Badge>
                         )}
                       </div>
                     </CardHeader>
-                    <CardContent className="p-4">
-                      <div className="mb-2">
-                        <h3 className="font-semibold text-sm line-clamp-2 mb-1">{product.name}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          {product.brand} {product.model} 
-                          {product.year_from && product.year_to && ` (${product.year_from}-${product.year_to})`}
-                        </p>
+
+                    {/* Product Info */}
+                    <CardContent className="p-3 sm:p-4">
+                      {/* Product Name & Details */}
+                      <div className="space-y-2">
+                        <h3 className="font-semibold text-sm sm:text-base line-clamp-2 leading-tight">
+                          {product.name}
+                        </h3>
+                        
+                        {/* Brand & Model */}
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-medium">{product.brand}</span>
+                          {product.model && <span> {product.model}</span>}
+                          {product.year_from && product.year_to && (
+                            <span className="block sm:inline sm:ml-1">
+                              ({product.year_from}-{product.year_to})
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Screen Sizes */}
                         {product.screen_size && product.screen_size.length > 0 && (
-                          <div className="flex gap-1 mt-1">
-                            {product.screen_size.map((size) => (
-                              <Badge key={size} variant="outline" className="text-xs">
+                          <div className="flex flex-wrap gap-1">
+                            {product.screen_size.slice(0, 2).map((size) => (
+                              <Badge key={size} variant="outline" className="text-xs px-2 py-0.5">
                                 {size}"
                               </Badge>
                             ))}
+                            {product.screen_size.length > 2 && (
+                              <Badge variant="outline" className="text-xs px-2 py-0.5">
+                                +{product.screen_size.length - 2}
+                              </Badge>
+                            )}
                           </div>
                         )}
                       </div>
-                      
-                      <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
-                        {product.description}
-                      </p>
 
-
-                      <div className="flex items-center justify-center">
-                        <div className="text-xs text-muted-foreground">
-                          Click to view details
+                      {/* Action Area */}
+                      <div className="mt-4 pt-3 border-t border-border/50">
+                        <div className="text-center">
+                          <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                            <Eye className="h-3 w-3" />
+                            View Details & Components
+                          </div>
                         </div>
                       </div>
                     </CardContent>
@@ -316,8 +361,8 @@ const Catalog = () => {
 
           {/* Statistics */}
           {products.length > 0 && (
-            <div className="text-center mt-12">
-              <p className="text-muted-foreground">
+            <div className="text-center mt-8 sm:mt-12">
+              <p className="text-sm sm:text-base text-muted-foreground">
                 Showing {products.length} product{products.length !== 1 ? 's' : ''}
               </p>
             </div>
@@ -325,32 +370,35 @@ const Catalog = () => {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="bg-muted text-muted-foreground py-12">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
+      {/* Footer - Responsive */}
+      <footer className="bg-muted text-muted-foreground py-8 sm:py-12">
+        <div className="container mx-auto px-3 sm:px-4 lg:px-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+            {/* Company Info */}
+            <div className="sm:col-span-2 lg:col-span-1">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-gradient-hero rounded-lg">
                   <Package className="h-5 w-5 text-primary-foreground" />
                 </div>
                 <span className="font-bold text-lg">Autolab</span>
               </div>
-              <p className="text-sm opacity-80 mb-4">
+              <p className="text-sm opacity-80 mb-4 max-w-sm">
                 Malaysia's trusted destination for premium automotive parts and accessories.
               </p>
             </div>
             
+            {/* Quick Links */}
             <div>
               <h4 className="font-semibold mb-4">Quick Links</h4>
               <div className="space-y-2 text-sm">
-                <Link to="/catalog" className="block hover:text-primary transition-fast">Shop Parts</Link>
-                <Link to="/brands" className="block hover:text-primary transition-fast">Brands</Link>
-                <Link to="/about" className="block hover:text-primary transition-fast">About Us</Link>
-                <Link to="/contact" className="block hover:text-primary transition-fast">Contact</Link>
+                <Link to="/catalog" className="block hover:text-primary transition-colors">Shop Parts</Link>
+                <Link to="/brands" className="block hover:text-primary transition-colors">Brands</Link>
+                <Link to="/about" className="block hover:text-primary transition-colors">About Us</Link>
+                <Link to="/contact" className="block hover:text-primary transition-colors">Contact</Link>
               </div>
             </div>
 
+            {/* Customer Service */}
             <div>
               <h4 className="font-semibold mb-4">Customer Service</h4>
               <div className="space-y-2 text-sm">
@@ -360,18 +408,26 @@ const Catalog = () => {
               </div>
             </div>
 
+            {/* Social Media */}
             <div>
               <h4 className="font-semibold mb-4">Follow Us</h4>
-              <div className="flex gap-4">
-                <Button variant="ghost" size="sm">Facebook</Button>
-                <Button variant="ghost" size="sm">Instagram</Button>
-                <Button variant="ghost" size="sm">WhatsApp</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="ghost" size="sm" className="text-xs">Facebook</Button>
+                <Button variant="ghost" size="sm" className="text-xs">Instagram</Button>
+                <Button variant="ghost" size="sm" className="text-xs">WhatsApp</Button>
               </div>
             </div>
           </div>
           
-          <div className="border-t border-border/20 mt-8 pt-8 text-center text-sm opacity-80">
-            <p>&copy; 2024 Autolab. All rights reserved. | Privacy Policy | Terms of Service</p>
+          {/* Copyright */}
+          <div className="border-t border-border/20 mt-6 sm:mt-8 pt-6 sm:pt-8 text-center">
+            <div className="text-xs sm:text-sm opacity-80 space-y-2 sm:space-y-0">
+              <p>&copy; 2024 Autolab. All rights reserved.</p>
+              <div className="flex flex-wrap justify-center gap-4 sm:gap-6 mt-2">
+                <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
+                <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
+              </div>
+            </div>
           </div>
         </div>
       </footer>

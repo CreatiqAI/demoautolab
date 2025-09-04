@@ -35,6 +35,7 @@ import UserManagement from './pages/admin/UserManagement';
 import OrderVerification from './pages/admin/OrderVerification';
 import WarehouseOperations from './pages/admin/WarehouseOperations';
 import AdminRegister from './pages/AdminRegister';
+import ScrollToTop from './components/ScrollToTop';
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+          <ScrollToTop />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/catalog" element={<Catalog />} />

@@ -51,6 +51,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    // Don't set loading to true if we're already in the middle of an operation
+    if (loading) {
+      console.log('🔄 Cart loading already in progress, skipping...');
+      return;
+    }
+
     try {
       setLoading(true);
       console.log('🔄 Loading cart from database for user:', user?.id);
@@ -65,6 +71,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('❌ Database cart load failed:', error);
         console.log('🔄 Falling back to localStorage');
         loadCartFromLocalStorage();
+        setLoading(false);
         return;
       }
 
@@ -97,6 +104,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('💥 Unexpected error loading cart:', error);
       loadCartFromLocalStorage();
+      setLoading(false);
     } finally {
       setLoading(false);
     }
@@ -121,8 +129,29 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      setLoading(true);
       console.log('🛒 Adding item to cart:', newItem);
+      
+      // Immediately update local state for instant UI feedback
+      const itemId = `${newItem.component_sku}_${newItem.product_name}`;
+      let updatedItems: CartItem[] = [];
+      
+      setCartItems(prevItems => {
+        const existingItem = prevItems.find(item => item.id === itemId);
+        
+        if (existingItem) {
+          // Update quantity if item already exists
+          updatedItems = prevItems.map(item =>
+            item.id === itemId
+              ? { ...item, quantity: item.quantity + newItem.quantity }
+              : item
+          );
+        } else {
+          // Add new item
+          updatedItems = [...prevItems, { ...newItem, id: itemId }];
+        }
+        
+        return updatedItems;
+      });
       
       // Find component_id from component_library
       console.log('🔍 Looking up component:', newItem.component_sku);
@@ -135,7 +164,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (componentError || !componentData) {
         console.error('❌ Component lookup failed:', componentError);
         console.log('🔄 Falling back to localStorage method');
-        addToCartLocalStorage(newItem);
+        // State was already updated above, just sync to localStorage
+        localStorage.setItem('cart', JSON.stringify(updatedItems));
         return;
       }
 
@@ -166,21 +196,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('❌ Database add_to_cart failed:', error);
-        console.log('🔄 Falling back to localStorage method');
-        addToCartLocalStorage(newItem);
+        console.log('🔄 Database failed but local state already updated');
+        // State was already updated above for instant feedback
         return;
       }
 
       console.log('✅ Database add_to_cart success:', data);
       
-      // Reload cart from database
-      console.log('🔄 Reloading cart from database...');
-      await loadCartFromDatabase();
+      // Background sync completed - no need to reload as state is already updated
+      console.log('✅ Cart sync completed successfully');
     } catch (error) {
       console.error('💥 Unexpected error adding to cart:', error);
-      addToCartLocalStorage(newItem);
-    } finally {
-      setLoading(false);
+      // State was already updated above for instant feedback
     }
   };
 
@@ -216,7 +243,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      setLoading(true);
+      // Immediately update local state for instant UI feedback
+      setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
       
       // Extract component_sku from itemId
       const component_sku = itemId.split('_')[0];
@@ -230,8 +258,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (componentError || !componentData) {
         console.error('Component not found for removal:', componentError);
-        // Fallback to localStorage method
-        removeFromCartLocalStorage(itemId);
+        // State was already updated above for instant feedback
         return;
       }
 
@@ -246,19 +273,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Error removing from cart database:', error);
-        // Fallback to localStorage method
-        removeFromCartLocalStorage(itemId);
+        // State was already updated above for instant feedback
         return;
       }
 
-      // Reload cart from database
-      await loadCartFromDatabase();
+      // Background sync completed successfully
+      console.log('✅ Remove from cart completed successfully');
     } catch (error) {
       console.error('Error removing from cart:', error);
-      // Fallback to localStorage method
-      removeFromCartLocalStorage(itemId);
-    } finally {
-      setLoading(false);
+      // State was already updated above for instant feedback
     }
   };
 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,10 +15,27 @@ import {
   Package,
   CheckCircle
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import heroImage from '@/assets/hero-automotive.jpg';
 
 const Home = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const navigate = useNavigate();
+
+  const handleSearch = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (searchTerm.trim()) {
+      navigate(`/catalog?search=${encodeURIComponent(searchTerm.trim())}`);
+    } else {
+      navigate('/catalog');
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -98,18 +116,21 @@ const Home = () => {
             <h2 className="text-2xl font-bold text-black">
               Find the Right Parts for Your Vehicle
             </h2>
-            <div className="flex gap-2">
+            <form onSubmit={handleSearch} className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" />
                 <Input 
                   placeholder="Search by part name, brand, or vehicle model..." 
                   className="pl-12 h-14 text-lg border-gray-300"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyPress={handleKeyPress}
                 />
               </div>
-              <Button variant="default" size="xl">
+              <Button variant="default" size="xl" type="submit">
                 Search
               </Button>
-            </div>
+            </form>
             <p className="text-gray-600">
               Try searching: "brake pads", "oil filter", "Honda Civic", "Toyota Camry"
             </p>
