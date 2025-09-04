@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import heroImage from '@/assets/hero-automotive.jpg';
-import { supabase } from '@/integrations/supabase';
+import { supabase } from '@/integrations/supabase/index';
 
 const Home = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
