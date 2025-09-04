@@ -76,101 +76,45 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
     
     setLoading(true);
     try {
-      // Collect all possible components from different matching strategies
-      let allMatchedComponents: any[] = [];
-      
-      // Strategy 1: Try to find components related to this product by name matching
-      try {
-          const { data: nameMatchData, error: nameMatchError } = await supabase
-            .from('component_library')
-            .select('*')
-            .eq('is_active', true)
-            .or(`name.ilike.%${product.name}%,description.ilike.%${product.name}%,component_value.ilike.%${product.name}%`);
+      // Fetch components that are specifically linked to this product
+      const { data: productComponentData, error: productComponentError } = await supabase
+        .from('product_components')
+        .select(`
+          component_library!inner(
+            id, component_sku, name, description, component_type,
+            stock_level, normal_price, merchant_price, default_image_url
+          )
+        `)
+        .eq('product_id', product.id)
+        .order('display_order', { ascending: true });
 
-          if (!nameMatchError && nameMatchData && nameMatchData.length > 0) {
-            allMatchedComponents.push(...nameMatchData);
-            console.log(`Found ${nameMatchData.length} components by product name matching`);
-          }
-        } catch (e) {
-          console.warn('Product name matching failed:', e);
-        }
-
-      // Strategy 2: Try to find components that match product brand/model
-      try {
-          const searchTerm = `${product.brand} ${product.model}`.trim();
-          if (searchTerm.length > 3) {
-            const { data: brandModelData, error: brandModelError } = await supabase
-              .from('component_library')
-              .select('*')
-              .eq('is_active', true)
-              .or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,component_value.ilike.%${searchTerm}%`);
-
-            if (!brandModelError && brandModelData && brandModelData.length > 0) {
-              allMatchedComponents.push(...brandModelData);
-              console.log(`Found ${brandModelData.length} components by brand/model matching`);
-            }
-          }
-        } catch (e) {
-          console.warn('Brand/model matching failed:', e);
-        }
-
-      // Strategy 3: Try broader brand matching
-      try {
-          if (product.brand && product.brand.length > 2) {
-            const { data: brandData, error: brandError } = await supabase
-              .from('component_library')
-              .select('*')
-              .eq('is_active', true)
-              .or(`name.ilike.%${product.brand}%,description.ilike.%${product.brand}%,component_value.ilike.%${product.brand}%`);
-
-            if (!brandError && brandData && brandData.length > 0) {
-              allMatchedComponents.push(...brandData);
-              console.log(`Found ${brandData.length} components by brand matching`);
-            }
-          }
-        } catch (e) {
-          console.warn('Brand matching failed:', e);
-        }
-
-      // Strategy 4: If we have less than 2 components, get more general components
-      if (allMatchedComponents.length < 2) {
-        try {
-            const { data: moreData, error: moreError } = await supabase
-              .from('component_library')
-              .select('*')
-              .eq('is_active', true)
-              .order('created_at', { ascending: false })
-              .limit(10);
-
-            if (!moreError && moreData) {
-              allMatchedComponents.push(...moreData);
-              console.log(`Found ${moreData.length} additional components to reach target count`);
-            }
-        } catch (e) {
-          console.warn('Additional components query failed:', e);
-        }
+      if (productComponentError) {
+        console.error('Error fetching product components:', productComponentError);
+        setComponents([]);
+        return;
       }
 
-      // Remove duplicates based on component ID
-      const uniqueComponents = allMatchedComponents.filter((comp, index, self) => 
-        index === self.findIndex(c => c.id === comp.id)
-      );
-      
-      const componentsData = uniqueComponents;
-      console.log(`Total unique components found: ${componentsData.length}`);
+      if (!productComponentData || productComponentData.length === 0) {
+        console.log(`No components found for product: ${product.name}`);
+        setComponents([]);
+        return;
+      }
 
       // Transform the data to match expected structure
-      const transformedComponents = componentsData.map(comp => ({
-        id: comp.id,
-        component_sku: comp.component_sku || comp.sku || `COMP-${comp.id?.slice(0, 8)}`,
-        name: comp.name || 'Component',
-        description: comp.description || 'Product component',
-        component_type: comp.component_type || 'part',
-        stock_level: comp.stock_level || 0,
-        normal_price: comp.normal_price || 0,
-        merchant_price: comp.merchant_price || 0,
-        default_image_url: comp.default_image_url || null
-      }));
+      const transformedComponents = productComponentData.map(pc => {
+        const component = pc.component_library;
+        return {
+          id: component.id,
+          component_sku: component.component_sku,
+          name: component.name,
+          description: component.description || 'Product component',
+          component_type: component.component_type || 'component',
+          stock_level: component.stock_level || 0,
+          normal_price: component.normal_price || 0,
+          merchant_price: component.merchant_price || component.normal_price || 0,
+          default_image_url: component.default_image_url || null
+        };
+      });
 
       setComponents(transformedComponents);
       console.log(`✅ Found ${transformedComponents.length} components for product: ${product.name}`);
@@ -294,6 +238,12 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
                 src={product.product_images[selectedImage]?.url || primaryImage?.url || '/placeholder.svg'}
                 alt={product.product_images[selectedImage]?.alt_text || product.name}
                 className="max-w-full max-h-full object-contain"
+                loading="lazy"
+                decoding="async"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/placeholder.svg';
+                }}
               />
             </div>
             {product.product_images.length > 1 && (
@@ -310,6 +260,8 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
                       src={image.url}
                       alt={image.alt_text || `Image ${index + 1}`}
                       className="max-w-full max-h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </button>
                 ))}
@@ -378,6 +330,8 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
                                 src={component.default_image_url}
                                 alt={component.name}
                                 className="w-full h-full object-cover"
+                                loading="lazy"
+                                decoding="async"
                               />
                             </button>
                           )}

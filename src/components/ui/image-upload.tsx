@@ -75,7 +75,7 @@ export default function ImageUpload({
       const { data, error } = await supabase.storage
         .from(bucket)
         .upload(filePath, file, {
-          cacheControl: '3600',
+          cacheControl: '31536000', // Cache for 1 year (better performance)
           upsert: true, // Changed to true to overwrite if exists
         });
 

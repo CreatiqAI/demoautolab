@@ -83,7 +83,6 @@ export default function AdminRegister() {
         .insert([{
           username: formData.username,
           full_name: formData.username,
-          email: `${formData.username}@autolab-admin.local`,
           role: formData.role,
           password_hash: formData.password, // In production, this should be properly hashed
           is_active: true

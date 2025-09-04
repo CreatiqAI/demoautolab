@@ -14,7 +14,20 @@
       "Bash(gh:*)",
       "Bash(git push:*)",
       "Bash(npx supabase:*)",
-      "WebFetch(domain:maps.googleapis.com)"
+      "WebFetch(domain:maps.googleapis.com)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\components/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\pages\\admin/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\components/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\components/**)",
+      "Bash(npx tsc:*)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\pages\\admin/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\pages\\admin/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\pages\\admin/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\components\\ui/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\pages/**)",
+      "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\pages/**)"
     ],
     "deny": [],
     "ask": []
