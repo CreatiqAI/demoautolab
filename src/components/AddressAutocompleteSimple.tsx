@@ -55,11 +55,7 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
       // Load Google Maps API if not already loaded
       if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
         const script = document.createElement('script');
-        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-        if (!apiKey) {
-          console.error('Google Maps API key not found. Please set VITE_GOOGLE_MAPS_API_KEY in your environment variables.');
-          return;
-        }
+        const apiKey = 'AIzaSyDZJ6_oq2uAI4FnA3Lj2nuiV8GFkKOMtXU';
         
         script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async&callback=initMap`;
         script.async = true;
