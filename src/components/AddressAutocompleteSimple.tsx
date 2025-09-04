@@ -29,23 +29,16 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
   const [loading, setLoading] = useState(false);
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteSuggestion = useRef<any>(null);
+  const autocompleteService = useRef<any>(null);
 
-  // Initialize Google Places API with new AutocompleteSuggestion
+  // Initialize Google Places API with reliable AutocompleteService
   useEffect(() => {
     const initializeGoogleMaps = async () => {
       if (window.google && window.google.maps && window.google.maps.places) {
         try {
-          // Use the new AutocompleteSuggestion API instead of deprecated AutocompleteService
-          if (window.google.maps.places.AutocompleteSuggestion) {
-            autocompleteSuggestion.current = new window.google.maps.places.AutocompleteSuggestion();
-            setIsGoogleMapsLoaded(true);
-          } else {
-            // Fallback to AutocompleteService if new API not available
-            console.warn('AutocompleteSuggestion not available, falling back to AutocompleteService');
-            autocompleteSuggestion.current = new window.google.maps.places.AutocompleteService();
-            setIsGoogleMapsLoaded(true);
-          }
+          // Use AutocompleteService (reliable and well-documented)
+          autocompleteService.current = new window.google.maps.places.AutocompleteService();
+          setIsGoogleMapsLoaded(true);
         } catch (error) {
           console.error('Error initializing Google Maps:', error);
         }
@@ -64,14 +57,8 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
         // Create a global callback function
         (window as any).initMap = () => {
           try {
-            if (window.google.maps.places.AutocompleteSuggestion) {
-              autocompleteSuggestion.current = new window.google.maps.places.AutocompleteSuggestion();
-              setIsGoogleMapsLoaded(true);
-            } else {
-              console.warn('AutocompleteSuggestion not available, falling back to AutocompleteService');
-              autocompleteSuggestion.current = new window.google.maps.places.AutocompleteService();
-              setIsGoogleMapsLoaded(true);
-            }
+            autocompleteService.current = new window.google.maps.places.AutocompleteService();
+            setIsGoogleMapsLoaded(true);
           } catch (error) {
             console.error('Error in callback:', error);
           }
@@ -89,7 +76,7 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
   }, []);
 
   const searchAddresses = async (query: string) => {
-    if (!query.trim() || query.length < 3 || !autocompleteSuggestion.current) {
+    if (!query.trim() || query.length < 3 || !autocompleteService.current) {
       setSuggestions([]);
       return;
     }
@@ -103,7 +90,7 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
         types: ['establishment']
       };
 
-      autocompleteSuggestion.current.getPlacePredictions(request, (predictions: any[], status: string) => {
+      autocompleteService.current.getPlacePredictions(request, (predictions: any[], status: string) => {
         if (status === 'OK' && predictions && predictions.length > 0) {
           const formattedSuggestions = predictions.map(prediction => ({
             place_id: prediction.place_id,
@@ -120,7 +107,7 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
             types: ['geocode']
           };
 
-          autocompleteSuggestion.current.getPlacePredictions(geocodeRequest, (geocodePredictions: any[], geocodeStatus: string) => {
+          autocompleteService.current.getPlacePredictions(geocodeRequest, (geocodePredictions: any[], geocodeStatus: string) => {
             if (geocodeStatus === 'OK' && geocodePredictions) {
               const formattedSuggestions = geocodePredictions.map(prediction => ({
                 place_id: prediction.place_id,
