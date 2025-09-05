@@ -38,71 +38,76 @@ const Header = () => {
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
       {/* Top bar */}
       <div className="bg-primary text-primary-foreground">
-        <div className="container mx-auto px-4 py-2">
-          <div className="flex justify-between items-center text-sm">
-            <div className="flex items-center gap-4 md:gap-6">
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4" />
+        <div className="container mx-auto px-3 sm:px-4 py-2">
+          <div className="flex justify-between items-center text-xs sm:text-sm">
+            <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <Phone className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">+60 3-1234 5678</span>
+                <span className="sm:hidden">Call</span>
               </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
+              <div className="flex items-center gap-1 sm:gap-2">
+                <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">Kuala Lumpur, Malaysia</span>
+                <span className="sm:hidden">MY</span>
               </div>
             </div>
             <div className="hidden md:flex items-center gap-4">
               <span>Free shipping on orders over RM 200</span>
+            </div>
+            <div className="md:hidden text-xs">
+              <span>Free shipping RM 200+</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main header */}
-      <div className="container mx-auto px-4 py-4">
+      <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
         <div className="flex items-center justify-between">
           {/* Logo - Updated name and made clickable */}
-          <div onClick={handleLogoClick} className="flex items-center gap-3 group cursor-pointer">
-            <div className="p-2 bg-gradient-hero rounded-lg shadow-glow group-hover:shadow-premium transition-smooth">
-              <Car className="h-6 w-6 text-primary-foreground" />
+          <div onClick={handleLogoClick} className="flex items-center gap-2 sm:gap-3 group cursor-pointer">
+            <div className="p-1.5 sm:p-2 bg-gradient-hero rounded-lg shadow-glow group-hover:shadow-premium transition-smooth">
+              <Car className="h-5 w-5 sm:h-6 sm:w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Autolab</h1>
-              <p className="text-sm text-muted-foreground">Car Parts & More</p>
+              <h1 className="text-lg sm:text-xl font-bold text-foreground">Autolab</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Car Parts & More</p>
             </div>
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-8">
-            <Link to="/catalog" className="text-foreground hover:text-primary transition-fast font-medium">
+          <nav className="hidden md:flex items-center gap-6 lg:gap-8">
+            <Link to="/catalog" className="text-foreground hover:text-primary transition-fast font-medium text-sm lg:text-base">
               Catalog
             </Link>
             {user && (
-              <Link to="/my-orders" className="text-foreground hover:text-primary transition-fast font-medium">
+              <Link to="/my-orders" className="text-foreground hover:text-primary transition-fast font-medium text-sm lg:text-base">
                 My Orders
               </Link>
             )}
           </nav>
 
           {/* Search Bar */}
-          <div className="hidden md:flex items-center flex-1 max-w-lg mx-8">
+          <div className="hidden md:flex items-center flex-1 max-w-lg mx-4 lg:mx-8">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search car parts, brands, models..." 
-                className="pl-10 pr-4 w-full"
+                className="pl-10 pr-4 w-full text-sm"
               />
             </div>
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             {/* Cart */}
             {user ? (
               <Button variant="ghost" size="icon" className="relative" asChild>
                 <Link to="/cart">
-                  <ShoppingCart className="h-5 w-5" />
+                  <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
                   {getTotalItems() > 0 && (
-                    <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                    <Badge variant="destructive" className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 h-4 w-4 sm:h-5 sm:w-5 rounded-full p-0 flex items-center justify-center text-xs">
                       {getTotalItems()}
                     </Badge>
                   )}
@@ -116,13 +121,13 @@ const Header = () => {
                 title="Please sign in to access cart"
                 disabled
               >
-                <ShoppingCart className="h-5 w-5" />
+                <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             )}
 
             {/* Account */}
             {user ? (
-              <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
                 <Button 
                   variant="ghost" 
                   size="icon"
@@ -135,7 +140,7 @@ const Header = () => {
                 </Button>
               </div>
             ) : (
-              <Button asChild variant="hero">
+              <Button asChild variant="hero" size="sm" className="hidden sm:inline-flex">
                 <Link to="/auth">Sign In</Link>
               </Button>
             )}
@@ -143,38 +148,38 @@ const Header = () => {
             {/* Mobile Menu */}
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="lg:hidden">
-                  <Menu className="h-5 w-5" />
+                <Button variant="ghost" size="icon" className="md:hidden">
+                  <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-80">
-                <div className="flex flex-col gap-6 mt-6">
+              <SheetContent side="right" className="w-[300px] sm:w-80">
+                <div className="flex flex-col gap-4 sm:gap-6 mt-4 sm:mt-6">
                   {/* Mobile Search */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
                       placeholder="Search parts..." 
-                      className="pl-10"
+                      className="pl-10 text-sm"
                     />
                   </div>
 
                   {/* Mobile Navigation */}
-                  <nav className="flex flex-col gap-4">
-                    <Link to="/catalog" className="text-foreground hover:text-primary transition-fast font-medium py-2">
+                  <nav className="flex flex-col gap-3 sm:gap-4">
+                    <Link to="/catalog" className="text-foreground hover:text-primary transition-fast font-medium py-2 text-base">
                       Catalog
                     </Link>
                     {user && (
-                      <Link to="/my-orders" className="text-foreground hover:text-primary transition-fast font-medium py-2">
+                      <Link to="/my-orders" className="text-foreground hover:text-primary transition-fast font-medium py-2 text-base">
                         My Orders
                       </Link>
                     )}
                   </nav>
 
-                  <div className="pt-4 border-t border-border">
+                  <div className="pt-3 sm:pt-4 border-t border-border">
                     {user ? (
                       <div className="space-y-2">
                         <Button 
-                          className="w-full" 
+                          className="w-full justify-start" 
                           variant="ghost" 
                           size="sm"
                           onClick={() => setIsProfileModalOpen(true)}
@@ -182,7 +187,7 @@ const Header = () => {
                           <User className="h-4 w-4 mr-2" />
                           Profile
                         </Button>
-                        <Button className="w-full" variant="outline" size="sm" onClick={handleSignOut}>
+                        <Button className="w-full justify-start" variant="outline" size="sm" onClick={handleSignOut}>
                           <LogOut className="h-4 w-4 mr-2" />
                           Sign Out
                         </Button>

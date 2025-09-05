@@ -235,16 +235,16 @@ export default function MyOrders() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold">My Orders</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold">My Orders</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Track your order history and status
             </p>
           </div>
           <Link to="/catalog">
-            <Button variant="outline">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Shop
             </Button>
@@ -278,89 +278,145 @@ export default function MyOrders() {
                 </Link>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Order</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Payment</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* Mobile View - Cards */}
+                <div className="block md:hidden space-y-3">
                   {orders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell>
+                    <Card key={order.id} className="p-4">
+                      <div className="flex justify-between items-start mb-3">
                         <div>
-                          <div className="font-medium">#{order.order_no}</div>
-                          <div className="text-sm text-muted-foreground">{order.id.slice(0, 8)}</div>
+                          <div className="font-semibold text-base">#{order.order_no}</div>
+                          <div className="text-xs text-muted-foreground">{formatDate(order.created_at)}</div>
                         </div>
-                      </TableCell>
-                      <TableCell>{formatDate(order.created_at)}</TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{order.order_items.length} item{order.order_items.length !== 1 ? 's' : ''}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {order.order_items.reduce((total, item) => total + item.quantity, 0)} pieces
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatCurrency(order.total)}</TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusBadgeVariant(order.status)}>
-                          {order.status.toLowerCase().replace('_', ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getPaymentBadgeVariant(order.payment_state)}>
-                          {order.payment_state.toLowerCase().replace('_', ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => openViewDialog(order)}
+                          className="p-2"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <div className="text-xs text-muted-foreground">Items</div>
+                          <div className="text-sm font-medium">
+                            {order.order_items.length} item{order.order_items.length !== 1 ? 's' : ''} 
+                            <span className="text-muted-foreground">
+                              ({order.order_items.reduce((total, item) => total + item.quantity, 0)} pcs)
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Total</div>
+                          <div className="text-sm font-semibold">{formatCurrency(order.total)}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <div className="flex gap-2">
+                          <Badge variant={getStatusBadgeVariant(order.status)} className="text-xs">
+                            {order.status.toLowerCase().replace('_', ' ')}
+                          </Badge>
+                          <Badge variant={getPaymentBadgeVariant(order.payment_state)} className="text-xs">
+                            {order.payment_state.toLowerCase().replace('_', ' ')}
+                          </Badge>
+                        </div>
+                      </div>
+                    </Card>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+
+                {/* Desktop View - Table */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Items</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Payment</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orders.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">#{order.order_no}</div>
+                              <div className="text-sm text-muted-foreground">{order.id.slice(0, 8)}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{formatDate(order.created_at)}</TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{order.order_items.length} item{order.order_items.length !== 1 ? 's' : ''}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {order.order_items.reduce((total, item) => total + item.quantity, 0)} pieces
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{formatCurrency(order.total)}</TableCell>
+                          <TableCell>
+                            <Badge variant={getStatusBadgeVariant(order.status)}>
+                              {order.status.toLowerCase().replace('_', ' ')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getPaymentBadgeVariant(order.payment_state)}>
+                              {order.payment_state.toLowerCase().replace('_', ' ')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openViewDialog(order)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
 
         {/* View Order Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
             <DialogHeader>
-              <DialogTitle>Order Details</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-lg sm:text-xl">Order Details</DialogTitle>
+              <DialogDescription className="text-sm">
                 Complete order information and items
               </DialogDescription>
             </DialogHeader>
 
             {selectedOrder && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <h4 className="font-semibold mb-2">Order Information</h4>
-                    <div className="space-y-2 text-sm">
+                    <h4 className="font-semibold mb-2 text-sm sm:text-base">Order Information</h4>
+                    <div className="space-y-2 text-xs sm:text-sm">
                       <div><span className="font-medium">Order #:</span> {selectedOrder.order_no}</div>
                       <div><span className="font-medium">Date:</span> {formatDate(selectedOrder.created_at)}</div>
-                      <div><span className="font-medium">Status:</span> 
-                        <Badge className="ml-2" variant={getStatusBadgeVariant(selectedOrder.status)}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Status:</span> 
+                        <Badge variant={getStatusBadgeVariant(selectedOrder.status)} className="text-xs">
                           {selectedOrder.status.toLowerCase().replace('_', ' ')}
                         </Badge>
                       </div>
-                      <div><span className="font-medium">Payment:</span> 
-                        <Badge className="ml-2" variant={getPaymentBadgeVariant(selectedOrder.payment_state)}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Payment:</span> 
+                        <Badge variant={getPaymentBadgeVariant(selectedOrder.payment_state)} className="text-xs">
                           {selectedOrder.payment_state.toLowerCase().replace('_', ' ')}
                         </Badge>
                       </div>
@@ -368,8 +424,8 @@ export default function MyOrders() {
                   </div>
 
                   <div>
-                    <h4 className="font-semibold mb-2">Delivery</h4>
-                    <div className="space-y-2 text-sm">
+                    <h4 className="font-semibold mb-2 text-sm sm:text-base">Delivery</h4>
+                    <div className="space-y-2 text-xs sm:text-sm">
                       <div><span className="font-medium">Method:</span> {selectedOrder.delivery_method.replace('-', ' ').toUpperCase()}</div>
                       <div><span className="font-medium">Payment Method:</span> {selectedOrder.payment_method.replace('-', ' ').toUpperCase()}</div>
                       <div><span className="font-medium">Delivery Fee:</span> {selectedOrder.delivery_fee === 0 ? 'FREE' : formatCurrency(selectedOrder.delivery_fee)}</div>
@@ -393,37 +449,65 @@ export default function MyOrders() {
                 )}
 
                 <div>
-                  <h4 className="font-semibold mb-2">Order Items</h4>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Component</TableHead>
-                        <TableHead>SKU</TableHead>
-                        <TableHead>From Product</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="text-right">Price</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedOrder.order_items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{item.component_name}</TableCell>
-                          <TableCell><code className="text-xs bg-gray-100 px-1 rounded">{item.component_sku}</code></TableCell>
-                          <TableCell>
-                            {item.product_context ? (
-                              <span className="text-sm text-muted-foreground">{item.product_context}</span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.total_price)}</TableCell>
+                  <h4 className="font-semibold mb-2 text-sm sm:text-base">Order Items</h4>
+                  
+                  {/* Mobile View - Cards */}
+                  <div className="block sm:hidden space-y-3">
+                    {selectedOrder.order_items.map((item) => (
+                      <Card key={item.id} className="p-3 bg-gray-50">
+                        <div className="space-y-2">
+                          <div className="font-medium text-sm">{item.component_name}</div>
+                          <div className="text-xs">
+                            <code className="bg-white px-1 rounded border text-xs">{item.component_sku}</code>
+                          </div>
+                          {item.product_context && (
+                            <div className="text-xs text-muted-foreground">From: {item.product_context}</div>
+                          )}
+                          <div className="flex justify-between items-center text-sm">
+                            <div>Qty: {item.quantity}</div>
+                            <div className="text-right">
+                              <div className="text-xs text-muted-foreground">{formatCurrency(item.unit_price)} each</div>
+                              <div className="font-medium">{formatCurrency(item.total_price)}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Desktop View - Table */}
+                  <div className="hidden sm:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Component</TableHead>
+                          <TableHead>SKU</TableHead>
+                          <TableHead>From Product</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Price</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedOrder.order_items.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>{item.component_name}</TableCell>
+                            <TableCell><code className="text-xs bg-gray-100 px-1 rounded">{item.component_sku}</code></TableCell>
+                            <TableCell>
+                              {item.product_context ? (
+                                <span className="text-sm text-muted-foreground">{item.product_context}</span>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">{item.quantity}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(item.total_price)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
 
                 <div className="border-t pt-4">

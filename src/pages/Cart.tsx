@@ -74,16 +74,16 @@ export default function Cart() {
       <div className="min-h-screen bg-background">
         <Header />
         
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-3 sm:px-4 py-8">
           <div className="max-w-2xl mx-auto text-center">
             <div className="mb-8">
-              <ShoppingBag className="h-24 w-24 mx-auto text-muted-foreground mb-4" />
-              <h1 className="text-3xl font-bold mb-4">Your Cart is Empty</h1>
-              <p className="text-muted-foreground mb-8">
+              <ShoppingBag className="h-16 w-16 sm:h-24 sm:w-24 mx-auto text-muted-foreground mb-4" />
+              <h1 className="text-2xl sm:text-3xl font-bold mb-4">Your Cart is Empty</h1>
+              <p className="text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8 px-4">
                 Add some automotive parts to your cart to get started!
               </p>
               <Link to="/catalog">
-                <Button size="lg">
+                <Button size="lg" className="w-full sm:w-auto">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Browse Catalog
                 </Button>
@@ -99,36 +99,36 @@ export default function Cart() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Shopping Cart</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold">Shopping Cart</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               {getTotalItems()} item{getTotalItems() !== 1 ? 's' : ''} in your cart
             </p>
           </div>
           <Link to="/catalog">
-            <Button variant="outline">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Continue Shopping
             </Button>
           </Link>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
           {/* Cart Items */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 order-2 lg:order-1">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <CardTitle>Cart Items</CardTitle>
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                  <CardTitle className="text-lg sm:text-xl">Cart Items</CardTitle>
                   <div className="flex items-center space-x-2">
                     <Checkbox 
                       id="select-all"
                       checked={isAllSelected}
                       onCheckedChange={handleSelectAll}
                     />
-                    <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
+                    <label htmlFor="select-all" className="text-xs sm:text-sm font-medium cursor-pointer">
                       Select All
                     </label>
                   </div>
@@ -137,7 +137,7 @@ export default function Cart() {
                   variant="outline" 
                   size="sm"
                   onClick={clearCart}
-                  className="text-destructive hover:text-destructive"
+                  className="text-destructive hover:text-destructive w-full sm:w-auto"
                 >
                   Clear Cart
                 </Button>
@@ -145,70 +145,80 @@ export default function Cart() {
               <CardContent className="p-0">
                 <div className="divide-y">
                   {cartItems.map((item) => (
-                    <div key={item.id} className="p-6 flex items-center gap-4">
-                      <Checkbox
-                        checked={selectedItems.includes(item.id)}
-                        onCheckedChange={(checked) => handleItemSelection(item.id, checked as boolean)}
-                      />
-                      {item.component_image && (
-                        <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                          <img
-                            src={item.component_image}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-                      
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold truncate">{item.name}</h3>
-                        <p className="text-sm text-muted-foreground">{item.component_sku}</p>
-                        <p className="text-sm text-muted-foreground">
-                          From: {item.product_name}
-                        </p>
-                        <div className="mt-2">
-                          <Badge variant="outline" className="text-xs">
-                            {formatPrice(item.normal_price)} each
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            disabled={item.quantity <= 1}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="w-12 text-center border rounded px-2 py-1">
-                            {item.quantity}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
+                    <div key={item.id} className="p-3 sm:p-6">
+                      <div className="flex items-start gap-3 sm:gap-4">
+                        <Checkbox
+                          checked={selectedItems.includes(item.id)}
+                          onCheckedChange={(checked) => handleItemSelection(item.id, checked as boolean)}
+                          className="mt-1"
+                        />
+                        {item.component_image && (
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                            <img
+                              src={item.component_image}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
                         
-                        <div className="text-right min-w-[100px]">
-                          <p className="font-semibold">
-                            {formatPrice(item.normal_price * item.quantity)}
-                          </p>
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div>
+                            <h3 className="text-sm sm:text-base font-semibold line-clamp-2">{item.name}</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground">{item.component_sku}</p>
+                            <p className="text-xs sm:text-sm text-muted-foreground">
+                              From: {item.product_name}
+                            </p>
+                          </div>
+                          
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">
+                                {formatPrice(item.normal_price)} each
+                              </Badge>
+                            </div>
+                            
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-1 sm:gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                  disabled={item.quantity <= 1}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                <span className="w-8 sm:w-12 text-center text-sm border rounded px-1 sm:px-2 py-1">
+                                  {item.quantity}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              
+                              <div className="text-right min-w-[80px] sm:min-w-[100px]">
+                                <p className="text-sm sm:text-base font-semibold">
+                                  {formatPrice(item.normal_price * item.quantity)}
+                                </p>
+                              </div>
+                              
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => removeFromCart(item.id)}
+                                className="text-destructive hover:text-destructive p-1 sm:p-2 h-8 w-8"
+                              >
+                                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => removeFromCart(item.id)}
-                          className="text-destructive hover:text-destructive p-2"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
                       </div>
                     </div>
                   ))}
@@ -218,24 +228,24 @@ export default function Cart() {
           </div>
 
           {/* Order Summary */}
-          <div className="lg:col-span-1">
-            <Card>
+          <div className="lg:col-span-1 order-1 lg:order-2">
+            <Card className="sticky top-4">
               <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
+                <CardTitle className="text-lg sm:text-xl">Order Summary</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 sm:space-y-4">
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-xs sm:text-sm">
                     <span>Selected Items ({selectedItems.length} of {getTotalItems()})</span>
-                    <span>{formatPrice(getSelectedTotal())}</span>
+                    <span className="font-medium">{formatPrice(getSelectedTotal())}</span>
                   </div>
                   {hasSelectedItems && (
                     <>
-                      <div className="flex justify-between text-sm">
+                      <div className="flex justify-between text-xs sm:text-sm">
                         <span>Shipping</span>
                         <span className="text-muted-foreground">Calculated at checkout</span>
                       </div>
-                      <div className="flex justify-between text-sm">
+                      <div className="flex justify-between text-xs sm:text-sm">
                         <span>Tax</span>
                         <span className="text-muted-foreground">Calculated at checkout</span>
                       </div>
@@ -245,7 +255,7 @@ export default function Cart() {
                 
                 <Separator />
                 
-                <div className="flex justify-between text-lg font-semibold">
+                <div className="flex justify-between text-base sm:text-lg font-semibold">
                   <span>Total</span>
                   <span>{formatPrice(getSelectedTotal())}</span>
                 </div>
@@ -256,7 +266,8 @@ export default function Cart() {
                   disabled={!hasSelectedItems}
                   onClick={() => setShowCheckoutModal(true)}
                 >
-                  Proceed to Checkout ({selectedItems.length} items)
+                  <span className="hidden sm:inline">Proceed to Checkout ({selectedItems.length} items)</span>
+                  <span className="sm:hidden">Checkout ({selectedItems.length})</span>
                 </Button>
                 
                 <div className="text-center">
