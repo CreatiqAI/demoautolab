@@ -226,18 +226,18 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-7xl h-[95vh] max-h-[900px] flex flex-col p-3 sm:p-6">
+      <DialogContent className="w-[95vw] max-w-7xl max-h-[90vh] sm:max-h-[85vh] flex flex-col p-3 sm:p-6 overflow-hidden">
         <DialogHeader className="flex-shrink-0 pb-2">
-          <DialogTitle className="text-xl sm:text-2xl line-clamp-1">{product.name}</DialogTitle>
-          <DialogDescription className="text-sm">
+          <DialogTitle className="text-lg sm:text-xl lg:text-2xl line-clamp-2">{product.name}</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
             {product.brand} {product.model} - View product details and available components
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4 flex-1 overflow-hidden">
-          {/* Product Images - Responsive sizing */}
-          <div className="lg:col-span-2 flex flex-col space-y-3">
-            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+        <div className="flex flex-col lg:grid lg:grid-cols-5 gap-3 sm:gap-4 flex-1 min-h-0 overflow-hidden">
+          {/* Product Images - Mobile optimized */}
+          <div className="lg:col-span-2 flex flex-col space-y-2 sm:space-y-3 flex-shrink-0">
+            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center max-h-[250px] sm:max-h-none">
               <img
                 src={product.product_images[selectedImage]?.url || primaryImage?.url || '/placeholder.svg'}
                 alt={product.product_images[selectedImage]?.alt_text || product.name}
@@ -251,12 +251,12 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
               />
             </div>
             {product.product_images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-2">
+              <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1 sm:pb-2">
                 {product.product_images.map((image, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
-                    className={`w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-colors flex items-center justify-center ${
+                    className={`w-12 h-12 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-colors flex items-center justify-center ${
                       index === selectedImage ? 'border-primary' : 'border-gray-200'
                     }`}
                   >
@@ -273,80 +273,87 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
             )}
           </div>
 
-          {/* Product Info and Components - Better space allocation */}
-          <div className="lg:col-span-3 flex flex-col min-h-0">
+          {/* Product Info and Components - Scrollable container */}
+          <div className="lg:col-span-3 flex flex-col min-h-0 overflow-y-auto">
             {/* Compact Product Header */}
-            <div className="flex-shrink-0 space-y-3 pb-3 border-b">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="default">Available</Badge>
+            <div className="flex-shrink-0 space-y-2 sm:space-y-3 pb-3 border-b sticky top-0 bg-white z-10">
+              <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                <Badge variant="default" className="text-xs">Available</Badge>
                 {product.featured && (
-                  <Badge variant="secondary">⭐ Featured</Badge>
+                  <Badge variant="secondary" className="text-xs">⭐ Featured</Badge>
                 )}
                 {product.screen_size && product.screen_size.length > 0 && (
                   <>
-                    {product.screen_size.map((size) => (
+                    {product.screen_size.slice(0, 2).map((size) => (
                       <Badge key={size} variant="outline" className="text-xs">
-                        {size}" Screen
+                        {size}"
                       </Badge>
                     ))}
+                    {product.screen_size.length > 2 && (
+                      <Badge variant="outline" className="text-xs">
+                        +{product.screen_size.length - 2}
+                      </Badge>
+                    )}
                   </>
                 )}
               </div>
               <div>
-                <p className="text-sm sm:text-base text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   {product.brand} {product.model}
                   {product.year_from && product.year_to && ` (${product.year_from}-${product.year_to})`}
                 </p>
                 {product.description && (
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-2 line-clamp-2">
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2">
                     {product.description}
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Cart Summary - More responsive */}
-            <div className="flex-shrink-0 bg-blue-50 p-2 sm:p-3 rounded-lg border border-blue-200 my-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                  <span className="text-xs sm:text-sm font-medium">Selected:</span>
-                  <span className="text-xs sm:text-sm text-muted-foreground">
-                    {getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''}
-                  </span>
-                  {localCart.length > 0 && (
-                    <span className="font-medium text-xs sm:text-sm">
-                      {formatPrice(getLocalCartTotal())}
+            {/* Cart Summary - Sticky and responsive */}
+            <div className="flex-shrink-0 bg-blue-50 p-2 sm:p-3 rounded-lg border border-blue-200 my-2 sm:my-3 sticky top-[120px] z-10">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm font-medium">Selected:</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">
+                      {getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''}
                     </span>
-                  )}
+                    {localCart.length > 0 && (
+                      <span className="font-medium text-xs sm:text-sm text-primary">
+                        {formatPrice(getLocalCartTotal())}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {!user ? (
-                  <Button variant="default" size="sm" asChild className="w-full sm:w-auto">
-                    <a href="/auth">Sign In</a>
+                  <Button variant="default" size="sm" asChild className="w-full">
+                    <a href="/auth">Sign In to Add Items</a>
                   </Button>
                 ) : (
                   <Button 
                     size="sm"
                     onClick={handleAddToCart}
                     disabled={localCart.length === 0 || cartLoading}
-                    className="w-full sm:w-auto"
+                    className="w-full"
                   >
                     <ShoppingCart className="h-3 w-3 mr-1 sm:mr-2" />
-                    {cartLoading ? 'Adding...' : 'Add to Cart'}
+                    {cartLoading ? 'Adding...' : `Add ${getLocalCartTotalQuantity() > 0 ? getLocalCartTotalQuantity() + ' ' : ''}to Cart`}
                   </Button>
                 )}
               </div>
             </div>
 
-            {/* Components Section - Optimized */}
-            <div className="flex-1 flex flex-col min-h-0">
+            {/* Components Section - Scrollable */}
+            <div className="flex-1 pb-4">
               <div className="flex-shrink-0 mb-3">
                 <h3 className="font-medium text-sm sm:text-base mb-1">Available Components</h3>
                 <p className="text-xs text-muted-foreground">
-                  Select components and quantities
+                  Select components and quantities to add to cart
                 </p>
               </div>
               
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              <div className="space-y-2 sm:space-y-3">
                 {loading ? (
                   <div className="flex items-center justify-center h-32">
                     <div className="text-center text-sm">Loading components...</div>
@@ -359,13 +366,13 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <>
                     {components.map((component) => {
                       const quantity = getLocalCartQuantity(component.id);
                       return (
-                        <Card key={component.id} className="p-3">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <Card key={component.id} className="p-3 hover:bg-gray-50 transition-colors">
+                          <div className="flex flex-col gap-3">
+                            <div className="flex items-start gap-3">
                               {component.default_image_url && (
                                 <button
                                   onClick={() => setViewingComponentImage(component.default_image_url!)}
@@ -382,35 +389,40 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
                                 </button>
                               )}
                               <div className="flex-1 min-w-0">
-                                <h4 className="font-medium text-sm line-clamp-1">{component.name}</h4>
-                                <p className="text-xs text-muted-foreground">{component.component_sku}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Stock: {component.stock_level}
-                                </p>
+                                <h4 className="font-medium text-sm line-clamp-2 mb-1">{component.name}</h4>
+                                <p className="text-xs text-muted-foreground mb-1">{component.component_sku}</p>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  <span>Stock: {component.stock_level}</span>
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-medium text-sm text-foreground">
+                                      {formatPrice(getDisplayPrice(component.normal_price, component.merchant_price))}
+                                    </span>
+                                    {customerType === 'merchant' && component.normal_price !== component.merchant_price && (
+                                      <span className="text-xs text-muted-foreground line-through">
+                                        {formatPrice(component.normal_price)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                             
-                            <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
-                              <div className="text-right">
-                                <p className="font-medium text-sm">{formatPrice(getDisplayPrice(component.normal_price, component.merchant_price))}</p>
-                                {customerType === 'merchant' && component.normal_price !== component.merchant_price && (
-                                  <p className="text-xs text-muted-foreground line-through">
-                                    {formatPrice(component.normal_price)}
-                                  </p>
-                                )}
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs text-muted-foreground">
+                                {!user && "Sign in to add to cart"}
                               </div>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 sm:gap-2">
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => updateLocalQuantity(component, quantity - 1)}
                                   disabled={!user || quantity === 0}
-                                  className="h-8 w-8 p-0"
-                                  title={!user ? "Please sign in to add items to cart" : ""}
+                                  className="h-8 w-8 p-0 touch-manipulation"
+                                  title={!user ? "Please sign in to add items to cart" : "Decrease quantity"}
                                 >
                                   <Minus className="h-3 w-3" />
                                 </Button>
-                                <span className="w-10 text-center text-sm border rounded px-1 py-1">
+                                <span className="w-8 sm:w-10 text-center text-sm font-medium">
                                   {quantity}
                                 </span>
                                 <Button
@@ -418,8 +430,8 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
                                   variant="outline"
                                   onClick={() => updateLocalQuantity(component, quantity + 1)}
                                   disabled={!user || quantity >= component.stock_level}
-                                  className="h-8 w-8 p-0"
-                                  title={!user ? "Please sign in to add items to cart" : ""}
+                                  className="h-8 w-8 p-0 touch-manipulation"
+                                  title={!user ? "Please sign in to add items to cart" : "Increase quantity"}
                                 >
                                   <Plus className="h-3 w-3" />
                                 </Button>
@@ -429,7 +441,7 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
                         </Card>
                       );
                     })}
-                  </div>
+                  </>
                 )}
               </div>
             </div>
@@ -440,18 +452,20 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
       {/* Component Image Viewer */}
       {viewingComponentImage && (
         <Dialog open={!!viewingComponentImage} onOpenChange={() => setViewingComponentImage(null)}>
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-3xl w-[95vw] max-h-[85vh] overflow-hidden p-3 sm:p-6">
             <DialogHeader>
-              <DialogTitle>Component Image</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-base sm:text-lg">Component Image</DialogTitle>
+              <DialogDescription className="text-sm">
                 View component image in full size
               </DialogDescription>
             </DialogHeader>
-            <div className="flex justify-center">
+            <div className="flex justify-center overflow-hidden">
               <img
                 src={viewingComponentImage}
                 alt="Component"
-                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                className="max-w-full max-h-[60vh] sm:max-h-[70vh] object-contain rounded-lg"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           </DialogContent>
