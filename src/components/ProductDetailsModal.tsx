@@ -276,7 +276,7 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
           {/* Product Info and Components - Scrollable container */}
           <div className="lg:col-span-3 flex flex-col min-h-0 overflow-y-auto">
             {/* Compact Product Header */}
-            <div className="flex-shrink-0 space-y-2 sm:space-y-3 pb-3 border-b sticky top-0 bg-white z-10">
+            <div className="flex-shrink-0 space-y-2 sm:space-y-3 pb-3 border-b">
               <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                 <Badge variant="default" className="text-xs">Available</Badge>
                 {product.featured && (
@@ -310,42 +310,8 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
               </div>
             </div>
 
-            {/* Cart Summary - Sticky and responsive */}
-            <div className="flex-shrink-0 bg-blue-50 p-2 sm:p-3 rounded-lg border border-blue-200 my-2 sm:my-3 sticky top-[120px] z-10">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs sm:text-sm font-medium">Selected:</span>
-                    <span className="text-xs sm:text-sm text-muted-foreground">
-                      {getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''}
-                    </span>
-                    {localCart.length > 0 && (
-                      <span className="font-medium text-xs sm:text-sm text-primary">
-                        {formatPrice(getLocalCartTotal())}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {!user ? (
-                  <Button variant="default" size="sm" asChild className="w-full">
-                    <a href="/auth">Sign In to Add Items</a>
-                  </Button>
-                ) : (
-                  <Button 
-                    size="sm"
-                    onClick={handleAddToCart}
-                    disabled={localCart.length === 0 || cartLoading}
-                    className="w-full"
-                  >
-                    <ShoppingCart className="h-3 w-3 mr-1 sm:mr-2" />
-                    {cartLoading ? 'Adding...' : `Add ${getLocalCartTotalQuantity() > 0 ? getLocalCartTotalQuantity() + ' ' : ''}to Cart`}
-                  </Button>
-                )}
-              </div>
-            </div>
-
             {/* Components Section - Scrollable */}
-            <div className="flex-1 pb-4">
+            <div className="flex-1 py-4">
               <div className="flex-shrink-0 mb-3">
                 <h3 className="font-medium text-sm sm:text-base mb-1">Available Components</h3>
                 <p className="text-xs text-muted-foreground">
@@ -441,6 +407,40 @@ const ProductDetailsModal = ({ product, isOpen, onClose }: ProductDetailsModalPr
                         </Card>
                       );
                     })}
+
+                    {/* Cart Summary - At the bottom, scrolls with components */}
+                    <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200 mt-4">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">Selected:</span>
+                            <span className="text-sm text-muted-foreground">
+                              {getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''}
+                            </span>
+                            {localCart.length > 0 && (
+                              <span className="font-semibold text-primary">
+                                {formatPrice(getLocalCartTotal())}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {!user ? (
+                          <Button variant="default" size="lg" asChild className="w-full">
+                            <a href="/auth">Sign In to Add Items</a>
+                          </Button>
+                        ) : (
+                          <Button 
+                            size="lg"
+                            onClick={handleAddToCart}
+                            disabled={localCart.length === 0 || cartLoading}
+                            className="w-full"
+                          >
+                            <ShoppingCart className="h-4 w-4 mr-2" />
+                            {cartLoading ? 'Adding...' : `Add ${getLocalCartTotalQuantity() > 0 ? getLocalCartTotalQuantity() + ' Items ' : ''}to Cart`}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
