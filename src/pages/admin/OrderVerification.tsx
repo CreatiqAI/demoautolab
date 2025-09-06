@@ -139,6 +139,59 @@ export default function OrderVerification() {
     });
   };
 
+  // Webhook function to send WhatsApp notification
+  const sendWhatsAppNotification = async (order: PendingOrder, estimatedDeliveryDate: string) => {
+    try {
+      const webhookUrl = "https://auto.creatiqai.com/webhook/752b6772-30ca-4dd1-ac8e-cb860f193177";
+      
+      const webhookPayload = {
+        orderNo: order.order_no,
+        customerName: order.customer_name,
+        customerPhone: order.customer_phone,
+        customerEmail: order.customer_email,
+        orderItems: order.order_items.map(item => ({
+          sku: item.component_sku,
+          name: item.component_name,
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+          totalPrice: item.total_price,
+          productContext: item.product_context
+        })),
+        orderTotal: order.total,
+        deliveryMethod: order.delivery_method,
+        deliveryAddress: order.delivery_address,
+        estimatedDeliveryDate: estimatedDeliveryDate,
+        orderDate: order.created_at,
+        status: "approved",
+        message: "Your order has been approved and is now being processed! We'll keep you updated on the progress.",
+        trackingUrl: `${window.location.origin}/my-orders`
+      };
+
+      console.log('🚀 Sending WhatsApp notification webhook:', webhookPayload);
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        mode: 'cors',
+        body: JSON.stringify(webhookPayload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Webhook failed: ${response.status} ${response.statusText}`);
+      }
+
+      console.log('✅ WhatsApp notification webhook sent successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending WhatsApp notification webhook:', error);
+      // Don't throw error here as it shouldn't block the main approval process
+      return false;
+    }
+  };
+
   const handleVerification = async (approved: boolean) => {
     if (!selectedOrder) return;
 
@@ -177,10 +230,27 @@ export default function OrderVerification() {
         throw new Error(functionResult?.message || 'Payment verification failed');
       }
 
-      toast({
-        title: approved ? "Payment Verified" : "Payment Rejected",
-        description: functionResult.message,
-      });
+      // Send WhatsApp notification if order is approved
+      if (approved) {
+        const webhookSent = await sendWhatsAppNotification(selectedOrder, verificationData.estimatedDeliveryDate);
+        if (webhookSent) {
+          toast({
+            title: "Payment Verified",
+            description: `${functionResult.message} WhatsApp notification sent to customer.`,
+          });
+        } else {
+          toast({
+            title: "Payment Verified",
+            description: `${functionResult.message} Note: WhatsApp notification could not be sent.`,
+            variant: "default"
+          });
+        }
+      } else {
+        toast({
+          title: "Payment Rejected",
+          description: functionResult.message,
+        });
+      }
 
       // Reset form and close dialog
       setSelectedOrder(null);
