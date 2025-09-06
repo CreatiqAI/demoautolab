@@ -51,8 +51,8 @@ const Catalog = () => {
   
   // Mobile infinite scroll settings
   const [isMobile, setIsMobile] = useState(false);
-  const [visibleItems, setVisibleItems] = useState(4); // Start with 4 items on mobile
-  const itemsPerBatch = 4; // Load 4 more items each time
+  const [visibleItems, setVisibleItems] = useState(4); // Start with 4 items (2x2 grid) on mobile
+  const itemsPerBatch = 4; // Load 4 more items each time (2 more rows)
 
   const { user } = useAuth();
   const { customerType, pricingMode, getPriceLabel } = usePricing();
@@ -296,8 +296,8 @@ const Catalog = () => {
             </div>
           </div>
 
-          {/* Products Grid - Improved Responsive Grid */}
-          <div className="products-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
+          {/* Products Grid - Mobile 2x2, Desktop Responsive */}
+          <div className="products-grid grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 xl:gap-6">
             {productsLoading ? (
               Array.from({ length: isMobile ? 4 : 8 }).map((_, i) => (
                 <Card key={i} className="overflow-hidden">
@@ -355,48 +355,48 @@ const Catalog = () => {
                       </div>
                     </CardHeader>
 
-                    {/* Product Info */}
-                    <CardContent className="p-3 sm:p-4">
+                    {/* Product Info - Compact for Mobile 2x2 Grid */}
+                    <CardContent className="p-2 sm:p-3 lg:p-4">
                       {/* Product Name & Details */}
-                      <div className="space-y-2">
-                        <h3 className="font-semibold text-sm sm:text-base line-clamp-2 leading-tight">
+                      <div className="space-y-1 sm:space-y-2">
+                        <h3 className="font-semibold text-xs sm:text-sm lg:text-base line-clamp-2 leading-tight">
                           {product.name}
                         </h3>
                         
-                        {/* Brand & Model */}
+                        {/* Brand & Model - More compact on mobile */}
                         <div className="text-xs text-muted-foreground">
                           <span className="font-medium">{product.brand}</span>
-                          {product.model && <span> {product.model}</span>}
+                          {product.model && <span className="hidden sm:inline"> {product.model}</span>}
                           {product.year_from && product.year_to && (
-                            <span className="block sm:inline sm:ml-1">
+                            <span className="hidden sm:block lg:inline lg:ml-1 text-xs">
                               ({product.year_from}-{product.year_to})
                             </span>
                           )}
                         </div>
 
-                        {/* Screen Sizes */}
+                        {/* Screen Sizes - Hide on very small mobile, show on tablet+ */}
                         {product.screen_size && product.screen_size.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {product.screen_size.slice(0, 2).map((size) => (
-                              <Badge key={size} variant="outline" className="text-xs px-2 py-0.5">
+                          <div className="hidden sm:flex flex-wrap gap-1">
+                            {product.screen_size.slice(0, 1).map((size) => (
+                              <Badge key={size} variant="outline" className="text-xs px-1 py-0.5">
                                 {size}"
                               </Badge>
                             ))}
-                            {product.screen_size.length > 2 && (
-                              <Badge variant="outline" className="text-xs px-2 py-0.5">
-                                +{product.screen_size.length - 2}
+                            {product.screen_size.length > 1 && (
+                              <Badge variant="outline" className="text-xs px-1 py-0.5">
+                                +{product.screen_size.length - 1}
                               </Badge>
                             )}
                           </div>
                         )}
                       </div>
 
-                      {/* Action Area */}
-                      <div className="mt-4 pt-3 border-t border-border/50">
+                      {/* Action Area - Simplified for mobile */}
+                      <div className="mt-2 sm:mt-3 lg:mt-4 pt-2 sm:pt-3 border-t border-border/50">
                         <div className="text-center">
                           <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                             <Eye className="h-3 w-3" />
-                            View Details & Components
+                            <span className="hidden sm:inline">View Details &</span> Components
                           </div>
                         </div>
                       </div>
@@ -409,10 +409,10 @@ const Catalog = () => {
 
           {/* Loading More Indicator */}
           {isMobile && hasMoreProducts && (
-            <div className="text-center mt-6 py-4">
+            <div className="text-center mt-4 py-3">
               <div className="flex items-center justify-center gap-2 text-gray-600">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                <span className="text-sm">Scroll down for more products...</span>
+                <span className="text-sm">Scroll for more...</span>
               </div>
             </div>
           )}
