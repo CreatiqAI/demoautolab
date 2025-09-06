@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Filter, ShoppingCart, Eye, Package, Store, User } from 'lucide-react';
-import ProductDetailsModal from '@/components/ProductDetailsModal';
 import Header from '@/components/Header';
 import { Link } from 'react-router-dom';
 import { usePricing } from '@/hooks/usePricing';
@@ -48,8 +47,7 @@ const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'all');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   const { user } = useAuth();
   const { customerType, pricingMode, getPriceLabel } = usePricing();
@@ -192,9 +190,8 @@ const Catalog = () => {
     return primaryImage?.url || '/placeholder.svg';
   };
 
-  const handleQuickView = (product: Product) => {
-    setSelectedProduct(product);
-    setIsModalOpen(true);
+  const handleProductView = (product: Product) => {
+    navigate(`/product/${product.id}`);
   };
 
   return (
@@ -279,7 +276,7 @@ const Catalog = () => {
                   <Card 
                     key={product.id} 
                     className="overflow-hidden hover:shadow-lg transition-all duration-300 group cursor-pointer bg-white"
-                    onClick={() => handleQuickView(product)}
+                    onClick={() => handleProductView(product)}
                   >
                     {/* Product Image */}
                     <CardHeader className="p-0 relative">
@@ -432,15 +429,6 @@ const Catalog = () => {
         </div>
       </footer>
 
-      {/* Product Details Modal */}
-      <ProductDetailsModal
-        product={selectedProduct}
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedProduct(null);
-        }}
-      />
     </div>
   );
 };

@@ -10,6 +10,7 @@ import { PricingProvider } from "@/hooks/usePricing";
 import Home from './pages/Home';
 import Auth from './pages/Auth';
 import Catalog from './pages/Catalog';
+import ProductDetails from './pages/ProductDetails';
 import Cart from './pages/Cart';
 import MyOrders from './pages/MyOrders';
 import PaymentGateway from './pages/PaymentGateway';
@@ -52,6 +53,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/catalog" element={<Catalog />} />
+            <Route path="/product/:id" element={<ProductDetails />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/my-orders" element={<MyOrders />} />
             <Route path="/payment-gateway" element={<PaymentGateway />} />
