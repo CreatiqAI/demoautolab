@@ -512,7 +512,7 @@ const Catalog = () => {
             <div>
               <h4 className="font-semibold mb-4">Customer Service</h4>
               <div className="space-y-2 text-sm">
-                <p>Phone: +60 3-1234 5678</p>
+                <p>Phone: 03-4297 7668</p>
                 <p>Email: support@autolab.my</p>
                 <p>Hours: Mon-Sat 9AM-6PM</p>
               </div>

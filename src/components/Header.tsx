@@ -43,12 +43,12 @@ const Header = () => {
             <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
               <div className="flex items-center gap-1 sm:gap-2">
                 <Phone className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">+60 3-1234 5678</span>
+                <span className="hidden sm:inline">03-4297 7668</span>
                 <span className="sm:hidden">Call</span>
               </div>
               <div className="flex items-center gap-1 sm:gap-2">
                 <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">Kuala Lumpur, Malaysia</span>
+                <span className="hidden sm:inline">Cheras, Kuala Lumpur</span>
                 <span className="sm:hidden">MY</span>
               </div>
             </div>
