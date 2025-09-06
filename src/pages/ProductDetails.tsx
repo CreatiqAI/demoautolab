@@ -10,6 +10,7 @@ import { useCart } from '@/hooks/useCartDB';
 import { useAuth } from '@/hooks/useAuth';
 import { usePricing } from '@/hooks/usePricing';
 import Header from '@/components/Header';
+import LoginPromptButton from '@/components/LoginPromptButton';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface ComponentData {
@@ -577,9 +578,15 @@ const ProductDetails = () => {
                     </div>
                     
                     {!user ? (
-                      <Button variant="default" size="sm" asChild className="w-full">
-                        <a href="/auth">Sign In to Add Items</a>
-                      </Button>
+                      <LoginPromptButton 
+                        variant="default" 
+                        size="sm" 
+                        className="w-full h-9"
+                        redirectTo={`/product/${id}`}
+                      >
+                        <ShoppingCart className="h-3 w-3 mr-2" />
+                        Login to Add Items
+                      </LoginPromptButton>
                     ) : (
                       <Button 
                         size="sm"
