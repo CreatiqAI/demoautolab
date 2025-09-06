@@ -73,7 +73,7 @@ const Catalog = () => {
 
   // Fetch products with pricing based on customer type
   const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['products', searchTerm, selectedBrand, user?.id],
+    queryKey: ['products', searchTerm, selectedBrand],
     queryFn: async () => {
       // Direct query to get products
       const { data: directData, error: directError } = await supabase
@@ -138,6 +138,11 @@ const Catalog = () => {
     });
   };
 
+  // Reset visible items only when search term or brand changes
+  useEffect(() => {
+    setVisibleItems(isMobile ? 12 : 1000);
+  }, [searchTerm, selectedBrand, isMobile]);
+
   // Update search term and selected brand when URL changes
   useEffect(() => {
     const searchFromUrl = searchParams.get('search');
@@ -166,7 +171,6 @@ const Catalog = () => {
   // Handle search term changes with debounced URL updates
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    setVisibleItems(isMobile ? 12 : 1000); // Reset visible items when searching
     
     // Update URL parameters
     if (value.trim()) {
@@ -179,7 +183,6 @@ const Catalog = () => {
 
   const handleBrandChangeWithReset = (brand: string) => {
     handleBrandChange(brand);
-    setVisibleItems(isMobile ? 12 : 1000); // Reset visible items when changing brand
   };
 
   // Fetch unique brands
