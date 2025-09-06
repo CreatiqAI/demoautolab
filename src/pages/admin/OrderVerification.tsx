@@ -13,7 +13,6 @@ import {
   CheckCircle, 
   XCircle, 
   Eye, 
-  Calendar,
   Package,
   User,
   Phone,
@@ -62,7 +61,6 @@ export default function OrderVerification() {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<PendingOrder | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [verificationData, setVerificationData] = useState<VerificationData>({
     estimatedDeliveryDate: '',
     processingNotes: '',
@@ -79,7 +77,7 @@ export default function OrderVerification() {
       setLoading(true);
       
       // Fetch orders pending payment verification using the function
-      const { data: orderData, error } = await supabase
+      const { data: orderData, error } = await (supabase as any)
         .rpc('get_orders_pending_verification');
 
       if (error) throw error;
@@ -210,7 +208,7 @@ export default function OrderVerification() {
       // Use admin function to bypass RLS issues
       const verificationNotes = verificationData.verificationNotes || (approved ? 'Payment verified and approved' : 'Payment verification rejected');
       
-      const { data: functionResult, error } = await supabase
+      const { data: functionResult, error } = await (supabase as any)
         .rpc('admin_verify_payment', {
           p_order_id: selectedOrder.id,
           p_approved: approved,
@@ -226,8 +224,8 @@ export default function OrderVerification() {
 
       console.log('✅ Payment verification result:', functionResult);
       
-      if (!functionResult?.success) {
-        throw new Error(functionResult?.message || 'Payment verification failed');
+      if (!functionResult || !(functionResult as any).success) {
+        throw new Error((functionResult as any)?.message || 'Payment verification failed');
       }
 
       // Send WhatsApp notification if order is approved
@@ -236,19 +234,19 @@ export default function OrderVerification() {
         if (webhookSent) {
           toast({
             title: "Payment Verified",
-            description: `${functionResult.message} WhatsApp notification sent to customer.`,
+            description: `${(functionResult as any)?.message || 'Order approved'} WhatsApp notification sent to customer.`,
           });
         } else {
           toast({
             title: "Payment Verified",
-            description: `${functionResult.message} Note: WhatsApp notification could not be sent.`,
+            description: `${(functionResult as any)?.message || 'Order approved'} Note: WhatsApp notification could not be sent.`,
             variant: "default"
           });
         }
       } else {
         toast({
           title: "Payment Rejected",
-          description: functionResult.message,
+          description: (functionResult as any)?.message || 'Payment rejected',
         });
       }
 

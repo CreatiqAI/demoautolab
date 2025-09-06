@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Search, Trash2, Download, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Tables, Enums } from '@/integrations/supabase/types';
 
 interface Order {
   id: string;
@@ -72,7 +71,7 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrder] = useState<Order | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -107,7 +106,7 @@ export default function Orders() {
       let ordersData: any[] = [];
       
       // Try the admin function first (same as Dashboard.tsx)
-      const { data: functionData, error: functionError } = await supabase
+      const { data: functionData, error: functionError } = await (supabase as any)
         .rpc('get_admin_orders');
 
       if (!functionError && functionData) {
@@ -116,7 +115,7 @@ export default function Orders() {
         console.warn('Admin function failed, trying fallback approach:', functionError);
         
         // Fallback: Try the enhanced admin view
-        const { data: viewData, error: viewError } = await supabase
+        const { data: viewData, error: viewError } = await (supabase as any)
           .from('admin_orders_enhanced')
           .select('*')
           .order('created_at', { ascending: false });
@@ -211,20 +210,7 @@ export default function Orders() {
     }
   };
 
-  const openEditDialog = (order: Order) => {
-    setSelectedOrder(order);
-    setEditForm({
-      status: order.status,
-      payment_state: order.payment_state,
-      notes: order.notes || ''
-    });
-    setIsEditDialogOpen(true);
-  };
-
-  const openViewDialog = (order: Order) => {
-    setSelectedOrder(order);
-    setIsViewDialogOpen(true);
-  };
+  // Removed unused functions openEditDialog and openViewDialog
 
   const handleDeleteOrder = async (order: Order) => {
     if (!confirm(`Are you sure you want to permanently delete order #${order.order_no}? This action cannot be undone.`)) {
