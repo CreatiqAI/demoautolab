@@ -71,6 +71,65 @@ const Catalog = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Fetch products with pricing based on customer type
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['products', searchTerm, selectedBrand, user?.id],
+    queryFn: async () => {
+      // Direct query to get products
+      const { data: directData, error: directError } = await supabase
+        .from('products_new')
+        .select(`
+          *,
+          product_images_new (
+            url,
+            alt_text,
+            is_primary,
+            sort_order
+          )
+        `)
+        .eq('active', true)
+        .order('created_at', { ascending: false });
+
+      if (directError) {
+        console.error('Error fetching products:', directError);
+        return [];
+      }
+
+      // Map the data to match interface with fallback pricing
+      const productsData = directData.map(item => ({
+        ...item,
+        product_images: item.product_images_new || [],
+        price: item.normal_price || 299, // Fallback price
+        normal_price: item.normal_price || 299,
+        merchant_price: item.merchant_price || 249,
+        customer_type: 'normal'
+      }));
+      
+      // Filter products based on search and brand
+      let filteredData = productsData;
+      
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        filteredData = filteredData.filter(item =>
+          item.name?.toLowerCase().includes(searchLower) ||
+          item.description?.toLowerCase().includes(searchLower) ||
+          item.brand?.toLowerCase().includes(searchLower) ||
+          item.model?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      if (selectedBrand !== 'all') {
+        filteredData = filteredData.filter(item => item.brand === selectedBrand);
+      }
+      
+      // Ensure product_images is always an array
+      return filteredData.map(item => ({
+        ...item,
+        product_images: Array.isArray(item.product_images) ? item.product_images : []
+      })) as Product[];
+    },
+  });
+
   // Infinite scroll handler
   useEffect(() => {
     if (!isMobile) return;
@@ -133,69 +192,20 @@ const Catalog = () => {
   };
 
   // Handle brand change
+  const handleBrandChange = (brand: string) => {
+    setSelectedBrand(brand);
+    if (brand === 'all') {
+      searchParams.delete('brand');
+    } else {
+      searchParams.set('brand', brand);
+    }
+    setSearchParams(searchParams);
+  };
+
   const handleBrandChangeWithReset = (brand: string) => {
     handleBrandChange(brand);
     setVisibleItems(isMobile ? 4 : 1000); // Reset visible items when changing brand
   };
-
-  // Fetch products with pricing based on customer type
-  const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['products', searchTerm, selectedBrand, user?.id],
-    queryFn: async () => {
-      // Direct query to get products
-      const { data: directData, error: directError } = await supabase
-        .from('products_new')
-        .select(`
-          *,
-          product_images_new (
-            url,
-            alt_text,
-            is_primary,
-            sort_order
-          )
-        `)
-        .eq('active', true)
-        .order('created_at', { ascending: false });
-
-      if (directError) {
-        console.error('Error fetching products:', directError);
-        return [];
-      }
-
-      // Map the data to match interface with fallback pricing
-      const productsData = directData.map(item => ({
-        ...item,
-        product_images: item.product_images_new || [],
-        price: item.normal_price || 299, // Fallback price
-        normal_price: item.normal_price || 299,
-        merchant_price: item.merchant_price || 249,
-        customer_type: 'normal'
-      }));
-      
-      // Filter products based on search and brand
-      let filteredData = productsData;
-      
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
-        filteredData = filteredData.filter(item =>
-          item.name?.toLowerCase().includes(searchLower) ||
-          item.description?.toLowerCase().includes(searchLower) ||
-          item.brand?.toLowerCase().includes(searchLower) ||
-          item.model?.toLowerCase().includes(searchLower)
-        );
-      }
-
-      if (selectedBrand !== 'all') {
-        filteredData = filteredData.filter(item => item.brand === selectedBrand);
-      }
-      
-      // Ensure product_images is always an array
-      return filteredData.map(item => ({
-        ...item,
-        product_images: Array.isArray(item.product_images) ? item.product_images : []
-      })) as Product[];
-    },
-  });
 
   // Fetch unique brands
   const { data: brands = [] } = useQuery({
