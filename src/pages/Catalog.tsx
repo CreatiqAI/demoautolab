@@ -49,10 +49,10 @@ const Catalog = () => {
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'all');
   const navigate = useNavigate();
   
-  // Mobile infinite scroll settings
+  // Mobile view more pagination settings
   const [isMobile, setIsMobile] = useState(false);
-  const [visibleItems, setVisibleItems] = useState(4); // Start with 4 items (2x2 grid) on mobile
-  const itemsPerBatch = 4; // Load 4 more items each time (2 more rows)
+  const [visibleItems, setVisibleItems] = useState(12); // Start with 12 items (6 rows) on mobile
+  const itemsPerBatch = 12; // Load 12 more items each time
 
   const { user } = useAuth();
   const { customerType, pricingMode, getPriceLabel } = usePricing();
@@ -63,7 +63,7 @@ const Catalog = () => {
       const mobile = window.innerWidth < 640;
       setIsMobile(mobile);
       // Reset visible items when switching between mobile/desktop
-      setVisibleItems(mobile ? 4 : 1000);
+      setVisibleItems(mobile ? 12 : 1000);
     };
     
     handleResize(); // Set initial value
@@ -130,27 +130,13 @@ const Catalog = () => {
     },
   });
 
-  // Infinite scroll handler
-  useEffect(() => {
-    if (!isMobile) return;
-
-    const handleScroll = () => {
-      // Check if user has scrolled near the bottom
-      const scrollTop = window.pageYOffset;
-      const windowHeight = window.innerHeight;
-      const docHeight = document.documentElement.scrollHeight;
-      
-      if (scrollTop + windowHeight >= docHeight - 200) { // 200px before bottom
-        setVisibleItems(prev => {
-          const newCount = prev + itemsPerBatch;
-          return Math.min(newCount, products.length); // Don't exceed total products
-        });
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [isMobile, products.length, itemsPerBatch]);
+  // View More button handler
+  const handleViewMore = () => {
+    setVisibleItems(prev => {
+      const newCount = prev + itemsPerBatch;
+      return Math.min(newCount, products.length); // Don't exceed total products
+    });
+  };
 
   // Update search term and selected brand when URL changes
   useEffect(() => {
@@ -180,7 +166,7 @@ const Catalog = () => {
   // Handle search term changes with debounced URL updates
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    setVisibleItems(isMobile ? 4 : 1000); // Reset visible items when searching
+    setVisibleItems(isMobile ? 12 : 1000); // Reset visible items when searching
     
     // Update URL parameters
     if (value.trim()) {
@@ -193,7 +179,7 @@ const Catalog = () => {
 
   const handleBrandChangeWithReset = (brand: string) => {
     handleBrandChange(brand);
-    setVisibleItems(isMobile ? 4 : 1000); // Reset visible items when changing brand
+    setVisibleItems(isMobile ? 12 : 1000); // Reset visible items when changing brand
   };
 
   // Fetch unique brands
@@ -299,7 +285,7 @@ const Catalog = () => {
           {/* Products Grid - Mobile 2x2, Desktop Responsive */}
           <div className="products-grid grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 xl:gap-6">
             {productsLoading ? (
-              Array.from({ length: isMobile ? 4 : 8 }).map((_, i) => (
+              Array.from({ length: isMobile ? 12 : 8 }).map((_, i) => (
                 <Card key={i} className="overflow-hidden">
                   <CardHeader className="p-0">
                     <Skeleton className="aspect-square w-full" />
@@ -407,13 +393,18 @@ const Catalog = () => {
             )}
           </div>
 
-          {/* Loading More Indicator */}
+          {/* View More Products Button */}
           {isMobile && hasMoreProducts && (
-            <div className="text-center mt-4 py-3">
-              <div className="flex items-center justify-center gap-2 text-gray-600">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                <span className="text-sm">Scroll for more...</span>
-              </div>
+            <div className="text-center mt-6">
+              <Button
+                onClick={handleViewMore}
+                variant="outline"
+                size="lg"
+                className="w-full max-w-sm bg-white hover:bg-gray-50 border-2 border-primary text-primary hover:text-primary font-semibold py-3 px-6 rounded-lg shadow-sm"
+              >
+                <Package className="h-4 w-4 mr-2" />
+                View More Products ({Math.min(itemsPerBatch, products.length - visibleItems)} more)
+              </Button>
             </div>
           )}
 
