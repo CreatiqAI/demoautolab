@@ -280,11 +280,11 @@ const Catalog = () => {
                   >
                     {/* Product Image */}
                     <CardHeader className="p-0 relative">
-                      <div className="aspect-square overflow-hidden bg-muted flex items-center justify-center">
+                      <div className="aspect-square overflow-hidden bg-gray-50 flex items-center justify-center">
                         <img
                           src={primaryImage}
                           alt={product.name}
-                          className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                           loading="lazy"
                           decoding="async"
                           onError={(e) => {

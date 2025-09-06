@@ -285,15 +285,16 @@ const ProductDetails = () => {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 lg:gap-8 xl:gap-12">
           {/* Product Images - Left Column (2/5 width) */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-3 sm:space-y-4">
             {/* Main Product Image */}
-            <div className="aspect-[4/3] bg-gray-50 rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+            <div className="relative rounded-xl overflow-hidden shadow-sm cursor-pointer group"
+                 onClick={() => setViewingComponentImage(product.product_images[selectedImage]?.url || primaryImage?.url)}>
               <img
                 src={product.product_images[selectedImage]?.url || primaryImage?.url || '/placeholder.svg'}
                 alt={product.product_images[selectedImage]?.alt_text || product.name}
-                className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
+                className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-300"
                 loading="lazy"
                 decoding="async"
                 onError={(e) => {
@@ -301,25 +302,30 @@ const ProductDetails = () => {
                   target.src = '/placeholder.svg';
                 }}
               />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 rounded-full p-2">
+                  <Eye className="h-5 w-5 text-gray-800" />
+                </div>
+              </div>
             </div>
             
             {/* Thumbnail Images */}
             {product.product_images.length > 1 && (
-              <div className="flex gap-3 justify-center lg:justify-start overflow-x-auto pb-2">
+              <div className="flex gap-2 sm:gap-3 justify-center lg:justify-start overflow-x-auto pb-2">
                 {product.product_images.map((image, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
-                    className={`w-20 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all duration-200 ${
+                    className={`relative rounded-lg overflow-hidden flex-shrink-0 transition-all duration-200 ${
                       index === selectedImage 
-                        ? 'border-primary ring-2 ring-primary/20 scale-105' 
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'ring-2 ring-primary scale-105' 
+                        : 'hover:scale-102'
                     }`}
                   >
                     <img
                       src={image.url}
                       alt={image.alt_text || `Thumbnail ${index + 1}`}
-                      className="w-full h-full object-contain"
+                      className="w-12 sm:w-16 h-auto object-cover"
                       loading="lazy"
                       decoding="async"
                     />
@@ -330,36 +336,41 @@ const ProductDetails = () => {
           </div>
 
           {/* Product Info and Selection - Right Column (3/5 width) */}
-          <div className="lg:col-span-3 space-y-8">
+          <div className="lg:col-span-3 space-y-4 sm:space-y-6 lg:space-y-8">
             {/* Product Header */}
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <div>
-                <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 leading-tight mb-4">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 leading-tight mb-3 sm:mb-4">
                   {product.name}
                 </h1>
                 
-                <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <Badge variant="default" className="px-3 py-1">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                  <Badge variant="default" className="px-2 sm:px-3 py-1 text-xs">
                     ✓ In Stock
                   </Badge>
                   {product.featured && (
-                    <Badge variant="secondary" className="px-3 py-1">
+                    <Badge variant="secondary" className="px-2 sm:px-3 py-1 text-xs">
                       ⭐ Featured
                     </Badge>
                   )}
                   {product.screen_size && product.screen_size.length > 0 && (
-                    product.screen_size.map((size) => (
-                      <Badge key={size} variant="outline" className="px-3 py-1">
+                    product.screen_size.slice(0, 2).map((size) => (
+                      <Badge key={size} variant="outline" className="px-2 sm:px-3 py-1 text-xs">
                         {size}" Display
                       </Badge>
                     ))
                   )}
+                  {product.screen_size && product.screen_size.length > 2 && (
+                    <Badge variant="outline" className="px-2 sm:px-3 py-1 text-xs">
+                      +{product.screen_size.length - 2}
+                    </Badge>
+                  )}
                 </div>
                 
-                <div className="text-xl text-gray-600 font-medium mb-4">
+                <div className="text-lg sm:text-xl text-gray-600 font-medium mb-3 sm:mb-4">
                   {product.brand} {product.model}
                   {product.year_from && product.year_to && (
-                    <span className="text-lg text-gray-500 ml-2">
+                    <span className="text-base sm:text-lg text-gray-500 ml-1 sm:ml-2 block sm:inline">
                       ({product.year_from}-{product.year_to})
                     </span>
                   )}
@@ -376,13 +387,13 @@ const ProductDetails = () => {
             </div>
 
             {/* Component Selection */}
-            <div className="border-t border-gray-200 pt-8">
-              <div className="space-y-6">
+            <div className="border-t border-gray-200 pt-4 sm:pt-6 lg:pt-8">
+              <div className="space-y-4 sm:space-y-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                  <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 mb-2">
                     Select Components
                   </h2>
-                  <p className="text-gray-600">
+                  <p className="text-sm sm:text-base text-gray-600">
                     Choose the components you need and specify quantities
                   </p>
                 </div>
@@ -401,10 +412,10 @@ const ProductDetails = () => {
                 ) : (
                   /* Expandable Components List */
                   <div className="space-y-2">
-                    <div className="text-sm text-gray-600 mb-3">
+                    <div className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
                       Available Components ({components.length} options)
                     </div>
-                    <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
+                    <div className="border rounded-lg divide-y max-h-64 sm:max-h-80 overflow-y-auto">
                       {components.map((component) => {
                         const quantity = getLocalCartQuantity(component.id);
                         const isExpanded = expandedComponent === component.id;
@@ -417,17 +428,17 @@ const ProductDetails = () => {
                             }`}
                           >
                             <div 
-                              className={`p-3 hover:bg-gray-50 cursor-pointer transition-all duration-300 ease-in-out ${
+                              className={`p-2 sm:p-3 hover:bg-gray-50 cursor-pointer transition-all duration-300 ease-in-out ${
                                 isExpanded 
                                   ? 'bg-gray-50 border-l-4 border-l-primary' 
                                   : ''
                               }`}
                               onClick={() => setExpandedComponent(isExpanded ? null : component.id)}
                             >
-                              <div className="flex items-start gap-3">
+                              <div className="flex items-start gap-2 sm:gap-3">
                                 {/* Image that grows when expanded */}
                                 <div className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
-                                  isExpanded ? 'w-20 h-20' : 'w-10 h-10'
+                                  isExpanded ? 'w-16 sm:w-20 h-16 sm:h-20' : 'w-8 sm:w-10 h-8 sm:h-10'
                                 }`}>
                                   {component.default_image_url && (
                                     <img
@@ -453,12 +464,17 @@ const ProductDetails = () => {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1 min-w-0">
-                                      <div className={`font-medium text-gray-900 transition-all duration-300 ease-in-out ${
-                                        isExpanded ? 'text-base mb-2' : 'text-sm truncate'
-                                      }`}>
-                                        {component.name}
-                                      </div>
-                                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                      {!isExpanded ? (
+                                        <div className="font-medium text-xs sm:text-sm text-gray-900 truncate">
+                                          {component.name}
+                                        </div>
+                                      ) : (
+                                        <div className="font-medium text-sm sm:text-base text-gray-900 mb-2">
+                                          {component.name}
+                                        </div>
+                                      )}
+                                      
+                                      <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-500 mb-1 sm:mb-2">
                                         <span className="font-semibold text-gray-700">
                                           {formatPrice(getDisplayPrice(component.normal_price, component.merchant_price))}
                                         </span>
@@ -469,10 +485,10 @@ const ProductDetails = () => {
                                       {/* Expanded details */}
                                       <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
                                         isExpanded 
-                                          ? 'max-h-32 opacity-100 mb-3' 
+                                          ? 'max-h-32 opacity-100 mb-2 sm:mb-3' 
                                           : 'max-h-0 opacity-0'
                                       }`}>
-                                        <div className="text-sm text-gray-700 mb-2">
+                                        <div className="text-xs sm:text-sm text-gray-700 mb-1 sm:mb-2">
                                           {component.description || 'No additional description available'}
                                         </div>
                                         <div className="text-xs text-gray-500">
@@ -487,7 +503,7 @@ const ProductDetails = () => {
                                     </div>
                                     
                                     {/* Controls */}
-                                    <div className="flex items-center gap-2 ml-3">
+                                    <div className="flex items-center gap-1 sm:gap-2 ml-2 sm:ml-3">
                                       {user && quantity > 0 && (
                                         <div className="flex items-center border rounded text-xs">
                                           <button
@@ -496,20 +512,20 @@ const ProductDetails = () => {
                                               updateLocalQuantity(component, quantity - 1);
                                             }}
                                             disabled={quantity === 0}
-                                            className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50"
+                                            className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50"
                                           >
-                                            <Minus className="h-3 w-3" />
+                                            <Minus className="h-2 w-2 sm:h-3 sm:w-3" />
                                           </button>
-                                          <span className="w-6 text-center font-medium">{quantity}</span>
+                                          <span className="w-5 sm:w-6 text-center font-medium text-xs">{quantity}</span>
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               updateLocalQuantity(component, quantity + 1);
                                             }}
                                             disabled={quantity >= component.stock_level}
-                                            className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50"
+                                            className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50"
                                           >
-                                            <Plus className="h-3 w-3" />
+                                            <Plus className="h-2 w-2 sm:h-3 sm:w-3" />
                                           </button>
                                         </div>
                                       )}
@@ -521,7 +537,7 @@ const ProductDetails = () => {
                                             updateLocalQuantity(component, 1);
                                           }}
                                           disabled={component.stock_level === 0}
-                                          className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 px-3 py-1 rounded"
+                                          className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 px-2 sm:px-3 py-1 rounded"
                                         >
                                           Add
                                         </button>
@@ -530,7 +546,7 @@ const ProductDetails = () => {
                                       <div className={`transition-transform duration-300 ease-in-out ${
                                         isExpanded ? 'rotate-180' : 'rotate-0'
                                       }`}>
-                                        <ChevronDown className="h-4 w-4 text-gray-400" />
+                                        <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
                                       </div>
                                     </div>
                                   </div>
@@ -546,51 +562,49 @@ const ProductDetails = () => {
               </div>
             </div>
 
-            {/* Simple Cart Summary - Shopee Style */}
+            {/* Compact Cart Summary */}
             {components.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                <div className="space-y-4">
-                  {localCart.length > 0 ? (
-                    <>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600">
-                          {getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''} selected
-                        </span>
-                        <span className="text-2xl font-bold text-primary">
-                          {formatPrice(getLocalCartTotal())}
-                        </span>
-                      </div>
-                      
-                      {!user ? (
-                        <Button variant="default" size="lg" asChild className="w-full">
-                          <a href="/auth">Sign In to Add Items</a>
-                        </Button>
-                      ) : (
-                        <Button 
-                          size="lg"
-                          onClick={handleAddToCart}
-                          disabled={cartLoading}
-                          className="w-full h-12 text-base font-medium"
-                        >
-                          <ShoppingCart className="h-4 w-4 mr-2" />
-                          {cartLoading ? 'Adding...' : 'Add to Cart'}
-                        </Button>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-center py-2">
-                      <p className="text-gray-500 text-sm mb-3">Select components to add to cart</p>
-                      <Button 
-                        disabled
-                        size="lg"
-                        className="w-full h-12 text-base font-medium"
-                      >
-                        <ShoppingCart className="h-4 w-4 mr-2" />
-                        Add to Cart
-                      </Button>
+              <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                {localCart.length > 0 ? (
+                  <>
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-sm text-gray-600">
+                        {getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''} selected
+                      </span>
+                      <span className="text-lg font-bold text-primary">
+                        {formatPrice(getLocalCartTotal())}
+                      </span>
                     </div>
-                  )}
-                </div>
+                    
+                    {!user ? (
+                      <Button variant="default" size="sm" asChild className="w-full">
+                        <a href="/auth">Sign In to Add Items</a>
+                      </Button>
+                    ) : (
+                      <Button 
+                        size="sm"
+                        onClick={handleAddToCart}
+                        disabled={cartLoading}
+                        className="w-full h-9 text-sm font-medium"
+                      >
+                        <ShoppingCart className="h-3 w-3 mr-2" />
+                        {cartLoading ? 'Adding...' : 'Add to Cart'}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-gray-500 text-xs mb-2">Select components to add to cart</p>
+                    <Button 
+                      disabled
+                      size="sm"
+                      className="w-full h-9 text-sm font-medium"
+                    >
+                      <ShoppingCart className="h-3 w-3 mr-2" />
+                      Add to Cart
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
