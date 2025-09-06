@@ -49,11 +49,10 @@ const Catalog = () => {
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'all');
   const navigate = useNavigate();
   
-  // Mobile view more pagination settings
+  // Mobile pagination settings
   const [isMobile, setIsMobile] = useState(false);
-  const [visibleItems, setVisibleItems] = useState(12); // Start with 12 items (6 rows) on mobile
-  const itemsPerBatch = 12; // Load 12 more items each time
-  const [currentSearchKey, setCurrentSearchKey] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12; // Show 12 items per page on mobile
 
   const { user } = useAuth();
   const { customerType, pricingMode, getPriceLabel } = usePricing();
@@ -63,14 +62,15 @@ const Catalog = () => {
     const handleResize = () => {
       const mobile = window.innerWidth < 640;
       setIsMobile(mobile);
-      // Reset visible items when switching between mobile/desktop
-      setVisibleItems(mobile ? 12 : 1000);
+      if (mobile !== isMobile) {
+        setCurrentPage(1); // Reset to first page when switching between mobile/desktop
+      }
     };
     
     handleResize(); // Set initial value
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [isMobile]);
 
   // Fetch products with pricing based on customer type
   const { data: products = [], isLoading: productsLoading } = useQuery({
@@ -131,24 +131,10 @@ const Catalog = () => {
     },
   });
 
-  // View More button handler
-  const handleViewMore = () => {
-    setVisibleItems(prev => {
-      const newCount = prev + itemsPerBatch;
-      return Math.min(newCount, products.length); // Don't exceed total products
-    });
-  };
-
-  // Create a unique key for current search/filter state
-  const searchKey = `${searchTerm}-${selectedBrand}`;
-  
-  // Reset visible items only when search/brand combination changes
+  // Reset to first page when search or brand changes
   useEffect(() => {
-    if (currentSearchKey !== searchKey) {
-      setVisibleItems(isMobile ? 12 : 1000);
-      setCurrentSearchKey(searchKey);
-    }
-  }, [searchKey, currentSearchKey, isMobile]);
+    setCurrentPage(1);
+  }, [searchTerm, selectedBrand]);
 
   // Update search term and selected brand when URL changes
   useEffect(() => {
@@ -186,10 +172,6 @@ const Catalog = () => {
       searchParams.delete('search');
     }
     setSearchParams(searchParams);
-  };
-
-  const handleBrandChangeWithReset = (brand: string) => {
-    handleBrandChange(brand);
   };
 
   // Fetch unique brands
@@ -237,9 +219,22 @@ const Catalog = () => {
     navigate(`/product/${product.id}`);
   };
 
-  // Get products to display based on visibility
-  const displayProducts = isMobile ? products.slice(0, visibleItems) : products;
-  const hasMoreProducts = isMobile && visibleItems < products.length;
+  // Pagination calculations
+  const totalProducts = products.length;
+  const totalPages = Math.ceil(totalProducts / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const displayProducts = isMobile ? products.slice(startIndex, endIndex) : products;
+
+  // Page navigation handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Smooth scroll to top of products grid
+    document.querySelector('.products-grid')?.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'start' 
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -273,7 +268,7 @@ const Catalog = () => {
                 </div>
                 {/* Brand Filter */}
                 <div className="w-full sm:w-48">
-                  <Select value={selectedBrand} onValueChange={handleBrandChangeWithReset}>
+                  <Select value={selectedBrand} onValueChange={handleBrandChange}>
                     <SelectTrigger className="w-full h-10 sm:h-9">
                       <Filter className="h-4 w-4 mr-2" />
                       <SelectValue placeholder="All Brands" />
@@ -295,7 +290,7 @@ const Catalog = () => {
           {/* Products Grid - Mobile 2x2, Desktop Responsive */}
           <div className="products-grid grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 xl:gap-6">
             {productsLoading ? (
-              Array.from({ length: isMobile ? 12 : 8 }).map((_, i) => (
+              Array.from({ length: isMobile ? itemsPerPage : 8 }).map((_, i) => (
                 <Card key={i} className="overflow-hidden">
                   <CardHeader className="p-0">
                     <Skeleton className="aspect-square w-full" />
@@ -308,7 +303,7 @@ const Catalog = () => {
                   </CardContent>
                 </Card>
               ))
-            ) : products.length === 0 ? (
+            ) : totalProducts === 0 ? (
               <div className="col-span-full text-center py-8 sm:py-12">
                 <div className="text-4xl sm:text-6xl mb-4">🔍</div>
                 <h3 className="text-lg sm:text-xl font-semibold mb-2">No products found</h3>
@@ -403,31 +398,79 @@ const Catalog = () => {
             )}
           </div>
 
-          {/* View More Products Button */}
-          {isMobile && hasMoreProducts && (
-            <div className="text-center mt-6">
-              <Button
-                onClick={handleViewMore}
-                variant="outline"
-                size="lg"
-                className="w-full max-w-sm bg-white hover:bg-gray-50 border-2 border-primary text-primary hover:text-primary font-semibold py-3 px-6 rounded-lg shadow-sm"
-              >
-                <Package className="h-4 w-4 mr-2" />
-                View More Products ({Math.min(itemsPerBatch, products.length - visibleItems)} more)
-              </Button>
+          {/* Mobile Pagination */}
+          {isMobile && totalPages > 1 && (
+            <div className="mt-6">
+              <div className="flex items-center justify-between bg-white rounded-lg border p-4 shadow-sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-2"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.min(totalPages, 3) }).map((_, index) => {
+                      let pageNum;
+                      if (totalPages <= 3) {
+                        pageNum = index + 1;
+                      } else {
+                        if (currentPage <= 2) {
+                          pageNum = index + 1;
+                        } else if (currentPage >= totalPages - 1) {
+                          pageNum = totalPages - 2 + index;
+                        } else {
+                          pageNum = currentPage - 1 + index;
+                        }
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`w-8 h-8 rounded text-xs font-medium transition-colors ${
+                            currentPage === pageNum
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-2"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
 
           {/* Statistics */}
-          {products.length > 0 && (
+          {totalProducts > 0 && (
             <div className="text-center mt-6 sm:mt-8">
               <p className="text-sm sm:text-base text-muted-foreground">
                 {isMobile ? (
-                  hasMoreProducts 
-                    ? `Showing ${displayProducts.length} of ${products.length} products`
-                    : `Showing all ${products.length} products`
+                  `Showing ${startIndex + 1}-${Math.min(endIndex, totalProducts)} of ${totalProducts} products`
                 ) : (
-                  `Showing ${products.length} product${products.length !== 1 ? 's' : ''}`
+                  `Showing ${totalProducts} product${totalProducts !== 1 ? 's' : ''}`
                 )}
               </p>
             </div>
