@@ -47,12 +47,12 @@ const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'all');
-  const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
   
-  // Mobile pagination settings - use hook to handle window resize
+  // Mobile infinite scroll settings
   const [isMobile, setIsMobile] = useState(false);
-  const itemsPerPage = isMobile ? 4 : 1000; // Show all items on desktop, 4 on mobile
+  const [visibleItems, setVisibleItems] = useState(4); // Start with 4 items on mobile
+  const itemsPerBatch = 4; // Load 4 more items each time
 
   const { user } = useAuth();
   const { customerType, pricingMode, getPriceLabel } = usePricing();
@@ -60,13 +60,38 @@ const Catalog = () => {
   // Handle window resize for mobile detection
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 640);
+      const mobile = window.innerWidth < 640;
+      setIsMobile(mobile);
+      // Reset visible items when switching between mobile/desktop
+      setVisibleItems(mobile ? 4 : 1000);
     };
     
     handleResize(); // Set initial value
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Infinite scroll handler
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const handleScroll = () => {
+      // Check if user has scrolled near the bottom
+      const scrollTop = window.pageYOffset;
+      const windowHeight = window.innerHeight;
+      const docHeight = document.documentElement.scrollHeight;
+      
+      if (scrollTop + windowHeight >= docHeight - 200) { // 200px before bottom
+        setVisibleItems(prev => {
+          const newCount = prev + itemsPerBatch;
+          return Math.min(newCount, products.length); // Don't exceed total products
+        });
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isMobile, products.length, itemsPerBatch]);
 
   // Update search term and selected brand when URL changes
   useEffect(() => {
@@ -96,7 +121,7 @@ const Catalog = () => {
   // Handle search term changes with debounced URL updates
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    setCurrentPage(1); // Reset to first page when searching
+    setVisibleItems(isMobile ? 4 : 1000); // Reset visible items when searching
     
     // Update URL parameters
     if (value.trim()) {
@@ -110,7 +135,7 @@ const Catalog = () => {
   // Handle brand change
   const handleBrandChangeWithReset = (brand: string) => {
     handleBrandChange(brand);
-    setCurrentPage(1); // Reset to first page when changing brand
+    setVisibleItems(isMobile ? 4 : 1000); // Reset visible items when changing brand
   };
 
   // Fetch products with pricing based on customer type
@@ -217,24 +242,9 @@ const Catalog = () => {
     navigate(`/product/${product.id}`);
   };
 
-  // Pagination calculations
-  const totalProducts = products.length;
-  const totalPages = Math.ceil(totalProducts / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentProducts = isMobile ? products.slice(startIndex, endIndex) : products;
-
-  // Pagination handlers with smooth scrolling
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setCurrentPage(newPage);
-      // Smooth scroll to top of products grid
-      document.querySelector('.products-grid')?.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'start' 
-      });
-    }
-  };
+  // Get products to display based on visibility
+  const displayProducts = isMobile ? products.slice(0, visibleItems) : products;
+  const hasMoreProducts = isMobile && visibleItems < products.length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -303,14 +313,14 @@ const Catalog = () => {
                   </CardContent>
                 </Card>
               ))
-            ) : totalProducts === 0 ? (
+            ) : products.length === 0 ? (
               <div className="col-span-full text-center py-8 sm:py-12">
                 <div className="text-4xl sm:text-6xl mb-4">🔍</div>
                 <h3 className="text-lg sm:text-xl font-semibold mb-2">No products found</h3>
                 <p className="text-muted-foreground text-sm sm:text-base">Try adjusting your search criteria</p>
               </div>
             ) : (
-              currentProducts.map((product) => {
+              displayProducts.map((product) => {
                 const productStatus = getProductStatus(product);
                 const primaryImage = getPrimaryImage(product.product_images);
                 
@@ -398,75 +408,26 @@ const Catalog = () => {
             )}
           </div>
 
-          {/* Mobile Pagination */}
-          {isMobile && totalProducts > 0 && totalPages > 1 && (
-            <div className="mt-6 sm:mt-8">
-              <div className="flex items-center justify-between bg-white rounded-lg border p-4 shadow-sm">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="flex items-center gap-2"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <div className="flex gap-1">
-                    {Array.from({ length: Math.min(totalPages, 5) }).map((_, index) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = index + 1;
-                      } else {
-                        const start = Math.max(1, currentPage - 2);
-                        pageNum = start + index;
-                        if (pageNum > totalPages) pageNum = totalPages - (4 - index);
-                      }
-                      
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => handlePageChange(pageNum)}
-                          className={`w-8 h-8 rounded text-xs font-medium transition-colors ${
-                            currentPage === pageNum
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="flex items-center gap-2"
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+          {/* Loading More Indicator */}
+          {isMobile && hasMoreProducts && (
+            <div className="text-center mt-6 py-4">
+              <div className="flex items-center justify-center gap-2 text-gray-600">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                <span className="text-sm">Scroll down for more products...</span>
               </div>
             </div>
           )}
 
           {/* Statistics */}
-          {totalProducts > 0 && (
+          {products.length > 0 && (
             <div className="text-center mt-6 sm:mt-8">
               <p className="text-sm sm:text-base text-muted-foreground">
                 {isMobile ? (
-                  `Showing ${startIndex + 1}-${Math.min(endIndex, totalProducts)} of ${totalProducts} products`
+                  hasMoreProducts 
+                    ? `Showing ${displayProducts.length} of ${products.length} products`
+                    : `Showing all ${products.length} products`
                 ) : (
-                  `Showing ${totalProducts} product${totalProducts !== 1 ? 's' : ''}`
+                  `Showing ${products.length} product${products.length !== 1 ? 's' : ''}`
                 )}
               </p>
             </div>
