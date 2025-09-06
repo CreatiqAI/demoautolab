@@ -10,8 +10,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Trash2, Download, FileText } from 'lucide-react';
+import { Search, Trash2, Download, FileText, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+// HTML2PDF CDN integration
+declare global {
+  interface Window {
+    html2pdf: any;
+  }
+}
 
 interface Order {
   id: string;
@@ -74,6 +81,8 @@ export default function Orders() {
   const [selectedOrder] = useState<Order | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -288,123 +297,114 @@ export default function Orders() {
     }).format(amount);
   };
 
-  const generatePDFInvoice = (order: Order) => {
-    const invoice = `
-AUTOLAB INVOICE
-=====================================
-
-Order Number: ${order.order_no}
-Date: ${new Date(order.created_at).toLocaleDateString()}
-
-CUSTOMER INFORMATION:
-Name: ${order.customer_name}
-Phone: ${order.customer_phone}
-Email: ${order.customer_email || 'N/A'}
-
-DELIVERY INFORMATION:
-Method: ${order.delivery_method}
-${order.delivery_address ? `
-Address: ${JSON.stringify(order.delivery_address, null, 2).replace(/[{}",]/g, '').trim()}` : 'Self Pickup'}
-
-ORDER ITEMS:
-=====================================
-${order.order_items.map(item => 
-  `${item.component_name} (${item.component_sku})
-  Quantity: ${item.quantity}
-  Unit Price: ${formatCurrency(item.unit_price)}
-  Total: ${formatCurrency(item.total_price)}
-  ${item.product_context ? `From: ${item.product_context}` : ''}
-  -------------------------------------`
-).join('\n')}
-
-PAYMENT SUMMARY:
-=====================================
-Subtotal: ${formatCurrency(order.subtotal)}
-Delivery Fee: ${formatCurrency(order.delivery_fee)}
-Tax (SST 6%): ${formatCurrency(order.tax)}
-Discount: ${formatCurrency(order.discount)}
-TOTAL: ${formatCurrency(order.total)}
-
-Payment Method: ${order.payment_method}
-Payment Status: ${order.payment_state}
-Order Status: ${order.status}
-
-${order.notes ? `Notes: ${order.notes}` : ''}
-
-=====================================
-Thank you for your business!
-Autolab - Car Parts & More
-Phone: +60 3-1234 5678
-Email: support@autolab.my
-=====================================
-    `;
-
-    // Create and download the text file as PDF alternative
-    const blob = new Blob([invoice], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Invoice-${order.order_no}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+  // Load HTML2PDF library
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    script.async = true;
+    document.head.appendChild(script);
     
-    toast({
-      title: "Invoice Downloaded",
-      description: `Invoice for order ${order.order_no} has been downloaded as a text file.`
-    });
+    return () => {
+      // Cleanup script on unmount
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
+  const convertToWords = (num: number): string => {
+    const ones = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
+    const tens = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+
+    if (num === 0) return 'ZERO';
+
+    function convertLessThanOneThousand(n: number): string {
+      if (n === 0) return '';
+      if (n < 20) return ones[n] || '';
+
+      const digit = n % 10;
+      const ten = Math.floor(n / 10) % 10;
+      const hundred = Math.floor(n / 100);
+
+      let result = '';
+      if (hundred > 0) result += (ones[hundred] || '') + ' HUNDRED ';
+      
+      // Handle teens (10-19) separately
+      const tensAndOnes = n % 100;
+      if (tensAndOnes < 20 && tensAndOnes > 0) {
+        result += ones[tensAndOnes] || '';
+      } else {
+        if (ten >= 2) result += (tens[ten] || '');
+        if (digit > 0) result += (ten >= 2 ? ' ' : '') + (ones[digit] || '');
+      }
+
+      return result.trim();
+    }
+
+    // Round to nearest whole number for word conversion (standard practice for invoices)
+    const wholeNum = Math.round(num);
+    
+    if (wholeNum === 0) return 'ZERO';
+    
+    const million = Math.floor(wholeNum / 1000000);
+    const thousand = Math.floor((wholeNum % 1000000) / 1000);
+    const remainder = wholeNum % 1000;
+
+    let result = '';
+    if (million > 0) {
+      const millionPart = convertLessThanOneThousand(million);
+      if (millionPart) result += millionPart + ' MILLION ';
+    }
+    if (thousand > 0) {
+      const thousandPart = convertLessThanOneThousand(thousand);
+      if (thousandPart) result += thousandPart + ' THOUSAND ';
+    }
+    if (remainder > 0) {
+      const remainderPart = convertLessThanOneThousand(remainder);
+      if (remainderPart) result += remainderPart;
+    }
+
+    return result.trim() || 'ZERO';
   };
 
-  const printInvoice = (order: Order) => {
-    const invoice = `
-AUTOLAB INVOICE
+  const generateInvoice = (order: Order) => {
+    setSelectedOrderForInvoice(order);
+    setIsInvoiceModalOpen(true);
+  };
 
-Order Number: ${order.order_no}
-Date: ${new Date(order.created_at).toLocaleDateString()}
+  const closeInvoiceModal = () => {
+    setIsInvoiceModalOpen(false);
+    setSelectedOrderForInvoice(null);
+  };
 
-CUSTOMER INFORMATION:
-Name: ${order.customer_name}
-Phone: ${order.customer_phone}
-Email: ${order.customer_email || 'N/A'}
+  const printInvoiceAction = () => {
+    window.print();
+  };
 
-DELIVERY INFORMATION:
-Method: ${order.delivery_method}
-${order.delivery_address ? `Address: ${JSON.stringify(order.delivery_address, null, 2).replace(/[{}",]/g, '').trim()}` : 'Self Pickup'}
+  const downloadInvoicePDF = () => {
+    if (!selectedOrderForInvoice) return;
+    
+    const invoiceBody = document.getElementById('invoiceBody');
+    const orderIdElement = invoiceBody?.querySelector('#invoice-order-id-p') as HTMLElement;
+    const orderId = orderIdElement ? orderIdElement.innerText.replace('Order ID: ', '').trim() : 'invoice';
 
-ORDER ITEMS:
-${order.order_items.map(item => 
-  `${item.component_name} (${item.component_sku}) - Qty: ${item.quantity} - ${formatCurrency(item.total_price)}`
-).join('\n')}
+    const opt = {
+      margin: 0.1,
+      filename: `invoice-${orderId}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
 
-PAYMENT SUMMARY:
-Subtotal: ${formatCurrency(order.subtotal)}
-Delivery Fee: ${formatCurrency(order.delivery_fee)}
-Tax (SST 6%): ${formatCurrency(order.tax)}
-TOTAL: ${formatCurrency(order.total)}
-
-Payment Method: ${order.payment_method}
-Payment Status: ${order.payment_state}
-
-Thank you for your business!
-Autolab - Car Parts & More
-    `;
-
-    const printWindow = window.open('', '_blank');
-    printWindow?.document.write(`
-      <html>
-        <head>
-          <title>Invoice ${order.order_no}</title>
-          <style>
-            body { font-family: monospace; white-space: pre-wrap; margin: 20px; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>${invoice}</body>
-      </html>
-    `);
-    printWindow?.document.close();
-    printWindow?.print();
+    if (window.html2pdf) {
+      window.html2pdf().from(invoiceBody).set(opt).save();
+    } else {
+      toast({
+        title: "Error",
+        description: "PDF library not loaded. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -552,22 +552,10 @@ Autolab - Car Parts & More
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                generatePDFInvoice(order);
+                                generateInvoice(order);
                               }}
                               className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              title="Download Invoice"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                printInvoice(order);
-                              }}
-                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                              title="Print Invoice"
+                              title="Generate Invoice"
                             >
                               <FileText className="h-4 w-4" />
                             </Button>
@@ -916,6 +904,232 @@ Autolab - Car Parts & More
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Professional Invoice Modal */}
+      {isInvoiceModalOpen && selectedOrderForInvoice && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeInvoiceModal();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto shadow-xl">
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+              <h2 className="text-xl font-semibold">Invoice Preview</h2>
+              <button
+                onClick={closeInvoiceModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div id="invoice-content">
+              <div id="invoiceBody" className="p-5 bg-white">
+                <div style={{
+                  padding: '10px',
+                  fontFamily: 'Arial, sans-serif',
+                  width: '100%',
+                  margin: '0 auto',
+                  fontSize: '9px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: '95vh'
+                }}>
+                  {/* Top Section */}
+                  <div style={{ flex: '0 0 auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <div>
+                        <h2 style={{ margin: '0', fontSize: '16px' }}>AUTO LABS SDN BHD</h2>
+                        <p style={{ margin: '2px 0', fontSize: '9px' }}>17, Jalan 7/95B, Cheras Utama</p>
+                        <p style={{ margin: '2px 0', fontSize: '9px' }}>56100 Cheras, Wilayah Persekutuan Kuala Lumpur</p>
+                        <p style={{ margin: '2px 0', fontSize: '9px' }}>Tel: 03-4297 7668</p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ border: '1px solid #000', padding: '5px 15px', display: 'inline-block' }}>
+                          <h2 style={{ margin: '0', textAlign: 'center', fontSize: '14px' }}>INVOICE</h2>
+                          <p style={{ margin: '3px 0', fontSize: '9px' }} id="invoice-order-id-p">
+                            <strong>Order ID: </strong>{selectedOrderForInvoice.order_no}
+                          </p>
+                        </div>
+                        <p style={{ margin: '5px 0 2px', fontSize: '9px' }}>
+                          <strong>Date: </strong>
+                          {new Date(selectedOrderForInvoice.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric', month: 'long', day: 'numeric'
+                          })}
+                        </p>
+                        <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>A/C Code: </strong>DMKT78C</p>
+                        <p style={{ margin: '2px 0', fontSize: '9px' }}>
+                          {selectedOrderForInvoice.payment_state === 'APPROVED'
+                            ? <><strong>Term: </strong>Cash / <span style={{ textDecoration: 'line-through' }}>Credit</span></>
+                            : <><strong>Term: </strong><span style={{ textDecoration: 'line-through' }}>Cash</span> / Credit</>
+                          }
+                        </p>
+                        <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>Salesman: </strong>TECH</p>
+                        <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>Served By: </strong>HTL</p>
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <p style={{ margin: '2px 0', fontSize: '9px' }}>
+                        <strong>Bill To: </strong>{selectedOrderForInvoice.customer_name}
+                      </p>
+                      <p style={{ margin: '2px 0', fontSize: '9px' }}>
+                        {selectedOrderForInvoice.delivery_address?.address || 
+                         selectedOrderForInvoice.delivery_address?.street || 
+                         'No address provided'}
+                      </p>
+                      <p style={{ margin: '2px 0', fontSize: '9px' }}>
+                        <strong>Attention: </strong>{selectedOrderForInvoice.customer_name}
+                      </p>
+                      <p style={{ margin: '2px 0', fontSize: '9px' }}>
+                        <strong>Tel: </strong>{selectedOrderForInvoice.customer_phone || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Middle Section (Table) */}
+                  <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5px' }}>
+                      <thead>
+                        <tr><td colSpan={8} style={{ borderTop: '1px solid #000', padding: '0' }}></td></tr>
+                        <tr>
+                          <th style={{ padding: '3px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold' }}>No.</th>
+                          <th style={{ padding: '3px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold' }}>Stock Code</th>
+                          <th style={{ padding: '3px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold' }}>Description</th>
+                          <th style={{ padding: '3px', textAlign: 'center', fontSize: '9px', fontWeight: 'bold' }}>Qty</th>
+                          <th style={{ padding: '3px', textAlign: 'center', fontSize: '9px', fontWeight: 'bold' }}>U.O.M</th>
+                          <th style={{ padding: '3px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold' }}>Unit Price</th>
+                          <th style={{ padding: '3px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold' }}>Discount</th>
+                          <th style={{ padding: '3px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold' }}>Amount</th>
+                        </tr>
+                        <tr><td colSpan={8} style={{ borderBottom: '1px solid #000', padding: '0' }}></td></tr>
+                      </thead>
+                      <tbody>
+                        {selectedOrderForInvoice.order_items.map((item, index) => (
+                          <tr key={item.id}>
+                            <td style={{ fontSize: '9px', padding: '2px 3px' }}>{index + 1}</td>
+                            <td style={{ fontSize: '9px', padding: '2px 3px' }}>{item.component_sku}</td>
+                            <td style={{ fontSize: '9px', padding: '2px 3px' }}>{item.component_name}</td>
+                            <td style={{ fontSize: '9px', textAlign: 'center', padding: '2px 3px' }}>{item.quantity}</td>
+                            <td style={{ fontSize: '9px', textAlign: 'center', padding: '2px 3px' }}>Unit</td>
+                            <td style={{ fontSize: '9px', textAlign: 'right', padding: '2px 3px' }}>
+                              RM {item.unit_price.toFixed(2)}
+                            </td>
+                            <td style={{ fontSize: '9px', textAlign: 'center', padding: '2px 3px' }}></td>
+                            <td style={{ fontSize: '9px', textAlign: 'right', padding: '2px 3px' }}>
+                              RM {item.total_price.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                        {/* Filler rows */}
+                        {Array.from({ length: Math.max(0, 12 - selectedOrderForInvoice.order_items.length) }, (_, i) => (
+                          <tr key={`filler-${i}`}>
+                            <td colSpan={8} style={{ fontSize: '9px', padding: '2px 3px' }}>&nbsp;</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Bottom Section */}
+                  <div style={{ flex: '0 0 auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5px' }}>
+                      <tbody>
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'right', padding: '3px', fontSize: '9px', fontWeight: 'bold' }}>
+                            TOTAL
+                          </td>
+                          <td style={{ 
+                            textAlign: 'right', 
+                            padding: '3px', 
+                            fontSize: '9px', 
+                            fontWeight: 'bold', 
+                            borderTop: '1px solid #000' 
+                          }}>
+                            RM {selectedOrderForInvoice.total.toFixed(2)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div style={{ marginTop: '5px' }}>
+                      <hr style={{ borderTop: '1px solid #000', borderBottom: 'none', margin: '0' }} />
+                      <p style={{ fontSize: '10px', margin: '5px 0', fontWeight: 'bold' }}>
+                        RINGGIT MALAYSIA {convertToWords(selectedOrderForInvoice.total)} ONLY
+                      </p>
+                      <p style={{ fontSize: '9px', marginTop: '5px' }}>Note:</p>
+                      <ol style={{ margin: '0', paddingLeft: '20px', fontSize: '8px' }}>
+                        <li>Please issue all payment in the name of <strong>AUTO LABS SDN BHD</strong></li>
+                        <li>All items remain the property of the company until fully paid</li>
+                        <li>No return or exchange of goods after inspection</li>
+                        <li>All prices are subject to 10% service tax</li>
+                        <li>Stock borrowed for more than seven (7) days will be billed in full of <strong>AUTO LABS SDN BHD</strong></li>
+                      </ol>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
+                      <div>
+                        <p style={{ borderTop: '1px solid #000', display: 'inline-block', paddingTop: '3px', fontSize: '9px' }}>
+                          Received By
+                        </p>
+                      </div>
+                      <div>
+                        <p style={{ borderTop: '1px solid #000', display: 'inline-block', paddingTop: '3px', fontSize: '9px' }}>
+                          Company Chop & Signature
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center', marginTop: '10px', fontStyle: 'italic', fontSize: '8px' }}>
+                      <p>This is a computer generated copy.<br />No signature is required.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t p-4 flex justify-center gap-3">
+              <Button onClick={printInvoiceAction} className="bg-red-600 hover:bg-red-700 text-white">
+                Print Invoice
+              </Button>
+              <Button onClick={downloadInvoicePDF} variant="outline" className="border-red-600 text-red-600 hover:bg-red-50">
+                Download PDF
+              </Button>
+              <Button onClick={closeInvoiceModal} variant="outline">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print Styles */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            #invoice-content,
+            #invoice-content * {
+              visibility: visible;
+            }
+            #invoice-content {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              height: 100%;
+              margin: 0;
+              padding: 0;
+              background: white;
+            }
+            .sticky {
+              display: none;
+            }
+          }
+        `
+      }} />
+
     </div>
   );
 }
