@@ -544,6 +544,19 @@ const ProductDetails = () => {
                                         </button>
                                       )}
                                       
+                                      {!user && (
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                          <LoginPromptButton
+                                            variant="default"
+                                            size="sm"
+                                            className="text-xs px-2 sm:px-3 py-1 h-auto"
+                                            redirectTo={`/product/${id}`}
+                                          >
+                                            Login
+                                          </LoginPromptButton>
+                                        </div>
+                                      )}
+                                      
                                       <div className={`transition-transform duration-300 ease-in-out ${
                                         isExpanded ? 'rotate-180' : 'rotate-0'
                                       }`}>

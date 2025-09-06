@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import Header from '@/components/Header';
+import SEOHead from '@/components/SEOHead';
 import { 
   Search, 
   Zap, 
@@ -39,6 +40,12 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <SEOHead 
+        title="Car Parts Malaysia | Auto Parts Kuala Lumpur | AUTO LABS"
+        description="Premium car parts & automotive parts in Malaysia. Located in Cheras, KL. Honda, Toyota, brake pads, engine oil & more. Fast delivery. Call 03-4297 7668"
+        keywords="car parts Malaysia, auto parts KL, automotive parts, brake pads, engine oil, Honda parts, Toyota parts, Cheras, Kuala Lumpur"
+        canonical="https://autolabs.my/"
+      />
       <Header />
       
       {/* Hero Section */}
