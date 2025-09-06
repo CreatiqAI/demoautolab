@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -53,6 +53,7 @@ const Catalog = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [visibleItems, setVisibleItems] = useState(12); // Start with 12 items (6 rows) on mobile
   const itemsPerBatch = 12; // Load 12 more items each time
+  const [currentSearchKey, setCurrentSearchKey] = useState('');
 
   const { user } = useAuth();
   const { customerType, pricingMode, getPriceLabel } = usePricing();
@@ -138,10 +139,16 @@ const Catalog = () => {
     });
   };
 
-  // Reset visible items only when search term or brand changes
+  // Create a unique key for current search/filter state
+  const searchKey = `${searchTerm}-${selectedBrand}`;
+  
+  // Reset visible items only when search/brand combination changes
   useEffect(() => {
-    setVisibleItems(isMobile ? 12 : 1000);
-  }, [searchTerm, selectedBrand, isMobile]);
+    if (currentSearchKey !== searchKey) {
+      setVisibleItems(isMobile ? 12 : 1000);
+      setCurrentSearchKey(searchKey);
+    }
+  }, [searchKey, currentSearchKey, isMobile]);
 
   // Update search term and selected brand when URL changes
   useEffect(() => {
