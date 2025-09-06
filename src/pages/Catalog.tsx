@@ -229,11 +229,13 @@ const Catalog = () => {
   // Page navigation handlers
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    // Smooth scroll to top of the page
-    window.scrollTo({ 
-      top: 0, 
-      behavior: 'smooth' 
-    });
+    // Small delay to ensure content loads before scrolling
+    setTimeout(() => {
+      window.scrollTo({ 
+        top: 0, 
+        behavior: 'smooth' 
+      });
+    }, 50);
   };
 
   return (
