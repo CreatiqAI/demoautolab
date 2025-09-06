@@ -615,14 +615,26 @@ const ProductDetails = () => {
                 ) : (
                   <div className="text-center">
                     <p className="text-gray-500 text-xs mb-2">Select components to add to cart</p>
-                    <Button 
-                      disabled
-                      size="sm"
-                      className="w-full h-9 text-sm font-medium"
-                    >
-                      <ShoppingCart className="h-3 w-3 mr-2" />
-                      Add to Cart
-                    </Button>
+                    {!user ? (
+                      <LoginPromptButton 
+                        variant="default" 
+                        size="sm" 
+                        className="w-full h-9"
+                        redirectTo={`/product/${id}`}
+                      >
+                        <ShoppingCart className="h-3 w-3 mr-2" />
+                        Login to Add Items
+                      </LoginPromptButton>
+                    ) : (
+                      <Button 
+                        disabled
+                        size="sm"
+                        className="w-full h-9 text-sm font-medium"
+                      >
+                        <ShoppingCart className="h-3 w-3 mr-2" />
+                        Add to Cart
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
