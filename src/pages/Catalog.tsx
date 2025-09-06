@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Filter, ShoppingCart, Eye, Package, Store, User } from 'lucide-react';
+import { Search, Filter, ShoppingCart, Eye, Package, Store, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import Header from '@/components/Header';
 import { Link } from 'react-router-dom';
 import { usePricing } from '@/hooks/usePricing';
@@ -47,10 +47,26 @@ const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'all');
+  const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
+  
+  // Mobile pagination settings - use hook to handle window resize
+  const [isMobile, setIsMobile] = useState(false);
+  const itemsPerPage = isMobile ? 4 : 1000; // Show all items on desktop, 4 on mobile
 
   const { user } = useAuth();
   const { customerType, pricingMode, getPriceLabel } = usePricing();
+
+  // Handle window resize for mobile detection
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    
+    handleResize(); // Set initial value
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Update search term and selected brand when URL changes
   useEffect(() => {
@@ -80,6 +96,7 @@ const Catalog = () => {
   // Handle search term changes with debounced URL updates
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
+    setCurrentPage(1); // Reset to first page when searching
     
     // Update URL parameters
     if (value.trim()) {
@@ -88,6 +105,12 @@ const Catalog = () => {
       searchParams.delete('search');
     }
     setSearchParams(searchParams);
+  };
+
+  // Handle brand change
+  const handleBrandChangeWithReset = (brand: string) => {
+    handleBrandChange(brand);
+    setCurrentPage(1); // Reset to first page when changing brand
   };
 
   // Fetch products with pricing based on customer type
@@ -194,6 +217,25 @@ const Catalog = () => {
     navigate(`/product/${product.id}`);
   };
 
+  // Pagination calculations
+  const totalProducts = products.length;
+  const totalPages = Math.ceil(totalProducts / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentProducts = isMobile ? products.slice(startIndex, endIndex) : products;
+
+  // Pagination handlers with smooth scrolling
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      // Smooth scroll to top of products grid
+      document.querySelector('.products-grid')?.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -226,7 +268,7 @@ const Catalog = () => {
                 </div>
                 {/* Brand Filter */}
                 <div className="w-full sm:w-48">
-                  <Select value={selectedBrand} onValueChange={handleBrandChange}>
+                  <Select value={selectedBrand} onValueChange={handleBrandChangeWithReset}>
                     <SelectTrigger className="w-full h-10 sm:h-9">
                       <Filter className="h-4 w-4 mr-2" />
                       <SelectValue placeholder="All Brands" />
@@ -246,9 +288,9 @@ const Catalog = () => {
           </div>
 
           {/* Products Grid - Improved Responsive Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
+          <div className="products-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
             {productsLoading ? (
-              Array.from({ length: 8 }).map((_, i) => (
+              Array.from({ length: isMobile ? 4 : 8 }).map((_, i) => (
                 <Card key={i} className="overflow-hidden">
                   <CardHeader className="p-0">
                     <Skeleton className="aspect-square w-full" />
@@ -261,14 +303,14 @@ const Catalog = () => {
                   </CardContent>
                 </Card>
               ))
-            ) : products.length === 0 ? (
+            ) : totalProducts === 0 ? (
               <div className="col-span-full text-center py-8 sm:py-12">
                 <div className="text-4xl sm:text-6xl mb-4">🔍</div>
                 <h3 className="text-lg sm:text-xl font-semibold mb-2">No products found</h3>
                 <p className="text-muted-foreground text-sm sm:text-base">Try adjusting your search criteria</p>
               </div>
             ) : (
-              products.map((product) => {
+              currentProducts.map((product) => {
                 const productStatus = getProductStatus(product);
                 const primaryImage = getPrimaryImage(product.product_images);
                 
@@ -356,11 +398,76 @@ const Catalog = () => {
             )}
           </div>
 
+          {/* Mobile Pagination */}
+          {isMobile && totalProducts > 0 && totalPages > 1 && (
+            <div className="mt-6 sm:mt-8">
+              <div className="flex items-center justify-between bg-white rounded-lg border p-4 shadow-sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-2"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.min(totalPages, 5) }).map((_, index) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = index + 1;
+                      } else {
+                        const start = Math.max(1, currentPage - 2);
+                        pageNum = start + index;
+                        if (pageNum > totalPages) pageNum = totalPages - (4 - index);
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`w-8 h-8 rounded text-xs font-medium transition-colors ${
+                            currentPage === pageNum
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-2"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Statistics */}
-          {products.length > 0 && (
-            <div className="text-center mt-8 sm:mt-12">
+          {totalProducts > 0 && (
+            <div className="text-center mt-6 sm:mt-8">
               <p className="text-sm sm:text-base text-muted-foreground">
-                Showing {products.length} product{products.length !== 1 ? 's' : ''}
+                {isMobile ? (
+                  `Showing ${startIndex + 1}-${Math.min(endIndex, totalProducts)} of ${totalProducts} products`
+                ) : (
+                  `Showing ${totalProducts} product${totalProducts !== 1 ? 's' : ''}`
+                )}
               </p>
             </div>
           )}
