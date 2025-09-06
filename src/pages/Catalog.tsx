@@ -229,10 +229,10 @@ const Catalog = () => {
   // Page navigation handlers
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    // Smooth scroll to top of products grid
-    document.querySelector('.products-grid')?.scrollIntoView({ 
-      behavior: 'smooth', 
-      block: 'start' 
+    // Smooth scroll to top of the page
+    window.scrollTo({ 
+      top: 0, 
+      behavior: 'smooth' 
     });
   };
 
