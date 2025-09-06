@@ -191,17 +191,6 @@ const Catalog = () => {
     setSearchParams(searchParams);
   };
 
-  // Handle brand change
-  const handleBrandChange = (brand: string) => {
-    setSelectedBrand(brand);
-    if (brand === 'all') {
-      searchParams.delete('brand');
-    } else {
-      searchParams.set('brand', brand);
-    }
-    setSearchParams(searchParams);
-  };
-
   const handleBrandChangeWithReset = (brand: string) => {
     handleBrandChange(brand);
     setVisibleItems(isMobile ? 4 : 1000); // Reset visible items when changing brand
