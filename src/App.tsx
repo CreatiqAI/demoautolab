@@ -36,6 +36,7 @@ import Settings from './pages/admin/Settings';
 import UserManagement from './pages/admin/UserManagement';
 import OrderVerification from './pages/admin/OrderVerification';
 import WarehouseOperations from './pages/admin/WarehouseOperations';
+import KnowledgeBase from './pages/admin/KnowledgeBase';
 import AdminRegister from './pages/AdminRegister';
 import ScrollToTop from './components/ScrollToTop';
 
@@ -80,6 +81,7 @@ const App = () => (
               <Route path="order-verification" element={<OrderVerification />} />
               <Route path="warehouse-operations" element={<WarehouseOperations />} />
               <Route path="customers" element={<Customers />} />
+              <Route path="knowledge-base" element={<KnowledgeBase />} />
               <Route path="users" element={<UserManagement />} />
               <Route path="settings" element={<Settings />} />
             </Route>

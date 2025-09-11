@@ -15,7 +15,8 @@ import {
   Layers,
   UserCog,
   CheckCircle,
-  Warehouse
+  Warehouse,
+  BookOpen
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +28,7 @@ const navigation = [
   { name: 'Order Verification', href: '/admin/order-verification', icon: CheckCircle },
   { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
   { name: 'Customers', href: '/admin/customers', icon: Users },
+  { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
   { name: 'Staff Management', href: '/admin/users', icon: UserCog },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
