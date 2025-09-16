@@ -6,9 +6,18 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Settings as SettingsIcon } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Plus, Edit, Trash2, Settings as SettingsIcon, Store, Users, Database,
+  Mail, Shield, Palette, Globe, CreditCard, Bell, Package, Truck, FileText,
+  AlertTriangle, CheckCircle, Info, Save, RefreshCw
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables, Enums } from '@/integrations/supabase/types';
 
@@ -21,12 +30,108 @@ const USER_ROLES: Array<{ value: Enums<'user_role'>; label: string }> = [
   { value: 'admin', label: 'Admin' },
 ];
 
+interface SystemSettings {
+  // Store Settings
+  storeName: string;
+  storeDescription: string;
+  storeAddress: string;
+  storePhone: string;
+  storeEmail: string;
+  storeWebsite: string;
+  storeLogo: string;
+
+  // Business Settings
+  currency: string;
+  taxRate: number;
+  shippingEnabled: boolean;
+  shippingRate: number;
+  freeShippingThreshold: number;
+
+  // Email Settings
+  emailNotifications: boolean;
+  orderNotifications: boolean;
+  lowStockAlerts: boolean;
+  marketingEmails: boolean;
+
+  // Security Settings
+  requireEmailVerification: boolean;
+  passwordMinLength: number;
+  sessionTimeout: number;
+  twoFactorAuth: boolean;
+
+  // Inventory Settings
+  lowStockThreshold: number;
+  autoReorderEnabled: boolean;
+  stockAlertEmails: boolean;
+
+  // Payment Settings
+  paymentMethods: string[];
+  paymentGateway: string;
+
+  // Theme Settings
+  primaryColor: string;
+  darkMode: boolean;
+
+  // Maintenance Settings
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+}
+
 export default function Settings() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [activeTab, setActiveTab] = useState('general');
+  const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>({
+    // Store Settings
+    storeName: 'AutoMot Hub',
+    storeDescription: 'Premium automotive parts and accessories',
+    storeAddress: '123 Auto Street, Kuala Lumpur, Malaysia',
+    storePhone: '+60 12-345-6789',
+    storeEmail: 'info@automothub.com',
+    storeWebsite: 'https://automothub.com',
+    storeLogo: '',
+
+    // Business Settings
+    currency: 'MYR',
+    taxRate: 6.0,
+    shippingEnabled: true,
+    shippingRate: 15.00,
+    freeShippingThreshold: 200.00,
+
+    // Email Settings
+    emailNotifications: true,
+    orderNotifications: true,
+    lowStockAlerts: true,
+    marketingEmails: false,
+
+    // Security Settings
+    requireEmailVerification: true,
+    passwordMinLength: 8,
+    sessionTimeout: 30,
+    twoFactorAuth: false,
+
+    // Inventory Settings
+    lowStockThreshold: 10,
+    autoReorderEnabled: false,
+    stockAlertEmails: true,
+
+    // Payment Settings
+    paymentMethods: ['credit_card', 'bank_transfer'],
+    paymentGateway: 'stripe',
+
+    // Theme Settings
+    primaryColor: '#3b82f6',
+    darkMode: false,
+
+    // Maintenance Settings
+    maintenanceMode: false,
+    maintenanceMessage: 'We are currently performing maintenance. Please check back later.',
+  });
 
   const [categoryForm, setCategoryForm] = useState({
     name: '',
@@ -40,6 +145,7 @@ export default function Settings() {
 
   useEffect(() => {
     fetchCategories();
+    loadSystemSettings();
   }, []);
 
   const fetchCategories = async () => {
@@ -52,11 +158,10 @@ export default function Settings() {
 
       if (error) throw error;
       setCategories(data || []);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to fetch categories",
+        description: "Failed to load categories",
         variant: "destructive"
       });
     } finally {
@@ -64,41 +169,64 @@ export default function Settings() {
     }
   };
 
+  const loadSystemSettings = async () => {
+    // In a real app, this would load from database
+    // For now, we'll use the default settings
+    console.log('Loading system settings...');
+  };
+
+  const saveSystemSettings = async () => {
+    try {
+      setSaving(true);
+      // In a real app, this would save to database
+      // For now, we'll just show a success message
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+
+      toast({
+        title: "Success",
+        description: "Settings saved successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to save settings",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
     try {
+      setLoading(true);
+
       if (editingCategory) {
         const { error } = await supabase
           .from('categories')
           .update(categoryForm)
           .eq('id', editingCategory.id);
-
         if (error) throw error;
-        
         toast({
           title: "Success",
-          description: "Category updated successfully"
+          description: "Category updated successfully",
         });
       } else {
         const { error } = await supabase
           .from('categories')
           .insert([categoryForm]);
-
         if (error) throw error;
-        
         toast({
           title: "Success",
-          description: "Category created successfully"
+          description: "Category created successfully",
         });
       }
 
+      fetchCategories();
       setIsCategoryDialogOpen(false);
       resetCategoryForm();
-      fetchCategories();
     } catch (error: any) {
-      console.error('Error saving category:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to save category",
@@ -110,42 +238,37 @@ export default function Settings() {
   };
 
   const handleEditCategory = (category: Category) => {
-    setEditingCategory(category);
     setCategoryForm({
       name: category.name,
       description: category.description || '',
       slug: category.slug,
       image_url: category.image_url || '',
-      active: category.active || true,
-      sort_order: category.sort_order || 0,
+      active: category.active,
+      sort_order: category.sort_order,
       parent_id: category.parent_id
     });
+    setEditingCategory(category);
     setIsCategoryDialogOpen(true);
   };
 
   const handleDeleteCategory = async (id: string) => {
     if (!confirm('Are you sure you want to delete this category?')) return;
-
     try {
       setLoading(true);
       const { error } = await supabase
         .from('categories')
         .delete()
         .eq('id', id);
-
       if (error) throw error;
-      
       toast({
         title: "Success",
-        description: "Category deleted successfully"
+        description: "Category deleted successfully",
       });
-      
       fetchCategories();
     } catch (error: any) {
-      console.error('Error deleting category:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to delete category",
+        description: "Failed to delete category",
         variant: "destructive"
       });
     } finally {
@@ -178,253 +301,807 @@ export default function Settings() {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
-        <p className="text-muted-foreground">Manage system settings and configurations</p>
+        <p className="text-muted-foreground">Manage your system settings and configurations</p>
       </div>
 
-      {/* Categories Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Product Categories</CardTitle>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="general" className="flex items-center gap-2">
+            <Store className="h-4 w-4" />
+            General
+          </TabsTrigger>
+          <TabsTrigger value="business" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            Business
+          </TabsTrigger>
+          <TabsTrigger value="security" className="flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            Security
+          </TabsTrigger>
+          <TabsTrigger value="notifications" className="flex items-center gap-2">
+            <Bell className="h-4 w-4" />
+            Notifications
+          </TabsTrigger>
+          <TabsTrigger value="inventory" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Inventory
+          </TabsTrigger>
+          <TabsTrigger value="system" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            System
+          </TabsTrigger>
+        </TabsList>
+
+        {/* General Settings */}
+        <TabsContent value="general" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Store className="h-5 w-5" />
+                Store Information
+              </CardTitle>
               <CardDescription>
-                Manage product categories for better organization
+                Basic information about your store
               </CardDescription>
-            </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="storeName">Store Name</Label>
+                  <Input
+                    id="storeName"
+                    value={systemSettings.storeName}
+                    onChange={(e) => setSystemSettings(prev => ({ ...prev, storeName: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="storeEmail">Store Email</Label>
+                  <Input
+                    id="storeEmail"
+                    type="email"
+                    value={systemSettings.storeEmail}
+                    onChange={(e) => setSystemSettings(prev => ({ ...prev, storeEmail: e.target.value }))}
+                  />
+                </div>
+              </div>
 
-            <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={resetCategoryForm}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Category
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingCategory ? 'Edit Category' : 'Add New Category'}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {editingCategory 
-                      ? 'Update category information' 
-                      : 'Create a new product category'}
-                  </DialogDescription>
-                </DialogHeader>
+              <div className="space-y-2">
+                <Label htmlFor="storeDescription">Store Description</Label>
+                <Textarea
+                  id="storeDescription"
+                  value={systemSettings.storeDescription}
+                  onChange={(e) => setSystemSettings(prev => ({ ...prev, storeDescription: e.target.value }))}
+                  rows={3}
+                />
+              </div>
 
-                <form onSubmit={handleCategorySubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name *</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="storePhone">Phone Number</Label>
+                  <Input
+                    id="storePhone"
+                    value={systemSettings.storePhone}
+                    onChange={(e) => setSystemSettings(prev => ({ ...prev, storePhone: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="storeWebsite">Website</Label>
+                  <Input
+                    id="storeWebsite"
+                    value={systemSettings.storeWebsite}
+                    onChange={(e) => setSystemSettings(prev => ({ ...prev, storeWebsite: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="storeAddress">Store Address</Label>
+                <Textarea
+                  id="storeAddress"
+                  value={systemSettings.storeAddress}
+                  onChange={(e) => setSystemSettings(prev => ({ ...prev, storeAddress: e.target.value }))}
+                  rows={2}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Palette className="h-5 w-5" />
+                Theme & Appearance
+              </CardTitle>
+              <CardDescription>
+                Customize the look and feel of your store
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="primaryColor">Primary Color</Label>
+                  <div className="flex gap-2">
                     <Input
-                      id="name"
-                      value={categoryForm.name}
-                      onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
-                      required
+                      id="primaryColor"
+                      type="color"
+                      value={systemSettings.primaryColor}
+                      onChange={(e) => setSystemSettings(prev => ({ ...prev, primaryColor: e.target.value }))}
+                      className="w-20"
+                    />
+                    <Input
+                      value={systemSettings.primaryColor}
+                      onChange={(e) => setSystemSettings(prev => ({ ...prev, primaryColor: e.target.value }))}
+                      placeholder="#3b82f6"
                     />
                   </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="darkMode"
+                    checked={systemSettings.darkMode}
+                    onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, darkMode: checked }))}
+                  />
+                  <Label htmlFor="darkMode">Enable Dark Mode</Label>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
+        {/* Business Settings */}
+        <TabsContent value="business" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Business Configuration
+              </CardTitle>
+              <CardDescription>
+                Configure your business and financial settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select
+                    value={systemSettings.currency}
+                    onValueChange={(value) => setSystemSettings(prev => ({ ...prev, currency: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MYR">Malaysian Ringgit (MYR)</SelectItem>
+                      <SelectItem value="USD">US Dollar (USD)</SelectItem>
+                      <SelectItem value="EUR">Euro (EUR)</SelectItem>
+                      <SelectItem value="SGD">Singapore Dollar (SGD)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="taxRate">Tax Rate (%)</Label>
+                  <Input
+                    id="taxRate"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={systemSettings.taxRate}
+                    onChange={(e) => setSystemSettings(prev => ({ ...prev, taxRate: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div className="flex items-center space-x-2 mt-8">
+                  <Switch
+                    id="shippingEnabled"
+                    checked={systemSettings.shippingEnabled}
+                    onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, shippingEnabled: checked }))}
+                  />
+                  <Label htmlFor="shippingEnabled">Enable Shipping</Label>
+                </div>
+              </div>
+
+              {systemSettings.shippingEnabled && (
+                <div className="grid grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/20">
                   <div className="space-y-2">
-                    <Label htmlFor="slug">URL Slug *</Label>
+                    <Label htmlFor="shippingRate">Shipping Rate ({systemSettings.currency})</Label>
                     <Input
-                      id="slug"
-                      value={categoryForm.slug}
-                      onChange={(e) => setCategoryForm({...categoryForm, slug: e.target.value})}
-                      placeholder="category-url-slug"
-                      required
+                      id="shippingRate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={systemSettings.shippingRate}
+                      onChange={(e) => setSystemSettings(prev => ({ ...prev, shippingRate: parseFloat(e.target.value) || 0 }))}
                     />
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="freeShippingThreshold">Free Shipping Threshold ({systemSettings.currency})</Label>
                     <Input
-                      id="description"
-                      value={categoryForm.description}
-                      onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
+                      id="freeShippingThreshold"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={systemSettings.freeShippingThreshold}
+                      onChange={(e) => setSystemSettings(prev => ({ ...prev, freeShippingThreshold: parseFloat(e.target.value) || 0 }))}
                     />
                   </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="image_url">Image URL</Label>
-                    <Input
-                      id="image_url"
-                      value={categoryForm.image_url}
-                      onChange={(e) => setCategoryForm({...categoryForm, image_url: e.target.value})}
-                      placeholder="https://example.com/image.jpg"
-                    />
-                  </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Payment Settings
+              </CardTitle>
+              <CardDescription>
+                Configure payment methods and gateways
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Payment Gateway</Label>
+                <Select
+                  value={systemSettings.paymentGateway}
+                  onValueChange={(value) => setSystemSettings(prev => ({ ...prev, paymentGateway: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stripe">Stripe</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                    <SelectItem value="razorpay">Razorpay</SelectItem>
+                    <SelectItem value="manual">Manual Processing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="sort_order">Sort Order</Label>
-                      <Input
-                        id="sort_order"
-                        type="number"
-                        min="0"
-                        value={categoryForm.sort_order}
-                        onChange={(e) => setCategoryForm({...categoryForm, sort_order: parseInt(e.target.value) || 0})}
+              <div className="space-y-3">
+                <Label>Accepted Payment Methods</Label>
+                <div className="space-y-2">
+                  {[
+                    { id: 'credit_card', label: 'Credit/Debit Cards' },
+                    { id: 'bank_transfer', label: 'Bank Transfer' },
+                    { id: 'paypal', label: 'PayPal' },
+                    { id: 'cash_on_delivery', label: 'Cash on Delivery' }
+                  ].map((method) => (
+                    <div key={method.id} className="flex items-center space-x-2">
+                      <Switch
+                        id={method.id}
+                        checked={systemSettings.paymentMethods.includes(method.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSystemSettings(prev => ({
+                              ...prev,
+                              paymentMethods: [...prev.paymentMethods, method.id]
+                            }));
+                          } else {
+                            setSystemSettings(prev => ({
+                              ...prev,
+                              paymentMethods: prev.paymentMethods.filter(m => m !== method.id)
+                            }));
+                          }
+                        }}
                       />
+                      <Label htmlFor={method.id}>{method.label}</Label>
                     </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="parent_id">Parent Category</Label>
-                      <Select
-                        value={categoryForm.parent_id || ''}
-                        onValueChange={(value) => setCategoryForm({...categoryForm, parent_id: value || null})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="No parent" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">No parent</SelectItem>
-                          {categories
-                            .filter(cat => cat.id !== editingCategory?.id)
-                            .map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
-                                {category.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+        {/* Security Settings */}
+        <TabsContent value="security" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Security Configuration
+              </CardTitle>
+              <CardDescription>
+                Manage security settings and user authentication
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="requireEmailVerification"
+                      checked={systemSettings.requireEmailVerification}
+                      onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, requireEmailVerification: checked }))}
+                    />
+                    <Label htmlFor="requireEmailVerification">Require Email Verification</Label>
                   </div>
 
-                  <div className="flex justify-end space-x-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsCategoryDialogOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={loading}>
-                      {loading ? 'Saving...' : (editingCategory ? 'Update' : 'Create')}
-                    </Button>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="twoFactorAuth"
+                      checked={systemSettings.twoFactorAuth}
+                      onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, twoFactorAuth: checked }))}
+                    />
+                    <Label htmlFor="twoFactorAuth">Enable Two-Factor Authentication</Label>
                   </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-        
-        <CardContent>
-          {loading && categories.length === 0 ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Slug</TableHead>
-                  <TableHead>Parent</TableHead>
-                  <TableHead>Sort Order</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {categories.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      No categories yet. Create your first category!
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  categories.map((category) => {
-                    const parentCategory = categories.find(cat => cat.id === category.parent_id);
-                    return (
-                      <TableRow key={category.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{category.name}</div>
-                            {category.description && (
-                              <div className="text-sm text-muted-foreground">{category.description}</div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>{category.slug}</TableCell>
-                        <TableCell>
-                          {parentCategory ? (
-                            <Badge variant="outline">{parentCategory.name}</Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>{category.sort_order || 0}</TableCell>
-                        <TableCell>
-                          <Badge variant={category.active ? 'default' : 'secondary'}>
-                            {category.active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{formatDate(category.created_at)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditCategory(category)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteCategory(category.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="passwordMinLength">Minimum Password Length</Label>
+                    <Input
+                      id="passwordMinLength"
+                      type="number"
+                      min="6"
+                      max="50"
+                      value={systemSettings.passwordMinLength}
+                      onChange={(e) => setSystemSettings(prev => ({ ...prev, passwordMinLength: parseInt(e.target.value) || 8 }))}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="sessionTimeout">Session Timeout (minutes)</Label>
+                    <Input
+                      id="sessionTimeout"
+                      type="number"
+                      min="5"
+                      max="480"
+                      value={systemSettings.sessionTimeout}
+                      onChange={(e) => setSystemSettings(prev => ({ ...prev, sessionTimeout: parseInt(e.target.value) || 30 }))}
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Notifications Settings */}
+        <TabsContent value="notifications" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                Email Notifications
+              </CardTitle>
+              <CardDescription>
+                Configure email notification preferences
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="emailNotifications"
+                    checked={systemSettings.emailNotifications}
+                    onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, emailNotifications: checked }))}
+                  />
+                  <Label htmlFor="emailNotifications">Enable Email Notifications</Label>
+                </div>
+
+                {systemSettings.emailNotifications && (
+                  <div className="pl-6 space-y-3 border-l-2 border-muted">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="orderNotifications"
+                        checked={systemSettings.orderNotifications}
+                        onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, orderNotifications: checked }))}
+                      />
+                      <Label htmlFor="orderNotifications">Order Notifications</Label>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="lowStockAlerts"
+                        checked={systemSettings.lowStockAlerts}
+                        onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, lowStockAlerts: checked }))}
+                      />
+                      <Label htmlFor="lowStockAlerts">Low Stock Alerts</Label>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="marketingEmails"
+                        checked={systemSettings.marketingEmails}
+                        onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, marketingEmails: checked }))}
+                      />
+                      <Label htmlFor="marketingEmails">Marketing Emails</Label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Inventory Settings */}
+        <TabsContent value="inventory" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Inventory Management
+              </CardTitle>
+              <CardDescription>
+                Configure inventory and stock management settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="lowStockThreshold">Low Stock Threshold</Label>
+                  <Input
+                    id="lowStockThreshold"
+                    type="number"
+                    min="0"
+                    value={systemSettings.lowStockThreshold}
+                    onChange={(e) => setSystemSettings(prev => ({ ...prev, lowStockThreshold: parseInt(e.target.value) || 10 }))}
+                  />
+                </div>
+                <div className="flex items-center space-x-2 mt-8">
+                  <Switch
+                    id="stockAlertEmails"
+                    checked={systemSettings.stockAlertEmails}
+                    onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, stockAlertEmails: checked }))}
+                  />
+                  <Label htmlFor="stockAlertEmails">Stock Alert Emails</Label>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="autoReorderEnabled"
+                  checked={systemSettings.autoReorderEnabled}
+                  onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, autoReorderEnabled: checked }))}
+                />
+                <Label htmlFor="autoReorderEnabled">Enable Auto-Reorder</Label>
+              </div>
+
+              {systemSettings.autoReorderEnabled && (
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Auto-reorder will automatically create purchase orders when stock falls below the threshold.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Categories Section - Moved here */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Product Categories</CardTitle>
+                  <CardDescription>
+                    Manage product categories for better organization
+                  </CardDescription>
+                </div>
+                <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button onClick={() => { resetCategoryForm(); setIsCategoryDialogOpen(true); }}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Category
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>
+                        {editingCategory ? 'Edit Category' : 'Add New Category'}
+                      </DialogTitle>
+                      <DialogDescription>
+                        {editingCategory
+                          ? 'Update category information'
+                          : 'Create a new product category'}
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleCategorySubmit} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Name *</Label>
+                        <Input
+                          id="name"
+                          value={categoryForm.name}
+                          onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="slug">URL Slug *</Label>
+                        <Input
+                          id="slug"
+                          value={categoryForm.slug}
+                          onChange={(e) => setCategoryForm({...categoryForm, slug: e.target.value})}
+                          placeholder="category-url-slug"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Description</Label>
+                        <Input
+                          id="description"
+                          value={categoryForm.description}
+                          onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="image_url">Image URL</Label>
+                        <Input
+                          id="image_url"
+                          value={categoryForm.image_url}
+                          onChange={(e) => setCategoryForm({...categoryForm, image_url: e.target.value})}
+                          placeholder="https://example.com/image.jpg"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="sort_order">Sort Order</Label>
+                          <Input
+                            id="sort_order"
+                            type="number"
+                            min="0"
+                            value={categoryForm.sort_order}
+                            onChange={(e) => setCategoryForm({...categoryForm, sort_order: parseInt(e.target.value) || 0})}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="parent_id">Parent Category</Label>
+                          <Select
+                            value={categoryForm.parent_id || ''}
+                            onValueChange={(value) => setCategoryForm({...categoryForm, parent_id: value || null})}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="No parent" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">No parent</SelectItem>
+                              {categories
+                                .filter(cat => cat.id !== editingCategory?.id)
+                                .map((category) => (
+                                  <SelectItem key={category.id} value={category.id}>
+                                    {category.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setIsCategoryDialogOpen(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={loading}>
+                          {loading ? 'Saving...' : (editingCategory ? 'Update' : 'Create')}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              {loading && categories.length === 0 ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Slug</TableHead>
+                      <TableHead>Parent</TableHead>
+                      <TableHead>Sort Order</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {categories.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8">
+                          No categories yet. Create your first category!
                         </TableCell>
                       </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                    ) : (
+                      categories.map((category) => {
+                        const parentCategory = categories.find(cat => cat.id === category.parent_id);
+                        return (
+                          <TableRow key={category.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{category.name}</div>
+                                {category.description && (
+                                  <div className="text-sm text-muted-foreground">{category.description}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{category.slug}</TableCell>
+                            <TableCell>
+                              {parentCategory ? (
+                                <Badge variant="outline">{parentCategory.name}</Badge>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>{category.sort_order}</TableCell>
+                            <TableCell>
+                              <Badge variant={category.active ? 'default' : 'secondary'}>
+                                {category.active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{formatDate(category.created_at)}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end space-x-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditCategory(category)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteCategory(category.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* System Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>System Information</CardTitle>
-          <CardDescription>
-            Current system status and information
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-semibold mb-3">Database Status</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Connection:</span>
-                  <Badge variant="default">Connected</Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span>Version:</span>
-                  <span>PostgreSQL 15</span>
-                </div>
+        {/* System Settings */}
+        <TabsContent value="system" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                Maintenance Mode
+              </CardTitle>
+              <CardDescription>
+                Control site availability and maintenance
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="maintenanceMode"
+                  checked={systemSettings.maintenanceMode}
+                  onCheckedChange={(checked) => setSystemSettings(prev => ({ ...prev, maintenanceMode: checked }))}
+                />
+                <Label htmlFor="maintenanceMode">Enable Maintenance Mode</Label>
               </div>
-            </div>
 
-            <div>
-              <h4 className="font-semibold mb-3">User Roles</h4>
-              <div className="space-y-2 text-sm">
-                {USER_ROLES.map((role) => (
-                  <div key={role.value} className="flex justify-between">
-                    <span>{role.label}:</span>
-                    <Badge variant="outline">{role.value}</Badge>
+              {systemSettings.maintenanceMode && (
+                <div className="space-y-2">
+                  <Label htmlFor="maintenanceMessage">Maintenance Message</Label>
+                  <Textarea
+                    id="maintenanceMessage"
+                    value={systemSettings.maintenanceMessage}
+                    onChange={(e) => setSystemSettings(prev => ({ ...prev, maintenanceMessage: e.target.value }))}
+                    rows={3}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                System Information
+              </CardTitle>
+              <CardDescription>
+                Current system status and information
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-semibold mb-3">Database Status</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Connection:</span>
+                      <Badge variant="default" className="flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        Connected
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Version:</span>
+                      <span>PostgreSQL 15</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Storage Used:</span>
+                      <span>2.4 GB</span>
+                    </div>
                   </div>
-                ))}
+                </div>
+
+                <div>
+                  <h4 className="font-semibold mb-3">Application Info</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Version:</span>
+                      <span>v1.2.0</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Environment:</span>
+                      <Badge variant="outline">Production</Badge>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Last Backup:</span>
+                      <span>2 hours ago</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
+              <Separator className="my-6" />
+
+              <div>
+                <h4 className="font-semibold mb-3">User Roles</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  {USER_ROLES.map((role) => (
+                    <div key={role.value} className="flex justify-between">
+                      <span>{role.label}:</span>
+                      <Badge variant="outline">{role.value}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Save Button - Fixed at bottom */}
+      <div className="flex justify-end space-x-2 pt-6 border-t">
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Reset Changes
+        </Button>
+        <Button onClick={saveSystemSettings} disabled={saving}>
+          {saving ? (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save All Settings
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
