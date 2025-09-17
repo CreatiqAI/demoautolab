@@ -202,10 +202,16 @@ export default function Settings() {
     try {
       setLoading(true);
 
+      // Prepare form data with proper parent_id conversion
+      const formData = {
+        ...categoryForm,
+        parent_id: categoryForm.parent_id === 'no-parent' ? null : categoryForm.parent_id
+      };
+
       if (editingCategory) {
         const { error } = await supabase
           .from('categories')
-          .update(categoryForm)
+          .update(formData)
           .eq('id', editingCategory.id);
         if (error) throw error;
         toast({
@@ -215,7 +221,7 @@ export default function Settings() {
       } else {
         const { error } = await supabase
           .from('categories')
-          .insert([categoryForm]);
+          .insert([formData]);
         if (error) throw error;
         toast({
           title: "Success",
@@ -856,14 +862,14 @@ export default function Settings() {
                         <div className="space-y-2">
                           <Label htmlFor="parent_id">Parent Category</Label>
                           <Select
-                            value={categoryForm.parent_id || ''}
-                            onValueChange={(value) => setCategoryForm({...categoryForm, parent_id: value || null})}
+                            value={categoryForm.parent_id || 'no-parent'}
+                            onValueChange={(value) => setCategoryForm({...categoryForm, parent_id: value === 'no-parent' ? null : value})}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="No parent" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">No parent</SelectItem>
+                              <SelectItem value="no-parent">No parent</SelectItem>
                               {categories
                                 .filter(cat => cat.id !== editingCategory?.id)
                                 .map((category) => (
