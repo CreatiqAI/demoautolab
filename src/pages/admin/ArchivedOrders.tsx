@@ -60,42 +60,52 @@ export default function ArchivedOrders() {
   const fetchArchivedOrders = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fetching archived orders...');
 
-      // Fetch only completed orders
+      // Use direct query for completed orders only
       let ordersData: any[] = [];
 
-      // Try the admin function first (same as main Orders.tsx)
-      const { data: functionData, error: functionError } = await (supabase as any)
-        .rpc('get_admin_orders');
+      // Direct query with order items for completed orders
+      const { data: archivedOrdersWithItems, error: archivedError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            id,
+            component_sku,
+            component_name,
+            product_context,
+            quantity,
+            unit_price,
+            total_price
+          )
+        `)
+        .eq('status', 'COMPLETED')
+        .order('updated_at', { ascending: false });
 
-      if (!functionError && functionData) {
-        ordersData = functionData.filter((order: any) => order.status === 'COMPLETED');
-      } else {
-        console.warn('Admin function failed, trying fallback approach:', functionError);
+      if (archivedError) {
+        console.warn('Direct archived orders query failed:', archivedError);
 
-        // Fallback: Try the enhanced admin view
-        const { data: viewData, error: viewError } = await (supabase as any)
-          .from('admin_orders_enhanced')
+        // Fallback: Basic completed orders query without items
+        const { data: basicData, error: basicError } = await supabase
+          .from('orders')
           .select('*')
           .eq('status', 'COMPLETED')
           .order('updated_at', { ascending: false });
 
-        if (!viewError && viewData) {
-          ordersData = viewData;
+        if (!basicError && basicData) {
+          console.log('📦 Using basic archived orders data (no items):', basicData.length, 'orders');
+          ordersData = basicData.map(order => ({
+            ...order,
+            order_items: [] // No items in fallback
+          }));
         } else {
-          console.warn('Admin view failed, trying basic query:', viewError);
-
-          // Final fallback: Basic orders query
-          const { data: basicData, error: basicError } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('status', 'COMPLETED')
-            .order('updated_at', { ascending: false });
-
-          if (!basicError && basicData) {
-            ordersData = basicData;
-          }
+          console.error('❌ All archived order queries failed:', basicError);
+          throw new Error('Failed to fetch archived orders');
         }
+      } else {
+        console.log('📦 Successfully fetched archived orders with items:', archivedOrdersWithItems.length, 'orders');
+        ordersData = archivedOrdersWithItems;
       }
 
       // Transform the data to match the expected interface

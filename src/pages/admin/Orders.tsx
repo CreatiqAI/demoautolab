@@ -110,40 +110,50 @@ export default function Orders() {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      
-      // Use the same pattern as Dashboard.tsx for fetching orders
-      let ordersData: any[] = [];
-      
-      // Try the admin function first (same as Dashboard.tsx)
-      const { data: functionData, error: functionError } = await (supabase as any)
-        .rpc('get_admin_orders');
+      console.log('🔄 Fetching orders...');
 
-      if (!functionError && functionData) {
-        ordersData = functionData;
-      } else {
-        console.warn('Admin function failed, trying fallback approach:', functionError);
-        
-        // Fallback: Try the enhanced admin view
-        const { data: viewData, error: viewError } = await (supabase as any)
-          .from('admin_orders_enhanced')
+      // Use direct orders query with proper joins for reliability
+      let ordersData: any[] = [];
+
+      // Direct query with order items - more reliable than RPC functions
+      const { data: ordersWithItems, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            id,
+            component_sku,
+            component_name,
+            product_context,
+            quantity,
+            unit_price,
+            total_price
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (ordersError) {
+        console.warn('Direct orders query failed:', ordersError);
+
+        // Fallback: Basic orders query without items
+        const { data: basicData, error: basicError } = await supabase
+          .from('orders')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!viewError && viewData) {
-          ordersData = viewData;
+        if (!basicError && basicData) {
+          console.log('📦 Using basic orders data (no items):', basicData.length, 'orders');
+          ordersData = basicData.map(order => ({
+            ...order,
+            order_items: [] // No items in fallback
+          }));
         } else {
-          console.warn('Admin view failed, trying basic query:', viewError);
-          
-          // Final fallback: Basic orders query (same as Dashboard.tsx)
-          const { data: basicData, error: basicError } = await supabase
-            .from('orders')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-          if (!basicError && basicData) {
-            ordersData = basicData;
-          }
+          console.error('❌ All order queries failed:', basicError);
+          throw new Error('Failed to fetch orders');
         }
+      } else {
+        console.log('📦 Successfully fetched orders with items:', ordersWithItems.length, 'orders');
+        ordersData = ordersWithItems;
       }
 
       // Transform the data to match the expected interface
@@ -171,10 +181,21 @@ export default function Orders() {
         order_items: order.order_items || []
       }));
 
+      console.log('📊 Orders by status:');
+      const statusCounts = transformedOrders.reduce((acc, order) => {
+        acc[order.status] = (acc[order.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.table(statusCounts);
+
+      console.log('📋 Total orders fetched:', transformedOrders.length);
+      const completedOrders = transformedOrders.filter(o => o.status === 'COMPLETED');
+      console.log('✅ Completed orders (will be filtered out):', completedOrders.length);
+
       setOrders(transformedOrders);
 
     } catch (error: any) {
-      console.error('Error fetching orders:', error);
+      console.error('❌ Error fetching orders:', error);
       setOrders([]);
       // Don't show error toast since this is expected when database isn't fully set up
     } finally {
@@ -228,30 +249,48 @@ export default function Orders() {
 
     try {
       setLoading(true);
+      console.log('🔄 Attempting to mark order as complete:', {
+        orderId: order.id,
+        orderNo: order.order_no,
+        currentStatus: order.status
+      });
 
       // Update order status to COMPLETED
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .update({
           status: 'COMPLETED',
           updated_at: new Date().toISOString()
         })
-        .eq('id', order.id);
+        .eq('id', order.id)
+        .select(); // Return updated data to verify the change
+
+      console.log('📝 Update result:', { data, error });
 
       if (error) {
         throw new Error(`Failed to mark order as complete: ${error.message}`);
       }
 
-      toast({
-        title: "Order Completed",
-        description: `Order #${order.order_no} has been marked as completed and moved to archive.`
-      });
+      // Verify the update worked
+      if (data && data.length > 0) {
+        console.log('✅ Order successfully updated:', data[0]);
+        toast({
+          title: "Order Completed",
+          description: `Order #${order.order_no} has been marked as completed and moved to archive.`
+        });
+      } else {
+        console.warn('⚠️ Update completed but no data returned');
+        toast({
+          title: "Order Status Updated",
+          description: `Order #${order.order_no} status updated. Please refresh to see changes.`
+        });
+      }
 
       // Refresh the orders list to remove completed order from view
       fetchOrders();
 
     } catch (error: any) {
-      console.error('Mark complete error:', error);
+      console.error('❌ Mark complete error:', error);
       toast({
         title: "Failed to Complete Order",
         description: error.message || "Failed to mark order as complete",
@@ -331,8 +370,18 @@ export default function Orders() {
 
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
 
-    return isNotCompleted && matchesSearch && matchesStatus;
+    const result = isNotCompleted && matchesSearch && matchesStatus;
+
+    // Debug logging for filtering
+    if (!isNotCompleted) {
+      console.log(`🔄 Filtered out completed order: ${order.order_no} (status: ${order.status})`);
+    }
+
+    return result;
   });
+
+  // Add this debug log to see filtering results
+  console.log(`📋 Orders after filtering: ${filteredOrders.length} / ${orders.length} (excluded ${orders.length - filteredOrders.length} completed orders)`);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-MY', {
