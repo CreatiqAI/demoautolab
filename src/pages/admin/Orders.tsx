@@ -221,6 +221,47 @@ export default function Orders() {
 
   // Removed unused functions openEditDialog and openViewDialog
 
+  const handleMarkComplete = async (order: Order) => {
+    if (!confirm(`Mark order #${order.order_no} as completed? This will move it to the archived orders.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Update order status to COMPLETED
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: 'COMPLETED',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id);
+
+      if (error) {
+        throw new Error(`Failed to mark order as complete: ${error.message}`);
+      }
+
+      toast({
+        title: "Order Completed",
+        description: `Order #${order.order_no} has been marked as completed and moved to archive.`
+      });
+
+      // Refresh the orders list to remove completed order from view
+      fetchOrders();
+
+    } catch (error: any) {
+      console.error('Mark complete error:', error);
+      toast({
+        title: "Failed to Complete Order",
+        description: error.message || "Failed to mark order as complete",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeleteOrder = async (order: Order) => {
     if (!confirm(`Are you sure you want to permanently delete order #${order.order_no}? This action cannot be undone.`)) {
       return;
@@ -231,27 +272,27 @@ export default function Orders() {
 
       // Direct deletion approach - delete order items first, then order
       console.log('Deleting order:', order.order_no, 'with ID:', order.id);
-      
+
       // First delete order items
       const { error: itemsError } = await supabase
         .from('order_items')
         .delete()
         .eq('order_id', order.id);
-        
+
       if (itemsError) {
         console.warn('Could not delete order items:', itemsError);
       }
-      
+
       // Then delete the order
       const { error: orderError } = await supabase
         .from('orders')
         .delete()
         .eq('id', order.id);
-        
+
       if (orderError) {
         throw new Error(`Failed to delete order: ${orderError.message}`);
       }
-      
+
       console.log('✅ Order deleted successfully');
 
       toast({
@@ -269,7 +310,7 @@ export default function Orders() {
         description: error.message || "Failed to delete order",
         variant: "destructive"
       });
-      
+
       // Refresh the orders list in case the order was actually deleted
       console.log('Refreshing orders list after failed deletion...');
       fetchOrders();
@@ -279,7 +320,10 @@ export default function Orders() {
   };
 
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
+    // Exclude completed orders from main orders view
+    const isNotCompleted = order.status !== 'COMPLETED';
+
+    const matchesSearch =
       order.order_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customer_phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -287,7 +331,7 @@ export default function Orders() {
 
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    return isNotCompleted && matchesSearch && matchesStatus;
   });
 
   const formatCurrency = (amount: number) => {
@@ -618,45 +662,109 @@ export default function Orders() {
                                 </div>
                               </div>
 
-                              {/* Order Items for Warehouse */}
+                              {/* Clean Order Details */}
                               {order.order_items && order.order_items.length > 0 && (
-                                <div>
-                                  <h4 className="font-medium mb-3">📦 Components to Prepare ({order.order_items.length} types)</h4>
-                                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                    <p className="text-sm font-medium text-blue-800 mb-3">Warehouse Picking List:</p>
-                                    <div className="space-y-3">
-                                      {order.order_items.map((item) => (
-                                        <div key={item.id} className="bg-white border rounded-lg p-3">
-                                          <div className="flex justify-between items-start">
-                                            <div className="flex-1">
-                                              <div className="flex items-center gap-3 mb-2">
-                                                <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">
-                                                  QTY: {item.quantity}
-                                                </span>
-                                                <span className="font-mono text-sm font-bold text-blue-600">
-                                                  {item.component_sku}
-                                                </span>
+                                <div className="space-y-6">
+                                  {/* Simple Header */}
+                                  <div className="border-b border-gray-200 pb-3">
+                                    <h4 className="text-xl font-semibold text-gray-900">Order Items</h4>
+                                    <p className="text-sm text-gray-600 mt-1">{order.order_items.length} items to prepare</p>
+                                  </div>
+
+                                  {/* Clean Table */}
+                                  <div className="border border-gray-400 rounded-sm overflow-hidden">
+                                    {/* Table Header */}
+                                    <div className="bg-gray-100 px-6 py-3 border-b border-gray-400">
+                                      <div className="grid grid-cols-10 gap-4 text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                        <div className="col-span-1">Qty</div>
+                                        <div className="col-span-2">SKU Code</div>
+                                        <div className="col-span-4">Product Name</div>
+                                        <div className="col-span-2">Unit Price</div>
+                                        <div className="col-span-1 text-right">Total</div>
+                                      </div>
+                                    </div>
+
+                                    {/* Table Rows */}
+                                    <div>
+                                      {order.order_items.map((item, index) => (
+                                        <div key={item.id} className="px-6 py-4 border-b border-gray-300 last:border-b-0">
+                                          <div className="grid grid-cols-10 gap-4 items-center">
+                                            {/* Quantity */}
+                                            <div className="col-span-1">
+                                              <div className="w-8 h-8 border border-gray-400 rounded flex items-center justify-center font-semibold text-sm">
+                                                {item.quantity}
                                               </div>
-                                              <p className="font-medium text-gray-800">{item.component_name}</p>
+                                            </div>
+
+                                            {/* SKU */}
+                                            <div className="col-span-2">
+                                              <div className="font-mono text-sm font-semibold text-gray-900">
+                                                {item.component_sku}
+                                              </div>
+                                            </div>
+
+                                            {/* Product Name */}
+                                            <div className="col-span-4">
+                                              <div className="font-medium text-gray-900">
+                                                {item.component_name}
+                                              </div>
                                               {item.product_context && (
-                                                <p className="text-xs text-gray-500 mt-1">Context: {item.product_context}</p>
+                                                <div className="text-xs text-gray-600 mt-1 pl-3 border-l-2 border-gray-400">
+                                                  {item.product_context}
+                                                </div>
                                               )}
                                             </div>
-                                            <div className="text-right">
-                                              <p className="text-sm text-gray-600">Unit: {formatCurrency(item.unit_price)}</p>
-                                              <p className="font-semibold">{formatCurrency(item.total_price)}</p>
+
+                                            {/* Unit Price */}
+                                            <div className="col-span-2">
+                                              <div className="text-sm text-gray-900">
+                                                {formatCurrency(item.unit_price)}
+                                              </div>
+                                            </div>
+
+                                            {/* Total */}
+                                            <div className="col-span-1 text-right">
+                                              <div className="font-semibold text-gray-900">
+                                                {formatCurrency(item.total_price)}
+                                              </div>
                                             </div>
                                           </div>
                                         </div>
                                       ))}
                                     </div>
-                                    
-                                    <div className="mt-4 pt-3 border-t border-blue-200">
+
+                                    {/* Order Total */}
+                                    <div className="bg-gray-100 px-6 py-4 border-t border-gray-400">
                                       <div className="flex justify-between items-center">
-                                        <span className="text-blue-800 font-medium">Order Total:</span>
-                                        <span className="text-lg font-bold text-blue-900">{formatCurrency(order.total)}</span>
+                                        <div>
+                                          <div className="font-semibold text-gray-900">Order Total</div>
+                                          <div className="text-sm text-gray-600">
+                                            {order.order_items.reduce((sum, item) => sum + item.quantity, 0)} items
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className="text-xl font-bold text-gray-900">
+                                            {formatCurrency(order.total)}
+                                          </div>
+                                        </div>
                                       </div>
                                     </div>
+                                  </div>
+
+                                  {/* Simple Actions */}
+                                  <div className="flex justify-end gap-3 pt-2">
+                                    <button className="px-4 py-2 border border-gray-400 text-gray-700 text-sm font-medium rounded hover:bg-gray-50 transition-colors">
+                                      Print List
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleMarkComplete(order);
+                                      }}
+                                      className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors"
+                                    >
+                                      Mark Complete
+                                    </button>
                                   </div>
                                 </div>
                               )}

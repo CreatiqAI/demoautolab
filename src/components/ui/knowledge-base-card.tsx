@@ -257,16 +257,36 @@ export function KnowledgeBaseCard({ entry, index, onApprove, onEdit, onDelete, o
       <div className="border-t px-4 pb-4">
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
           <CollapsibleTrigger asChild>
-            <Button 
-              variant="ghost" 
-              className="w-full justify-between h-8 text-xs text-slate-500 hover:text-slate-700"
+            <Button
+              variant="ghost"
+              className="group w-full justify-between h-9 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-50/80 transition-all duration-300 ease-out rounded-md border border-transparent hover:border-slate-200 hover:shadow-sm"
             >
-              <span>View full content</span>
-              {isExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                  isExpanded ? 'bg-blue-500' : 'bg-slate-300 group-hover:bg-blue-400'
+                }`}></div>
+                <span className="font-medium">
+                  {isExpanded ? 'Hide full content' : 'View full content'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className={`text-xs transition-all duration-300 ${
+                  isExpanded ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'
+                }`}>
+                  {isExpanded ? 'Collapse' : 'Expand'}
+                </span>
+                <div className={`transition-all duration-300 ease-out ${
+                  isExpanded
+                    ? 'rotate-180 text-blue-600'
+                    : 'rotate-0 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-0.5'
+                }`}>
+                  {isExpanded ? (
+                    <ChevronDown className="h-3 w-3" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3" />
+                  )}
+                </div>
+              </div>
             </Button>
           </CollapsibleTrigger>
           

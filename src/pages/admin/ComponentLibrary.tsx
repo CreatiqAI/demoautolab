@@ -14,17 +14,26 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 
 interface ComponentLibraryItem {
   id: string;
+  component_sku: string;
   name: string;
   description: string;
   component_type: string;
   component_value: string;
+  stock_level: number;
+  normal_price: number;
+  merchant_price: number;
+  supplier_id?: string;
+  supplier_name?: string;
   is_active: boolean;
   default_image_url?: string;
-  usage_count?: number;
-  products_count?: number;
-  total_stock?: number;
-  avg_price?: number;
   created_at: string;
+}
+
+interface Supplier {
+  id: string;
+  name: string;
+  company_name: string;
+  is_active: boolean;
 }
 
 const COMPONENT_TYPES = [
@@ -41,13 +50,19 @@ const COMPONENT_TYPES = [
 
 export default function ComponentLibrary() {
   const [components, setComponents] = useState<ComponentLibraryItem[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     id: '',
+    component_sku: '',
     name: '',
     description: '',
     component_type: '',
     component_value: '',
+    stock_level: 0,
+    normal_price: 0,
+    merchant_price: 0,
+    supplier_id: '',
     default_image_url: ''
   });
   const [isEditing, setIsEditing] = useState(false);
@@ -56,33 +71,60 @@ export default function ComponentLibrary() {
 
   useEffect(() => {
     fetchComponents();
+    fetchSuppliers();
   }, []);
 
   const fetchComponents = async () => {
     try {
       setLoading(true);
-      // Using a fallback approach since the view may not exist
-      try {
-        const { data, error } = await supabase
-          .rpc('get_component_library_with_usage');
-        
-        if (error) throw error;
-        setComponents(data || []);
-      } catch (rpcError) {
-        console.log('Using fallback approach for component library');
-        // Fallback to basic component library table
-        const { data, error } = await supabase
-          .from('categories') // Using existing table as fallback
+
+      // First try with supplier relationship
+      let { data, error } = await supabase
+        .from('component_library')
+        .select(`
+          *,
+          supplier:supplier_id(
+            id,
+            name,
+            company_name
+          )
+        `)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      // If supplier relationship fails (column doesn't exist), try without it
+      if (error && error.message?.includes('supplier_id')) {
+        console.warn('Supplier relationship failed, fetching without supplier data:', error);
+        const fallback = await supabase
+          .from('component_library')
           .select('*')
-          .limit(0); // Return empty for now
-        
-        setComponents([]);
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        data = fallback.data;
+        error = fallback.error;
       }
+
+      if (error) throw error;
+
+      // Transform data to include supplier name
+      const transformedData = data?.map(item => ({
+        ...item,
+        supplier_name: item.supplier?.name || 'No Supplier',
+        // Set defaults for missing fields
+        stock_level: item.stock_level || 0,
+        normal_price: item.normal_price || 0,
+        merchant_price: item.merchant_price || 0,
+        component_sku: item.component_sku || 'NO-SKU'
+      })) || [];
+
+      console.log('Fetched components:', transformedData);
+      setComponents(transformedData);
     } catch (error: any) {
       console.error('Error fetching components:', error);
       toast({
         title: "Error",
-        description: "Failed to load component library",
+        description: "Failed to load component library: " + (error.message || 'Unknown error'),
         variant: "destructive"
       });
     } finally {
@@ -90,30 +132,86 @@ export default function ComponentLibrary() {
     }
   };
 
+  const fetchSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('id, name, company_name, is_active')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) {
+        console.warn('Suppliers table may not exist yet:', error);
+        setSuppliers([]);
+        return;
+      }
+
+      console.log('Fetched suppliers:', data);
+      setSuppliers(data || []);
+    } catch (error: any) {
+      console.error('Error fetching suppliers:', error);
+      setSuppliers([]);
+      // Don't show error toast if suppliers table doesn't exist yet
+      if (!error.message?.includes('does not exist')) {
+        toast({
+          title: "Error",
+          description: "Failed to load suppliers: " + (error.message || 'Unknown error'),
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (!formData.component_sku || !formData.name || !formData.component_type) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
+      const componentData = {
+        component_sku: formData.component_sku,
+        name: formData.name,
+        description: formData.description,
+        component_type: formData.component_type,
+        component_value: formData.component_value,
+        stock_level: formData.stock_level,
+        normal_price: formData.normal_price,
+        merchant_price: formData.merchant_price,
+        supplier_id: formData.supplier_id === 'no-supplier' ? null : formData.supplier_id,
+        default_image_url: formData.default_image_url,
+        is_active: true
+      };
+
       if (isEditing) {
-        // Fallback - component library operations disabled for now
-        console.log('Component library update disabled - needs proper database setup');
-        
+        const { error } = await supabase
+          .from('component_library')
+          .update(componentData)
+          .eq('id', formData.id);
+
+        if (error) throw error;
+
         toast({
-          title: "Feature Unavailable",
-          description: "Component library editing requires database setup",
-          variant: "destructive"
+          title: "Success",
+          description: "Component updated successfully"
         });
-        return;
       } else {
-        // Fallback - component library operations disabled for now
-        console.log('Component library creation disabled - needs proper database setup');
-        
+        const { error } = await supabase
+          .from('component_library')
+          .insert([componentData]);
+
+        if (error) throw error;
+
         toast({
-          title: "Feature Unavailable",
-          description: "Component library creation requires database setup",
-          variant: "destructive"
+          title: "Success",
+          description: "Component created successfully"
         });
-        return;
       }
 
       setDialogOpen(false);
@@ -132,10 +230,15 @@ export default function ComponentLibrary() {
   const handleEdit = (component: ComponentLibraryItem) => {
     setFormData({
       id: component.id,
+      component_sku: component.component_sku,
       name: component.name,
       description: component.description,
       component_type: component.component_type,
       component_value: component.component_value,
+      stock_level: component.stock_level,
+      normal_price: component.normal_price,
+      merchant_price: component.merchant_price,
+      supplier_id: component.supplier_id || 'no-supplier',
       default_image_url: component.default_image_url || ''
     });
     setIsEditing(true);
@@ -145,20 +248,42 @@ export default function ComponentLibrary() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
 
-    toast({
-      title: "Feature Unavailable",
-      description: "Component library deletion requires database setup",
-      variant: "destructive"
-    });
+    try {
+      const { error } = await supabase
+        .from('component_library')
+        .update({ is_active: false })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Component "${name}" deleted successfully`
+      });
+
+      fetchComponents();
+    } catch (error: any) {
+      console.error('Error deleting component:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete component",
+        variant: "destructive"
+      });
+    }
   };
 
   const resetForm = () => {
     setFormData({
       id: '',
+      component_sku: '',
       name: '',
       description: '',
       component_type: '',
       component_value: '',
+      stock_level: 0,
+      normal_price: 0,
+      merchant_price: 0,
+      supplier_id: 'no-supplier',
       default_image_url: ''
     });
     setIsEditing(false);
@@ -190,38 +315,74 @@ export default function ComponentLibrary() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Component Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., Black Color, Large Size"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="component_sku">SKU Code *</Label>
+                  <Input
+                    id="component_sku"
+                    value={formData.component_sku}
+                    onChange={(e) => setFormData(prev => ({ ...prev, component_sku: e.target.value }))}
+                    placeholder="e.g., BM-026N"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="name">Component Name *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g., BMW X3 9 Inch Casing"
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="component_type">Component Type</Label>
-                <Select 
-                  value={formData.component_type} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, component_type: value }))}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select component type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COMPONENT_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        <span className="flex items-center gap-2">
-                          <span>{type.icon}</span>
-                          {type.label}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="component_type">Component Type *</Label>
+                  <Select
+                    value={formData.component_type}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, component_type: value }))}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select component type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMPONENT_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <span className="flex items-center gap-2">
+                            <span>{type.icon}</span>
+                            {type.label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="supplier_id">Supplier</Label>
+                  <Select
+                    value={formData.supplier_id}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, supplier_id: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select supplier" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="no-supplier">No Supplier</SelectItem>
+                      {suppliers.map((supplier) => (
+                        <SelectItem key={supplier.id} value={supplier.id}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{supplier.name}</span>
+                            <span className="text-xs text-muted-foreground">{supplier.company_name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -230,7 +391,7 @@ export default function ComponentLibrary() {
                   id="component_value"
                   value={formData.component_value}
                   onChange={(e) => setFormData(prev => ({ ...prev, component_value: e.target.value }))}
-                  placeholder="e.g., black, large, 128gb"
+                  placeholder="e.g., black, large, 9-inch"
                 />
               </div>
 
@@ -243,6 +404,44 @@ export default function ComponentLibrary() {
                   placeholder="Describe this component..."
                   rows={3}
                 />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="stock_level">Stock Level</Label>
+                  <Input
+                    id="stock_level"
+                    type="number"
+                    min="0"
+                    value={formData.stock_level}
+                    onChange={(e) => setFormData(prev => ({ ...prev, stock_level: parseInt(e.target.value) || 0 }))}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant_price">Cost Price (RM)</Label>
+                  <Input
+                    id="merchant_price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.merchant_price}
+                    onChange={(e) => setFormData(prev => ({ ...prev, merchant_price: parseFloat(e.target.value) || 0 }))}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="normal_price">Selling Price (RM)</Label>
+                  <Input
+                    id="normal_price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.normal_price}
+                    onChange={(e) => setFormData(prev => ({ ...prev, normal_price: parseFloat(e.target.value) || 0 }))}
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -261,9 +460,9 @@ export default function ComponentLibrary() {
                 <Button type="submit" className="flex-1">
                   {isEditing ? 'Update Component' : 'Create Component'}
                 </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => { setDialogOpen(false); resetForm(); }}
                 >
                   Cancel
@@ -284,10 +483,21 @@ export default function ComponentLibrary() {
               <Card key={component.id} className="relative">
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{typeInfo.icon}</span>
-                      <div>
+                    <div className="flex items-start gap-3">
+                      {component.default_image_url ? (
+                        <img
+                          src={component.default_image_url}
+                          alt={component.name}
+                          className="w-12 h-12 rounded object-cover"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center">
+                          <span className="text-lg">{typeInfo.icon}</span>
+                        </div>
+                      )}
+                      <div className="flex-1">
                         <CardTitle className="text-lg">{component.name}</CardTitle>
+                        <p className="text-sm text-blue-600 font-mono">{component.component_sku}</p>
                         <CardDescription>{component.description}</CardDescription>
                       </div>
                     </div>
@@ -311,35 +521,41 @@ export default function ComponentLibrary() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Badge variant="secondary">{typeInfo.label}</Badge>
                       {component.component_value && (
                         <Badge variant="outline">{component.component_value}</Badge>
                       )}
+                      {component.supplier_name && (
+                        <Badge variant="default" className="bg-green-100 text-green-800">
+                          🏭 {component.supplier_name}
+                        </Badge>
+                      )}
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+
+                    <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="flex items-center gap-1">
                         <Package className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-muted-foreground">Products:</span>
-                        <span className="font-medium">{component.products_count || 0}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Tag className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-muted-foreground">Variants:</span>
-                        <span className="font-medium">{component.usage_count || 0}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Layers className="h-3 w-3 text-muted-foreground" />
                         <span className="text-muted-foreground">Stock:</span>
-                        <span className="font-medium">{component.total_stock || 0}</span>
+                        <span className="font-medium text-blue-600">{component.stock_level}</span>
                       </div>
-                      {component.avg_price && component.avg_price > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground">Avg Price:</span>
-                          <span className="font-medium">${component.avg_price.toFixed(2)}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Cost:</span>
+                        <span className="font-medium text-green-600">RM{component.merchant_price?.toFixed(2) || '0.00'}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Price:</span>
+                        <span className="font-medium text-orange-600">RM{component.normal_price?.toFixed(2) || '0.00'}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Margin:</span>
+                        <span className="font-medium">
+                          {component.normal_price && component.merchant_price
+                            ? Math.round(((component.normal_price - component.merchant_price) / component.normal_price) * 100) + '%'
+                            : '0%'
+                          }
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

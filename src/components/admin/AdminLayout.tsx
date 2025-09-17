@@ -3,20 +3,22 @@ import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { 
-  BarChart3, 
-  Package, 
-  ShoppingBag, 
-  Users, 
-  Settings, 
-  LogOut, 
+import {
+  BarChart3,
+  Package,
+  ShoppingBag,
+  Users,
+  Settings,
+  LogOut,
   Menu,
   Home,
   Layers,
   UserCog,
   CheckCircle,
   Warehouse,
-  BookOpen
+  BookOpen,
+  Bell,
+  Archive
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,8 +27,10 @@ const navigation = [
   { name: 'Products', href: '/admin/products-enhanced', icon: Package },
   { name: 'Component Library', href: '/admin/component-library', icon: Layers },
   { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
+  { name: 'Archived Orders', href: '/admin/archived-orders', icon: Archive },
   { name: 'Order Verification', href: '/admin/order-verification', icon: CheckCircle },
   { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
+  { name: 'Inventory Alerts', href: '/admin/inventory-alerts', icon: Bell },
   { name: 'Customers', href: '/admin/customers', icon: Users },
   { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
   { name: 'Staff Management', href: '/admin/users', icon: UserCog },

@@ -53,10 +53,10 @@ const Header = () => {
               </div>
             </div>
             <div className="hidden md:flex items-center gap-4">
-              <span>Free shipping on orders over RM 200</span>
+              <span>Premium Automotive Parts & Accessories</span>
             </div>
             <div className="md:hidden text-xs">
-              <span>Free shipping RM 200+</span>
+              <span>Auto Parts</span>
             </div>
           </div>
         </div>
@@ -67,7 +67,7 @@ const Header = () => {
         <div className="flex items-center justify-between">
           {/* Logo - Updated name and made clickable */}
           <div onClick={handleLogoClick} className="flex items-center gap-2 sm:gap-3 group cursor-pointer">
-            <div className="p-1.5 sm:p-2 bg-gradient-hero rounded-lg shadow-glow group-hover:shadow-premium transition-smooth">
+            <div className="p-1.5 sm:p-2 bg-gradient-hero rounded-lg transition-smooth">
               <Car className="h-5 w-5 sm:h-6 sm:w-6 text-primary-foreground" />
             </div>
             <div>

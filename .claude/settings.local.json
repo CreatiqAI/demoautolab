@@ -40,7 +40,10 @@
       "Read(/C:\\Users\\USER\\Downloads\\automot-hub-main\\automot-hub-main\\src\\pages/**)",
       "Bash(npm install:*)",
       "Bash(npm uninstall:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git reset:*)",
+      "Bash(curl:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

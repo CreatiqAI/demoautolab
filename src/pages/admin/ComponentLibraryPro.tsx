@@ -23,11 +23,21 @@ interface ComponentItem {
   stock_level: number;
   normal_price: number;
   merchant_price: number;
+  supplier_id?: string;
+  supplier_name?: string;
+  supplier_company?: string;
   default_image_url?: string;
   is_active: boolean;
   products_used_in?: number;
   total_allocated_stock?: number;
   created_at: string;
+}
+
+interface Supplier {
+  id: string;
+  name: string;
+  company_name: string;
+  is_active: boolean;
 }
 
 const COMPONENT_TYPES = [
@@ -43,6 +53,7 @@ const COMPONENT_TYPES = [
 
 export default function ComponentLibraryPro() {
   const [components, setComponents] = useState<ComponentItem[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<ComponentItem[]>([]);
@@ -63,11 +74,13 @@ export default function ComponentLibraryPro() {
     stock_level: 0,
     normal_price: 0,
     merchant_price: 0,
+    supplier_id: 'no-supplier',
     default_image_url: ''
   });
 
   useEffect(() => {
     fetchComponents();
+    fetchSuppliers();
   }, []);
 
   // Debounced search effect
@@ -86,54 +99,70 @@ export default function ComponentLibraryPro() {
   const fetchComponents = async () => {
     try {
       setLoading(true);
-      
-      // Try using the helper function first
-      const { data: functionData, error: functionError } = await supabase
-        .rpc('get_components_with_usage');
 
-      if (!functionError && functionData) {
-        const componentData = functionData || [];
-        setComponents(componentData);
-        setSearchResults(componentData);
-        return;
-      }
-
-      console.warn('Helper function failed, trying direct view query:', functionError);
-
-      // Fallback to direct view query
-      const { data, error } = await supabase
-        .from('component_library_with_usage')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!error && data) {
-        const componentData = data || [];
-        setComponents(componentData);
-        setSearchResults(componentData);
-        return;
-      }
-
-      console.warn('View query failed, trying basic table query:', error);
-
-      // Final fallback to basic table query
+      // Use basic query first, then get supplier info separately
       const { data: basicData, error: basicError } = await supabase
         .from('component_library')
-        .select('*')
+        .select(`
+          id,
+          component_sku,
+          name,
+          description,
+          component_type,
+          component_value,
+          stock_level,
+          normal_price,
+          merchant_price,
+          default_image_url,
+          is_active,
+          created_at,
+          updated_at,
+          supplier_id,
+          min_stock_level,
+          max_stock_level,
+          reorder_point,
+          warehouse_location,
+          last_restocked
+        `)
+        .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       if (basicError) throw basicError;
-      
+
       const componentData = basicData || [];
-      // Add default usage stats for basic query
-      const componentsWithUsage = componentData.map(comp => ({
-        ...comp,
-        products_used_in: 0,
-        total_allocated_stock: 0
-      }));
-      
+
+      // Get supplier information separately for components that have supplier_id
+      const supplierIds = [...new Set(componentData.map(comp => comp.supplier_id).filter(Boolean))];
+      let supplierMap = new Map();
+
+      if (supplierIds.length > 0) {
+        const { data: supplierData, error: supplierError } = await supabase
+          .from('suppliers')
+          .select('id, name, company_name')
+          .in('id', supplierIds);
+
+        if (!supplierError && supplierData) {
+          supplierData.forEach(supplier => {
+            supplierMap.set(supplier.id, supplier);
+          });
+        }
+      }
+
+      // Add supplier information and usage stats
+      const componentsWithUsage = componentData.map(comp => {
+        const supplier = comp.supplier_id ? supplierMap.get(comp.supplier_id) : null;
+        return {
+          ...comp,
+          supplier_name: supplier?.name || 'No Supplier',
+          supplier_company: supplier?.company_name || 'No Company',
+          products_used_in: 0,
+          total_allocated_stock: 0
+        };
+      });
+
       setComponents(componentsWithUsage);
       setSearchResults(componentsWithUsage);
-      
+
     } catch (error: any) {
       console.error('Error fetching components:', error);
       toast({
@@ -143,6 +172,27 @@ export default function ComponentLibraryPro() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('id, name, company_name, is_active')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) {
+        console.warn('Suppliers table may not exist yet:', error);
+        setSuppliers([]);
+        return;
+      }
+
+      setSuppliers(data || []);
+    } catch (error: any) {
+      console.error('Error fetching suppliers:', error);
+      setSuppliers([]);
     }
   };
 
@@ -211,7 +261,8 @@ export default function ComponentLibraryPro() {
         stock_level: formData.stock_level,
         normal_price: formData.normal_price,
         merchant_price: formData.merchant_price,
-        default_image_url: formData.default_image_url
+        default_image_url: formData.default_image_url,
+        supplier_id: formData.supplier_id === 'no-supplier' ? null : formData.supplier_id
       };
 
       if (isEditing) {
@@ -275,7 +326,8 @@ export default function ComponentLibraryPro() {
       stock_level: component.stock_level,
       normal_price: component.normal_price,
       merchant_price: component.merchant_price,
-      default_image_url: component.default_image_url || ''
+      default_image_url: component.default_image_url || '',
+      supplier_id: component.supplier_id || 'no-supplier'
     });
     setIsEditing(true);
     setDialogOpen(true);
@@ -388,7 +440,8 @@ export default function ComponentLibraryPro() {
       stock_level: 0,
       normal_price: 0,
       merchant_price: 0,
-      default_image_url: ''
+      default_image_url: '',
+      supplier_id: 'no-supplier'
     });
     setIsEditing(false);
   };
@@ -559,6 +612,26 @@ export default function ComponentLibraryPro() {
                     onChange={(e) => setFormData(prev => ({ ...prev, merchant_price: parseFloat(e.target.value) || 0 }))}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="supplier">Supplier</Label>
+                <Select
+                  value={formData.supplier_id}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, supplier_id: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select supplier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no-supplier">No Supplier</SelectItem>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name} {supplier.company_name && `(${supplier.company_name})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">

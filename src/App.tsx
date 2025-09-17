@@ -31,12 +31,14 @@ import ComponentLibrary from './pages/admin/ComponentLibrary';
 import ComponentLibraryPro from './pages/admin/ComponentLibraryPro';
 import ProductsPro from './pages/admin/ProductsPro';
 import Orders from './pages/admin/Orders';
+import ArchivedOrders from './pages/admin/ArchivedOrders';
 import Customers from './pages/admin/CustomersNew';
 import Settings from './pages/admin/Settings';
 import UserManagement from './pages/admin/UserManagement';
 import OrderVerification from './pages/admin/OrderVerification';
 import WarehouseOperations from './pages/admin/WarehouseOperations';
 import KnowledgeBase from './pages/admin/KnowledgeBase';
+import InventoryAlerts from './pages/admin/InventoryAlerts';
 import AdminRegister from './pages/AdminRegister';
 import ScrollToTop from './components/ScrollToTop';
 
@@ -78,8 +80,10 @@ const App = () => (
               <Route path="products-enhanced" element={<ProductsPro />} />
               <Route path="component-library" element={<ComponentLibraryPro />} />
               <Route path="orders" element={<Orders />} />
+              <Route path="archived-orders" element={<ArchivedOrders />} />
               <Route path="order-verification" element={<OrderVerification />} />
               <Route path="warehouse-operations" element={<WarehouseOperations />} />
+              <Route path="inventory-alerts" element={<InventoryAlerts />} />
               <Route path="customers" element={<Customers />} />
               <Route path="knowledge-base" element={<KnowledgeBase />} />
               <Route path="users" element={<UserManagement />} />

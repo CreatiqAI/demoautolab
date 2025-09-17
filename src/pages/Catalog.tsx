@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Filter, ShoppingCart, Eye, Package, Store, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import PageTransition from '@/components/PageTransition';
 import { Link } from 'react-router-dom';
 import { usePricing } from '@/hooks/usePricing';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,6 +32,8 @@ interface Product {
   normal_price: number;
   merchant_price: number;
   customer_type: string;
+  category_id?: string;
+  category?: ProductCategory;
   product_images: Array<{
     url: string;
     alt_text: string;
@@ -41,12 +45,23 @@ interface Category {
   id: string;
   name: string;
   slug: string;
+  description?: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+interface ProductCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
 }
 
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'all');
+  const [selectedCategory, setSelectedCategory] = useState<string>(searchParams.get('category') || 'all');
   const navigate = useNavigate();
   
   // Mobile pagination settings
@@ -74,9 +89,9 @@ const Catalog = () => {
 
   // Fetch products with pricing based on customer type
   const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['products', searchTerm, selectedBrand],
+    queryKey: ['products', searchTerm, selectedBrand, selectedCategory],
     queryFn: async () => {
-      // Direct query to get products
+      // Direct query to get products with categories
       const { data: directData, error: directError } = await supabase
         .from('products_new')
         .select(`
@@ -86,6 +101,12 @@ const Catalog = () => {
             alt_text,
             is_primary,
             sort_order
+          ),
+          categories (
+            id,
+            name,
+            slug,
+            description
           )
         `)
         .eq('active', true)
@@ -100,6 +121,7 @@ const Catalog = () => {
       const productsData = directData.map(item => ({
         ...item,
         product_images: item.product_images_new || [],
+        category: item.categories,
         price: item.normal_price || 299, // Fallback price
         normal_price: item.normal_price || 299,
         merchant_price: item.merchant_price || 249,
@@ -122,6 +144,10 @@ const Catalog = () => {
       if (selectedBrand !== 'all') {
         filteredData = filteredData.filter(item => item.brand === selectedBrand);
       }
+
+      if (selectedCategory !== 'all') {
+        filteredData = filteredData.filter(item => item.category?.id === selectedCategory);
+      }
       
       // Ensure product_images is always an array
       return filteredData.map(item => ({
@@ -131,22 +157,27 @@ const Catalog = () => {
     },
   });
 
-  // Reset to first page when search or brand changes
+  // Reset to first page when search, brand, or category changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedBrand]);
+  }, [searchTerm, selectedBrand, selectedCategory]);
 
-  // Update search term and selected brand when URL changes
+  // Update search term, selected brand, and category when URL changes
   useEffect(() => {
     const searchFromUrl = searchParams.get('search');
     const brandFromUrl = searchParams.get('brand');
-    
+    const categoryFromUrl = searchParams.get('category');
+
     if (searchFromUrl !== searchTerm) {
       setSearchTerm(searchFromUrl || '');
     }
-    
+
     if (brandFromUrl && brandFromUrl !== selectedBrand) {
       setSelectedBrand(brandFromUrl);
+    }
+
+    if (categoryFromUrl && categoryFromUrl !== selectedCategory) {
+      setSelectedCategory(categoryFromUrl);
     }
   }, [searchParams]);
 
@@ -157,6 +188,17 @@ const Catalog = () => {
       searchParams.delete('brand');
     } else {
       searchParams.set('brand', brand);
+    }
+    setSearchParams(searchParams);
+  };
+
+  // Update URL when category changes
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    if (category === 'all') {
+      searchParams.delete('category');
+    } else {
+      searchParams.set('category', category);
     }
     setSearchParams(searchParams);
   };
@@ -239,40 +281,41 @@ const Catalog = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <div className="bg-gradient-to-br from-background to-muted/20">
-        <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
-          {/* Header - Responsive */}
-          <div className="text-center mb-6 sm:mb-8 lg:mb-12">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 sm:mb-4 bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+    <PageTransition>
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Clean Header */}
+          <div className="text-center mb-12">
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               Product Catalog
             </h1>
-            <p className="text-sm sm:text-base lg:text-xl text-muted-foreground max-w-2xl mx-auto px-4">
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Discover our extensive range of high-quality automotive parts and accessories
             </p>
           </div>
 
-          {/* Filters - Mobile First Design */}
-          <div className="mb-6 sm:mb-8">
-            <div className="bg-card rounded-lg shadow-sm border p-3 sm:p-4 lg:p-6">
-              <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-4">
+          {/* Clean Filters */}
+          <div className="mb-10">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="space-y-4 sm:space-y-0 sm:flex sm:gap-4">
                 {/* Search Input */}
                 <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <Input
                     placeholder="Search products, brands, or parts..."
                     value={searchTerm}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    className="pl-10 h-10 sm:h-9"
+                    className="pl-10 h-11 border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
+
                 {/* Brand Filter */}
                 <div className="w-full sm:w-48">
                   <Select value={selectedBrand} onValueChange={handleBrandChange}>
-                    <SelectTrigger className="w-full h-10 sm:h-9">
-                      <Filter className="h-4 w-4 mr-2" />
+                    <SelectTrigger className="h-11 border-gray-300">
+                      <Filter className="h-4 w-4 mr-2 text-gray-500" />
                       <SelectValue placeholder="All Brands" />
                     </SelectTrigger>
                     <SelectContent>
@@ -286,11 +329,21 @@ const Catalog = () => {
                   </Select>
                 </div>
               </div>
+
+              {/* Stats */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="text-sm text-gray-600">
+                  Found {totalProducts} products
+                  {isMobile && totalProducts > itemsPerPage && (
+                    <span className="ml-4">Page {currentPage} of {totalPages}</span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Products Grid - Mobile 2x2, Desktop Responsive */}
-          <div className="products-grid grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 xl:gap-6">
+          {/* Products Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {productsLoading ? (
               Array.from({ length: isMobile ? itemsPerPage : 8 }).map((_, i) => (
                 <Card key={i} className="overflow-hidden">
@@ -306,10 +359,18 @@ const Catalog = () => {
                 </Card>
               ))
             ) : totalProducts === 0 ? (
-              <div className="col-span-full text-center py-8 sm:py-12">
-                <div className="text-4xl sm:text-6xl mb-4">🔍</div>
-                <h3 className="text-lg sm:text-xl font-semibold mb-2">No products found</h3>
-                <p className="text-muted-foreground text-sm sm:text-base">Try adjusting your search criteria</p>
+              <div className="col-span-full text-center py-16">
+                <div className="text-6xl mb-4">🔍</div>
+                <h3 className="text-xl font-semibold mb-2 text-gray-900">No products found</h3>
+                <p className="text-gray-600 mb-6">
+                  Try adjusting your search criteria or browse all categories
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => {setSearchTerm(''); setSelectedBrand('all'); setSelectedCategory('all')}}
+                >
+                  Clear Filters
+                </Button>
               </div>
             ) : (
               displayProducts.map((product) => {
@@ -317,9 +378,9 @@ const Catalog = () => {
                 const primaryImage = getPrimaryImage(product.product_images);
                 
                 return (
-                  <Card 
-                    key={product.id} 
-                    className="overflow-hidden hover:shadow-lg transition-all duration-300 group cursor-pointer bg-white"
+                  <Card
+                    key={product.id}
+                    className="overflow-hidden cursor-pointer bg-white border border-gray-200 hover:border-gray-300 shadow-sm hover:shadow-md transition-all duration-200 group"
                     onClick={() => handleProductView(product)}
                   >
                     {/* Product Image */}
@@ -328,7 +389,7 @@ const Catalog = () => {
                         <img
                           src={primaryImage}
                           alt={product.name}
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
                           loading="lazy"
                           decoding="async"
                           onError={(e) => {
@@ -343,54 +404,64 @@ const Catalog = () => {
                           {productStatus.label}
                         </Badge>
                         {product.featured && (
-                          <Badge variant="secondary" className="text-xs">⭐</Badge>
+                          <Badge className="text-xs bg-blue-600 text-white">
+                            Featured
+                          </Badge>
                         )}
                       </div>
                     </CardHeader>
 
-                    {/* Product Info - Compact for Mobile 2x2 Grid */}
-                    <CardContent className="p-2 sm:p-3 lg:p-4">
-                      {/* Product Name & Details */}
-                      <div className="space-y-1 sm:space-y-2">
-                        <h3 className="font-semibold text-xs sm:text-sm lg:text-base line-clamp-2 leading-tight">
+                    {/* Product Info */}
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        <h3 className="font-semibold text-sm line-clamp-2 leading-tight text-gray-900">
                           {product.name}
                         </h3>
                         
-                        {/* Brand & Model - More compact on mobile */}
-                        <div className="text-xs text-muted-foreground">
-                          <span className="font-medium">{product.brand}</span>
-                          {product.model && <span className="hidden sm:inline"> {product.model}</span>}
+                        {/* Category */}
+                        {product.category && (
+                          <div className="mb-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {product.category.name}
+                            </Badge>
+                          </div>
+                        )}
+
+                        {/* Brand & Model */}
+                        <div className="space-y-1">
+                          <div className="text-sm text-gray-600">
+                            <span className="font-medium">{product.brand}</span>
+                            {product.model && <span className="ml-1">{product.model}</span>}
+                          </div>
                           {product.year_from && product.year_to && (
-                            <span className="hidden sm:block lg:inline lg:ml-1 text-xs">
-                              ({product.year_from}-{product.year_to})
-                            </span>
+                            <div className="text-xs text-gray-500">
+                              {product.year_from}-{product.year_to}
+                            </div>
                           )}
                         </div>
 
-                        {/* Screen Sizes - Hide on very small mobile, show on tablet+ */}
+                        {/* Screen Sizes */}
                         {product.screen_size && product.screen_size.length > 0 && (
-                          <div className="hidden sm:flex flex-wrap gap-1">
-                            {product.screen_size.slice(0, 1).map((size) => (
-                              <Badge key={size} variant="outline" className="text-xs px-1 py-0.5">
+                          <div className="flex flex-wrap gap-1">
+                            {product.screen_size.slice(0, 2).map((size) => (
+                              <Badge key={size} variant="outline" className="text-xs">
                                 {size}"
                               </Badge>
                             ))}
-                            {product.screen_size.length > 1 && (
-                              <Badge variant="outline" className="text-xs px-1 py-0.5">
-                                +{product.screen_size.length - 1}
+                            {product.screen_size.length > 2 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{product.screen_size.length - 2}
                               </Badge>
                             )}
                           </div>
                         )}
                       </div>
 
-                      {/* Action Area - Simplified for mobile */}
-                      <div className="mt-2 sm:mt-3 lg:mt-4 pt-2 sm:pt-3 border-t border-border/50">
-                        <div className="text-center">
-                          <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                            <Eye className="h-3 w-3" />
-                            <span className="hidden sm:inline">View Details &</span> Components
-                          </div>
+                      {/* Action Area */}
+                      <div className="mt-4 pt-3 border-t border-gray-100">
+                        <div className="flex items-center justify-center text-sm text-blue-600 group-hover:text-blue-700 transition-colors">
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Details
                         </div>
                       </div>
                     </CardContent>
@@ -402,73 +473,39 @@ const Catalog = () => {
 
           {/* Mobile Pagination */}
           {isMobile && totalPages > 1 && (
-            <div className="mt-6">
-              <div className="flex items-center justify-between bg-white rounded-lg border p-4 shadow-sm">
+            <div className="mt-8">
+              <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200 p-4">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="flex items-center gap-2"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-4 w-4 mr-2" />
                   Previous
                 </Button>
-                
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <div className="flex gap-1">
-                    {Array.from({ length: Math.min(totalPages, 3) }).map((_, index) => {
-                      let pageNum;
-                      if (totalPages <= 3) {
-                        pageNum = index + 1;
-                      } else {
-                        if (currentPage <= 2) {
-                          pageNum = index + 1;
-                        } else if (currentPage >= totalPages - 1) {
-                          pageNum = totalPages - 2 + index;
-                        } else {
-                          pageNum = currentPage - 1 + index;
-                        }
-                      }
-                      
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => handlePageChange(pageNum)}
-                          className={`w-8 h-8 rounded text-xs font-medium transition-colors ${
-                            currentPage === pageNum
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                
+
+                <span className="text-sm text-gray-600">
+                  Page {currentPage} of {totalPages}
+                </span>
+
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="flex items-center gap-2"
                 >
                   Next
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4 ml-2" />
                 </Button>
               </div>
             </div>
           )}
 
-          {/* Statistics */}
+          {/* Results Summary */}
           {totalProducts > 0 && (
-            <div className="text-center mt-6 sm:mt-8">
-              <p className="text-sm sm:text-base text-muted-foreground">
+            <div className="text-center mt-8">
+              <p className="text-sm text-gray-600">
                 {isMobile ? (
                   `Showing ${startIndex + 1}-${Math.min(endIndex, totalProducts)} of ${totalProducts} products`
                 ) : (
@@ -478,71 +515,10 @@ const Catalog = () => {
             </div>
           )}
         </div>
+
+        <Footer />
       </div>
-
-      {/* Footer - Responsive */}
-      <footer className="bg-muted text-muted-foreground py-8 sm:py-12">
-        <div className="container mx-auto px-3 sm:px-4 lg:px-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-            {/* Company Info */}
-            <div className="sm:col-span-2 lg:col-span-1">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-gradient-hero rounded-lg">
-                  <Package className="h-5 w-5 text-primary-foreground" />
-                </div>
-                <span className="font-bold text-lg">Autolab</span>
-              </div>
-              <p className="text-sm opacity-80 mb-4 max-w-sm">
-                Malaysia's trusted destination for premium automotive parts and accessories.
-              </p>
-            </div>
-            
-            {/* Quick Links */}
-            <div>
-              <h4 className="font-semibold mb-4">Quick Links</h4>
-              <div className="space-y-2 text-sm">
-                <Link to="/catalog" className="block hover:text-primary transition-colors">Shop Parts</Link>
-                <Link to="/brands" className="block hover:text-primary transition-colors">Brands</Link>
-                <Link to="/about" className="block hover:text-primary transition-colors">About Us</Link>
-                <Link to="/contact" className="block hover:text-primary transition-colors">Contact</Link>
-              </div>
-            </div>
-
-            {/* Customer Service */}
-            <div>
-              <h4 className="font-semibold mb-4">Customer Service</h4>
-              <div className="space-y-2 text-sm">
-                <p>Phone: 03-4297 7668</p>
-                <p>Email: support@autolab.my</p>
-                <p>Hours: Mon-Sat 9AM-6PM</p>
-              </div>
-            </div>
-
-            {/* Social Media */}
-            <div>
-              <h4 className="font-semibold mb-4">Follow Us</h4>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="ghost" size="sm" className="text-xs">Facebook</Button>
-                <Button variant="ghost" size="sm" className="text-xs">Instagram</Button>
-                <Button variant="ghost" size="sm" className="text-xs">WhatsApp</Button>
-              </div>
-            </div>
-          </div>
-          
-          {/* Copyright */}
-          <div className="border-t border-border/20 mt-6 sm:mt-8 pt-6 sm:pt-8 text-center">
-            <div className="text-xs sm:text-sm opacity-80 space-y-2 sm:space-y-0">
-              <p>&copy; 2024 Autolab. All rights reserved.</p>
-              <div className="flex flex-wrap justify-center gap-4 sm:gap-6 mt-2">
-                <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
-                <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
-
-    </div>
+    </PageTransition>
   );
 };
 

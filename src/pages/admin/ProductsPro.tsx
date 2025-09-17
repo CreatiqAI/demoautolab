@@ -37,6 +37,7 @@ interface ProductFormData {
   description: string;
   brand: string;
   model: string;
+  category_id: string;
   year_from: number;
   year_to: number;
   screen_size: string[];
@@ -45,6 +46,13 @@ interface ProductFormData {
   featured: boolean;
   images: Array<{ url: string; is_primary: boolean; alt_text?: string }>;
   selectedComponents: SelectedComponent[];
+}
+
+interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  active: boolean;
 }
 
 const SCREEN_SIZES = [
@@ -56,10 +64,13 @@ const SCREEN_SIZES = [
 export default function ProductsPro() {
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewProduct, setPreviewProduct] = useState<any>(null);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [viewingImageInfo, setViewingImageInfo] = useState<{url: string, title: string} | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
@@ -77,6 +88,7 @@ export default function ProductsPro() {
     description: '',
     brand: '',
     model: '',
+    category_id: 'no-category',
     year_from: new Date().getFullYear(),
     year_to: new Date().getFullYear() + 5,
     screen_size: [],
@@ -90,6 +102,7 @@ export default function ProductsPro() {
   useEffect(() => {
     fetchProducts();
     fetchAllComponents();
+    fetchCategories();
   }, []);
 
   // Filter products based on search and filters
@@ -144,10 +157,31 @@ export default function ProductsPro() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+
+      // Try with category join first
+      let { data, error } = await supabase
         .from('products_new')
-        .select('*')
+        .select(`
+          *,
+          categories!products_new_category_id_fkey(
+            id,
+            name,
+            description
+          )
+        `)
         .order('created_at', { ascending: false });
+
+      // If the join fails, try without category join
+      if (error) {
+        console.warn('Category join failed, fetching products without categories:', error);
+        const fallbackResult = await supabase
+          .from('products_new')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
 
       if (error) throw error;
       setProducts(data || []);
@@ -161,6 +195,26 @@ export default function ProductsPro() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, name, description, active')
+        .eq('active', true)
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load categories",
+        variant: "destructive"
+      });
     }
   };
 
@@ -317,6 +371,7 @@ export default function ProductsPro() {
         description: formData.description,
         brand: formData.brand,
         model: formData.model,
+        category_id: formData.category_id === 'no-category' ? null : formData.category_id,
         year_from: formData.year_from,
         year_to: formData.year_to,
         screen_size: formData.screen_size,
@@ -427,6 +482,7 @@ export default function ProductsPro() {
       description: '',
       brand: '',
       model: '',
+      category_id: 'no-category',
       year_from: new Date().getFullYear(),
       year_to: new Date().getFullYear() + 5,
       screen_size: [],
@@ -482,6 +538,7 @@ export default function ProductsPro() {
         description: product.description || '',
         brand: product.brand || '',
         model: product.model || '',
+        category_id: product.category_id || 'no-category',
         year_from: product.year_from || new Date().getFullYear(),
         year_to: product.year_to || new Date().getFullYear() + 5,
         screen_size: product.screen_size || [],
@@ -505,16 +562,17 @@ export default function ProductsPro() {
 
   const handlePreviewProduct = async (product: any) => {
     try {
-      // Fetch product components
-      const { data: productComponents, error: compError } = await supabase
+      // Fetch product components - same query as ProductDetails.tsx
+      const { data: productComponentData, error: compError } = await supabase
         .from('product_components')
         .select(`
           component_library!inner(
             id, component_sku, name, description, component_type,
-            normal_price, default_image_url
+            stock_level, normal_price, merchant_price, default_image_url
           )
         `)
-        .eq('product_id', product.id);
+        .eq('product_id', product.id)
+        .order('display_order', { ascending: true });
 
       // Fetch product images
       const { data: productImages, error: imgError } = await supabase
@@ -526,9 +584,25 @@ export default function ProductsPro() {
       if (compError) console.error('Error loading components:', compError);
       if (imgError) console.error('Error loading images:', imgError);
 
+      // Transform components data same as ProductDetails.tsx
+      const transformedComponents = (productComponentData || []).map((item: any, index: number) => {
+        const component = item.component_library;
+        return {
+          id: component.id,
+          component_sku: component.component_sku,
+          name: component.name,
+          description: component.description || 'Product component',
+          component_type: component.component_type || 'component',
+          stock_level: component.stock_level || 0,
+          normal_price: component.normal_price || 0,
+          merchant_price: component.merchant_price || component.normal_price || 0,
+          default_image_url: component.default_image_url || null
+        };
+      });
+
       const enhancedProduct = {
         ...product,
-        components: productComponents || [],
+        components: transformedComponents,
         images: productImages || []
       };
 
@@ -604,6 +678,25 @@ export default function ProductsPro() {
                           onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
                           placeholder="auto-generated"
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="category_id">Category</Label>
+                        <Select
+                          value={formData.category_id}
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="no-category">No Category</SelectItem>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="brand">Brand *</Label>
@@ -966,15 +1059,20 @@ export default function ProductsPro() {
                     <p className="text-sm text-muted-foreground">
                       {product.brand} {product.model} {product.year_from && product.year_to && `(${product.year_from}-${product.year_to})`}
                     </p>
-                    {product.screen_size && product.screen_size.length > 0 && (
-                      <div className="flex gap-1 mt-1">
-                        {product.screen_size.map((size: string) => (
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {(product.categories || product.category) && (
+                        <Badge variant="secondary" className="text-xs">
+                          📂 {(product.categories?.name || product.category?.name || 'Category')}
+                        </Badge>
+                      )}
+                      {product.screen_size && product.screen_size.length > 0 &&
+                        product.screen_size.map((size: string) => (
                           <Badge key={size} variant="outline" className="text-xs">
                             {size}"
                           </Badge>
-                        ))}
-                      </div>
-                    )}
+                        ))
+                      }
+                    </div>
                     <div className="flex gap-2 mt-2">
                       <Badge variant={product.active ? 'default' : 'secondary'}>
                         {product.active ? 'Active' : 'Inactive'}
@@ -1121,14 +1219,24 @@ export default function ProductsPro() {
               {/* Product Images */}
               {previewProduct.images && previewProduct.images.length > 0 && (
                 <div className="border-t pt-6">
-                  <h3 className="font-medium mb-4">Product Images</h3>
+                  <h3 className="font-medium mb-2">Product Images</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Click any image to view in full size</p>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {previewProduct.images.map((image: any, index: number) => (
-                      <div key={index} className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                        <img 
-                          src={image.url} 
+                      <div
+                        key={index}
+                        className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer group hover:shadow-lg transition-all duration-200"
+                        onClick={() => {
+                          const imageInfo = {url: image.url, title: `Product Image ${index + 1}`};
+                          setViewingImage(image.url);
+                          setViewingImageInfo(imageInfo);
+                        }}
+                        title="Click to enlarge"
+                      >
+                        <img
+                          src={image.url}
                           alt={image.alt_text || `Product image ${index + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={(e) => {
                             e.currentTarget.src = '/placeholder-image.png';
                           }}
@@ -1146,38 +1254,52 @@ export default function ProductsPro() {
               
               {/* Available Components/Variants Section */}
               <div className="border-t pt-6">
-                <h3 className="font-medium mb-4">Available Components</h3>
+                <h3 className="font-medium mb-2">Available Components</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Select the components you want and specify quantities
+                  Select components and specify quantities. Click component images to enlarge.
                 </p>
                 {previewProduct.components && previewProduct.components.length > 0 ? (
                   <div className="grid gap-4">
-                    {previewProduct.components.map((compData: any, index: number) => {
-                      const comp = compData.component_library;
+                    {previewProduct.components.map((component: any, index: number) => {
                       return (
                         <div key={index} className="flex items-center gap-4 p-4 border rounded-lg bg-gray-50">
-                          {comp.default_image_url && (
-                            <div className="w-16 h-16 bg-white rounded-lg overflow-hidden flex-shrink-0 border">
-                              <img 
-                                src={comp.default_image_url} 
-                                alt={comp.name}
-                                className="w-full h-full object-cover"
+                          {component.default_image_url && (
+                            <div
+                              className="w-16 h-16 bg-white rounded-lg overflow-hidden flex-shrink-0 border cursor-pointer group hover:shadow-md transition-all duration-200"
+                              onClick={() => {
+                                const imageInfo = {url: component.default_image_url, title: `${component.name} - Component Image`};
+                                setViewingImage(component.default_image_url);
+                                setViewingImageInfo(imageInfo);
+                              }}
+                              title="Click to enlarge component image"
+                            >
+                              <img
+                                src={component.default_image_url}
+                                alt={component.name}
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                                 onError={(e) => {
                                   e.currentTarget.style.display = 'none';
+                                }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const imageInfo = {url: component.default_image_url, title: `${component.name} - Component Image`};
+                                  setViewingImage(component.default_image_url);
+                                  setViewingImageInfo(imageInfo);
                                 }}
                               />
                             </div>
                           )}
                           <div className="flex-1">
-                            <h4 className="font-medium">{comp.name}</h4>
-                            <p className="text-sm text-muted-foreground">{comp.component_sku}</p>
+                            <h4 className="font-medium">{component.name}</h4>
+                            <p className="text-sm text-muted-foreground">{component.component_sku}</p>
                             <p className="text-xs text-muted-foreground mt-1">
-                              Stock: {comp.stock_level} available
+                              Stock: {component.stock_level} available
                             </p>
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="text-right">
-                              <p className="font-medium">RM {comp.normal_price?.toFixed(2)}</p>
+                              <p className="font-medium">RM {component.normal_price?.toFixed(2)}</p>
                             </div>
                             <div className="flex items-center gap-2">
                               <Button size="sm" variant="outline">-</Button>
@@ -1219,6 +1341,37 @@ export default function ProductsPro() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Image Viewer Modal */}
+      {viewingImage && (
+        <Dialog open={!!viewingImage} onOpenChange={() => {
+          setViewingImage(null);
+          setViewingImageInfo(null);
+        }}>
+          <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-hidden p-3 sm:p-6">
+            <DialogHeader>
+              <DialogTitle className="text-base sm:text-lg">
+                {viewingImageInfo?.title || 'Image Viewer'}
+              </DialogTitle>
+              <DialogDescription className="text-sm">
+                View image in full size
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-center overflow-hidden">
+              <img
+                src={viewingImage}
+                alt={viewingImageInfo?.title || "Full size view"}
+                className="max-w-full max-h-[75vh] object-contain rounded-lg"
+                loading="lazy"
+                decoding="async"
+                onError={(e) => {
+                  e.currentTarget.src = '/placeholder-image.png';
+                }}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
