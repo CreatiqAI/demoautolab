@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,6 +52,7 @@ interface Order {
   }>;
 }
 
+// Active order statuses only (COMPLETED orders are shown in Archived Orders page)
 const ORDER_STATUS_OPTIONS = [
   { value: 'PLACED', label: 'Placed' },
   { value: 'PENDING_VERIFICATION', label: 'Pending Verification' },
@@ -59,7 +60,6 @@ const ORDER_STATUS_OPTIONS = [
   { value: 'PACKING', label: 'Packing' },
   { value: 'DISPATCHED', label: 'Dispatched' },
   { value: 'DELIVERED', label: 'Delivered' },
-  { value: 'COMPLETED', label: 'Completed' },
   { value: 'CANCELLED', label: 'Cancelled' },
   { value: 'REJECTED', label: 'Rejected' },
 ];
@@ -359,8 +359,14 @@ export default function Orders() {
   };
 
   const filteredOrders = orders.filter(order => {
-    // Exclude completed orders from main orders view
+    // ALWAYS exclude completed orders from main orders view
     const isNotCompleted = order.status !== 'COMPLETED';
+
+    // If this order is completed, exclude it regardless of other filters
+    if (!isNotCompleted) {
+      console.log(`🔄 Filtered out completed order: ${order.order_no} (status: ${order.status})`);
+      return false;
+    }
 
     const matchesSearch =
       order.order_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -368,16 +374,10 @@ export default function Orders() {
       order.customer_phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.id.toLowerCase().includes(searchTerm.toLowerCase());
 
+    // For status filter, only apply to non-completed orders
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
 
-    const result = isNotCompleted && matchesSearch && matchesStatus;
-
-    // Debug logging for filtering
-    if (!isNotCompleted) {
-      console.log(`🔄 Filtered out completed order: ${order.order_no} (status: ${order.status})`);
-    }
-
-    return result;
+    return matchesSearch && matchesStatus;
   });
 
   // Add this debug log to see filtering results
@@ -542,8 +542,14 @@ export default function Orders() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Orders</h2>
-        <p className="text-muted-foreground">Manage customer orders and fulfillment</p>
+        <h2 className="text-3xl font-bold tracking-tight">Active Orders</h2>
+        <p className="text-muted-foreground">
+          Manage active customer orders and fulfillment. Completed orders are moved to
+          <Link to="/admin/archived-orders" className="text-blue-600 hover:text-blue-800 mx-1 underline">
+            Archived Orders
+          </Link>
+          for record keeping.
+        </p>
       </div>
 
       <Card>
