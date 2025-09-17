@@ -80,7 +80,7 @@ export default function ArchivedOrders() {
             total_price
           )
         `)
-        .eq('status', 'COMPLETED')
+        .eq('status', 'DELIVERED')
         .order('updated_at', { ascending: false });
 
       if (archivedError) {
@@ -90,7 +90,7 @@ export default function ArchivedOrders() {
         const { data: basicData, error: basicError } = await supabase
           .from('orders')
           .select('*')
-          .eq('status', 'COMPLETED')
+          .eq('status', 'DELIVERED')
           .order('updated_at', { ascending: false });
 
         if (!basicError && basicData) {
@@ -126,7 +126,7 @@ export default function ArchivedOrders() {
         discount: order.discount || 0,
         shipping_fee: order.shipping_fee || 0,
         total: order.total || 0,
-        status: order.status || 'COMPLETED',
+        status: order.status || 'DELIVERED',
         notes: order.notes || '',
         created_at: order.created_at,
         updated_at: order.updated_at,
@@ -151,11 +151,11 @@ export default function ArchivedOrders() {
     try {
       setLoading(true);
 
-      // Update order status to DELIVERED (active but finished)
+      // Update order status to DISPATCHED (active status)
       const { error } = await supabase
         .from('orders')
         .update({
-          status: 'DELIVERED',
+          status: 'DISPATCHED',
           updated_at: new Date().toISOString()
         })
         .eq('id', order.id);
@@ -240,7 +240,7 @@ export default function ArchivedOrders() {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Archived Orders</h2>
-        <p className="text-muted-foreground">View and manage completed orders archive</p>
+        <p className="text-muted-foreground">View and manage delivered orders archive</p>
       </div>
 
       <Card>
@@ -250,7 +250,7 @@ export default function ArchivedOrders() {
             Completed Orders Archive
           </CardTitle>
           <CardDescription>
-            Search through completed orders by order ID, customer name, or completion date
+            Search through delivered orders by order ID, customer name, or delivery date
           </CardDescription>
 
           <div className="flex items-center space-x-4">
@@ -311,7 +311,7 @@ export default function ArchivedOrders() {
                     <TableCell colSpan={6} className="text-center py-8">
                       {searchTerm || dateFilter
                         ? 'No archived orders found matching your criteria.'
-                        : 'No completed orders in archive yet.'}
+                        : 'No delivered orders in archive yet.'}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -381,7 +381,7 @@ export default function ArchivedOrders() {
                                     <p><strong>Order #:</strong> {order.order_no}</p>
                                     <p><strong>Created:</strong> {formatDate(order.created_at)}</p>
                                     <p><strong>Completed:</strong> {formatDate(order.updated_at)}</p>
-                                    <p><strong>Status:</strong> <Badge variant="default">Completed</Badge></p>
+                                    <p><strong>Status:</strong> <Badge variant="default">Delivered</Badge></p>
                                   </div>
                                 </div>
 
@@ -471,7 +471,7 @@ export default function ArchivedOrders() {
                     <div><span className="font-medium">Created:</span> {formatDate(selectedOrder.created_at)}</div>
                     <div><span className="font-medium">Completed:</span> {formatDate(selectedOrder.updated_at)}</div>
                     <div><span className="font-medium">Status:</span>
-                      <Badge className="ml-2" variant="default">Completed</Badge>
+                      <Badge className="ml-2" variant="default">Delivered</Badge>
                     </div>
                     <div><span className="font-medium">Payment:</span>
                       <Badge className="ml-2" variant={getPaymentBadgeVariant(selectedOrder.payment_state)}>

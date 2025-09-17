@@ -133,7 +133,7 @@ export default function Orders() {
         .order('created_at', { ascending: false });
 
       if (ordersError) {
-        console.warn('Direct orders query failed:', ordersError);
+        console.warn('❌ Direct orders query failed:', ordersError);
 
         // Fallback: Basic orders query without items
         const { data: basicData, error: basicError } = await supabase
@@ -149,10 +149,35 @@ export default function Orders() {
           }));
         } else {
           console.error('❌ All order queries failed:', basicError);
-          throw new Error('Failed to fetch orders');
+
+          // Let's also try without ordering to see if that's the issue
+          const { data: simpleData, error: simpleError } = await supabase
+            .from('orders')
+            .select('*')
+            .limit(10);
+
+          if (!simpleError && simpleData) {
+            console.log('📦 Using simple orders data:', simpleData.length, 'orders');
+            ordersData = simpleData.map(order => ({
+              ...order,
+              order_items: []
+            }));
+          } else {
+            console.error('❌ Even simple query failed:', simpleError);
+            console.log('🔍 Let\'s check if orders table exists and has data...');
+
+            // Check table existence and permissions
+            const { count, error: countError } = await supabase
+              .from('orders')
+              .select('*', { count: 'exact', head: true });
+
+            console.log('📊 Orders table count check:', { count, error: countError });
+
+            throw new Error('Failed to fetch orders - check database connection and permissions');
+          }
         }
       } else {
-        console.log('📦 Successfully fetched orders with items:', ordersWithItems.length, 'orders');
+        console.log('✅ Successfully fetched orders with items:', ordersWithItems.length, 'orders');
         ordersData = ordersWithItems;
       }
 
@@ -189,8 +214,8 @@ export default function Orders() {
       console.table(statusCounts);
 
       console.log('📋 Total orders fetched:', transformedOrders.length);
-      const completedOrders = transformedOrders.filter(o => o.status === 'COMPLETED');
-      console.log('✅ Completed orders (will be filtered out):', completedOrders.length);
+      const deliveredOrders = transformedOrders.filter(o => o.status === 'DELIVERED');
+      console.log('✅ Delivered orders (will be filtered out for archive):', deliveredOrders.length);
 
       setOrders(transformedOrders);
 
@@ -255,11 +280,11 @@ export default function Orders() {
         currentStatus: order.status
       });
 
-      // Update order status to COMPLETED
+      // Update order status to DELIVERED (which we'll treat as completed/archived)
       const { data, error } = await supabase
         .from('orders')
         .update({
-          status: 'COMPLETED',
+          status: 'DELIVERED',
           updated_at: new Date().toISOString()
         })
         .eq('id', order.id)
@@ -359,12 +384,12 @@ export default function Orders() {
   };
 
   const filteredOrders = orders.filter(order => {
-    // ALWAYS exclude completed orders from main orders view
-    const isNotCompleted = order.status !== 'COMPLETED';
+    // ALWAYS exclude delivered/completed orders from main orders view
+    const isNotDelivered = order.status !== 'DELIVERED';
 
-    // If this order is completed, exclude it regardless of other filters
-    if (!isNotCompleted) {
-      console.log(`🔄 Filtered out completed order: ${order.order_no} (status: ${order.status})`);
+    // If this order is delivered (archived), exclude it regardless of other filters
+    if (!isNotDelivered) {
+      console.log(`🔄 Filtered out delivered/archived order: ${order.order_no} (status: ${order.status})`);
       return false;
     }
 
@@ -381,7 +406,7 @@ export default function Orders() {
   });
 
   // Add this debug log to see filtering results
-  console.log(`📋 Orders after filtering: ${filteredOrders.length} / ${orders.length} (excluded ${orders.length - filteredOrders.length} completed orders)`);
+  console.log(`📋 Orders after filtering: ${filteredOrders.length} / ${orders.length} (excluded ${orders.length - filteredOrders.length} delivered/archived orders)`);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-MY', {
