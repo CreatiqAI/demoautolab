@@ -53,14 +53,15 @@ interface WarehouseOrder {
   }>;
 }
 
-type OrderStatus = 
+type OrderStatus =
   | 'PROCESSING'
   | 'WAREHOUSE_ASSIGNED'
   | 'PICKING'
   | 'PACKING'
   | 'READY_FOR_DELIVERY'
   | 'OUT_FOR_DELIVERY'
-  | 'DELIVERED';
+  | 'DELIVERED'
+  | 'COMPLETED';
 
 const STATUS_WORKFLOW: { status: OrderStatus; label: string; description: string; icon: any; color: string }[] = [
   { status: 'PROCESSING', label: 'Processing', description: 'Order approved, ready for warehouse', icon: Clock, color: 'bg-blue-100 text-blue-800 border-blue-200' },
@@ -69,7 +70,7 @@ const STATUS_WORKFLOW: { status: OrderStatus; label: string; description: string
   { status: 'PACKING', label: 'Packing', description: 'Items being packed for delivery', icon: PackageCheck, color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
   { status: 'READY_FOR_DELIVERY', label: 'Ready', description: 'Ready for pickup/delivery', icon: CheckCircle, color: 'bg-green-100 text-green-800 border-green-200' },
   { status: 'OUT_FOR_DELIVERY', label: 'Dispatched', description: 'Out for delivery', icon: Truck, color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
-  { status: 'DELIVERED', label: 'Delivered', description: 'Successfully delivered', icon: CheckCircle, color: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+  { status: 'DELIVERED', label: 'Delivered', description: 'Successfully delivered to customer', icon: CheckCircle, color: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
 ];
 
 export default function WarehouseOperations() {
@@ -80,6 +81,7 @@ export default function WarehouseOperations() {
   const [updateNotes, setUpdateNotes] = useState('');
   const [newStatus, setNewStatus] = useState<OrderStatus>('PICKING');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [currentTab, setCurrentTab] = useState<OrderStatus>('PROCESSING');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -89,39 +91,57 @@ export default function WarehouseOperations() {
   const fetchWarehouseOrders = async () => {
     try {
       setLoading(true);
-      let ordersData: any[] = [];
-      
-      // Try using the database function first
-      const { data: functionData, error: functionError } = await supabase
-        .rpc('get_warehouse_orders');
+      console.log('🏭 Fetching warehouse orders...');
 
-      if (!functionError && functionData) {
-        ordersData = functionData;
+      const warehouseStatuses = ['PROCESSING', 'WAREHOUSE_ASSIGNED', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+
+      // Get orders with warehouse statuses and their items
+      const { data: ordersWithItems, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            id, component_sku, component_name, product_context,
+            quantity, unit_price, total_price
+          )
+        `)
+        .in('status', warehouseStatuses)
+        .order('created_at', { ascending: false });
+
+      let ordersData: any[] = [];
+
+      if (!ordersError && ordersWithItems) {
+        ordersData = ordersWithItems;
+        console.log('✅ Successfully fetched warehouse orders with items:', ordersData.length);
       } else {
-        console.warn('Warehouse function failed, trying fallback approach:', functionError);
-        
-        // Fallback: Try direct query with warehouse-related statuses
-        const { data: directData, error: directError } = await supabase
+        console.warn('Warehouse orders with items query failed, trying basic approach:', ordersError);
+
+        // Fallback: Get orders without items first
+        const { data: basicData, error: basicError } = await supabase
           .from('orders')
           .select('*')
-          .in('status', ['PROCESSING', 'WAREHOUSE_ASSIGNED', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY'])
+          .in('status', warehouseStatuses)
           .order('created_at', { ascending: false });
 
-        if (!directError && directData) {
-          ordersData = directData;
+        if (!basicError && basicData) {
+          ordersData = basicData.map(order => ({ ...order, order_items: [] }));
+          console.log('✅ Fetched warehouse orders without items (fallback):', ordersData.length);
         } else {
-          console.warn('Direct orders query failed, trying basic query:', directError);
-          
+          console.warn('Direct warehouse query failed, trying all orders and filtering:', basicError);
+
           // Final fallback: Get all orders and filter in JavaScript
-          const { data: basicData, error: basicError } = await supabase
+          const { data: allData, error: allError } = await supabase
             .from('orders')
             .select('*')
             .order('created_at', { ascending: false });
 
-          if (!basicError && basicData) {
-            ordersData = basicData.filter(order => 
-              ['PROCESSING', 'WAREHOUSE_ASSIGNED', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY'].includes(order.status)
-            );
+          if (!allError && allData) {
+            ordersData = allData
+              .filter(order => warehouseStatuses.includes(order.status))
+              .map(order => ({ ...order, order_items: [] }));
+            console.log('✅ Filtered warehouse orders from all orders:', ordersData.length);
+          } else {
+            console.error('❌ All warehouse order queries failed:', allError);
           }
         }
       }
@@ -183,23 +203,15 @@ export default function WarehouseOperations() {
   const assignToWarehouse = async (orderId: string) => {
     try {
       setIsUpdating(true);
-      
-      const adminUserStr = localStorage.getItem('admin_user');
-      if (!adminUserStr) {
-        throw new Error('Admin user not found');
-      }
 
-      const adminUser = JSON.parse(adminUserStr);
-      if (!adminUser.id) {
-        throw new Error('Admin user not found');
-      }
-
+      // Update order to WAREHOUSE_ASSIGNED status
       const { error } = await supabase
-        .rpc('assign_to_warehouse', {
-          p_order_id: orderId,
-          p_warehouse_admin_id: adminUser.id,
-          p_notes: updateNotes || 'Assigned to warehouse operations'
-        });
+        .from('orders')
+        .update({
+          status: 'WAREHOUSE_ASSIGNED',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
 
       if (error) throw error;
 
@@ -226,35 +238,38 @@ export default function WarehouseOperations() {
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     try {
       setIsUpdating(true);
-      
-      const adminUserStr = localStorage.getItem('admin_user');
-      if (!adminUserStr) {
-        throw new Error('Admin user not found');
-      }
+      console.log('🔄 Updating order status:', { orderId, status });
 
-      const adminUser = JSON.parse(adminUserStr);
-      if (!adminUser.id) {
-        throw new Error('Admin user not found');
-      }
-
+      // Update order status directly
       const { error } = await supabase
-        .rpc('update_order_status', {
-          p_order_id: orderId,
-          p_new_status: status,
-          p_admin_id: adminUser.id,
-          p_notes: updateNotes || `Status updated to ${status}`
-        });
+        .from('orders')
+        .update({
+          status: status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
 
       if (error) throw error;
 
       const statusInfo = getStatusInfo(status);
-      toast({
-        title: "Status Updated",
-        description: `Order status updated to ${statusInfo.label}`,
-      });
+
+      // Special handling for COMPLETED status
+      if (status === 'COMPLETED') {
+        toast({
+          title: "Order Completed",
+          description: "Order has been completed and moved to archive",
+        });
+      } else {
+        toast({
+          title: "Status Updated",
+          description: `Order status updated to ${statusInfo.label}`,
+        });
+      }
 
       setUpdateNotes('');
       setSelectedOrder(null);
+
+      // Refresh warehouse orders but maintain current tab
       fetchWarehouseOrders();
 
     } catch (error: any) {
@@ -329,7 +344,7 @@ export default function WarehouseOperations() {
       </div>
 
       {/* Orders by Status Tabs */}
-      <Tabs defaultValue="PROCESSING" className="w-full">
+      <Tabs value={currentTab} onValueChange={(value) => setCurrentTab(value as OrderStatus)} className="w-full">
         <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
           {STATUS_WORKFLOW.map(({ status, label }) => (
             <TabsTrigger key={status} value={status} className="text-xs">
@@ -617,21 +632,22 @@ export default function WarehouseOperations() {
   );
 }
 
-// Missing functions that are referenced
+// Get valid next statuses for warehouse workflow progression
 const getValidNextStatuses = (currentStatus: string) => {
-  const STATUS_WORKFLOW = [
+  const WAREHOUSE_WORKFLOW = [
     { status: 'PROCESSING', label: 'Processing', icon: Clock },
     { status: 'WAREHOUSE_ASSIGNED', label: 'Assigned', icon: User },
     { status: 'PICKING', label: 'Picking', icon: Package },
     { status: 'PACKING', label: 'Packing', icon: PackageCheck },
     { status: 'READY_FOR_DELIVERY', label: 'Ready', icon: CheckCircle },
     { status: 'OUT_FOR_DELIVERY', label: 'Dispatched', icon: Truck },
-    { status: 'DELIVERED', label: 'Delivered', icon: CheckCircle }
+    { status: 'DELIVERED', label: 'Delivered', icon: CheckCircle },
+    { status: 'COMPLETED', label: 'Completed', icon: CheckCircle }
   ];
 
-  const statusIndex = STATUS_WORKFLOW.findIndex(s => s.status === currentStatus);
-  return statusIndex >= 0 && statusIndex < STATUS_WORKFLOW.length - 1 
-    ? [STATUS_WORKFLOW[statusIndex + 1]] 
+  const statusIndex = WAREHOUSE_WORKFLOW.findIndex(s => s.status === currentStatus);
+  return statusIndex >= 0 && statusIndex < WAREHOUSE_WORKFLOW.length - 1
+    ? [WAREHOUSE_WORKFLOW[statusIndex + 1]]
     : [];
 };
 

@@ -80,7 +80,7 @@ export default function ArchivedOrders() {
             total_price
           )
         `)
-        .eq('status', 'DELIVERED')
+        .eq('status', 'COMPLETED')
         .order('updated_at', { ascending: false });
 
       if (archivedError) {
@@ -90,7 +90,7 @@ export default function ArchivedOrders() {
         const { data: basicData, error: basicError } = await supabase
           .from('orders')
           .select('*')
-          .eq('status', 'DELIVERED')
+          .eq('status', 'COMPLETED')
           .order('updated_at', { ascending: false });
 
         if (!basicError && basicData) {
@@ -126,7 +126,7 @@ export default function ArchivedOrders() {
         discount: order.discount || 0,
         shipping_fee: order.shipping_fee || 0,
         total: order.total || 0,
-        status: order.status || 'DELIVERED',
+        status: order.status || 'COMPLETED',
         notes: order.notes || '',
         created_at: order.created_at,
         updated_at: order.updated_at,
@@ -240,7 +240,7 @@ export default function ArchivedOrders() {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Archived Orders</h2>
-        <p className="text-muted-foreground">View and manage delivered orders archive</p>
+        <p className="text-muted-foreground">View and manage completed orders archive</p>
       </div>
 
       <Card>
@@ -250,7 +250,7 @@ export default function ArchivedOrders() {
             Completed Orders Archive
           </CardTitle>
           <CardDescription>
-            Search through delivered orders by order ID, customer name, or delivery date
+            Search through completed orders by order ID, customer name, or delivery date
           </CardDescription>
 
           <div className="flex items-center space-x-4">
@@ -311,7 +311,7 @@ export default function ArchivedOrders() {
                     <TableCell colSpan={6} className="text-center py-8">
                       {searchTerm || dateFilter
                         ? 'No archived orders found matching your criteria.'
-                        : 'No delivered orders in archive yet.'}
+                        : 'No completed orders in archive yet.'}
                     </TableCell>
                   </TableRow>
                 ) : (

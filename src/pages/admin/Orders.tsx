@@ -214,8 +214,8 @@ export default function Orders() {
       console.table(statusCounts);
 
       console.log('📋 Total orders fetched:', transformedOrders.length);
-      const deliveredOrders = transformedOrders.filter(o => o.status === 'DELIVERED');
-      console.log('✅ Delivered orders (will be filtered out for archive):', deliveredOrders.length);
+      const completedOrders = transformedOrders.filter(o => o.status === 'COMPLETED');
+      console.log('✅ Completed orders (will be filtered out for archive):', completedOrders.length);
 
       setOrders(transformedOrders);
 
@@ -280,11 +280,11 @@ export default function Orders() {
         currentStatus: order.status
       });
 
-      // Update order status to DELIVERED (which we'll treat as completed/archived)
+      // Update order status to COMPLETED (archived status)
       const { data, error } = await supabase
         .from('orders')
         .update({
-          status: 'DELIVERED',
+          status: 'COMPLETED',
           updated_at: new Date().toISOString()
         })
         .eq('id', order.id)
@@ -384,12 +384,12 @@ export default function Orders() {
   };
 
   const filteredOrders = orders.filter(order => {
-    // ALWAYS exclude delivered/completed orders from main orders view
-    const isNotDelivered = order.status !== 'DELIVERED';
+    // ALWAYS exclude completed orders from main orders view
+    const isNotCompleted = order.status !== 'COMPLETED';
 
-    // If this order is delivered (archived), exclude it regardless of other filters
-    if (!isNotDelivered) {
-      console.log(`🔄 Filtered out delivered/archived order: ${order.order_no} (status: ${order.status})`);
+    // If this order is completed (archived), exclude it regardless of other filters
+    if (!isNotCompleted) {
+      console.log(`🔄 Filtered out completed/archived order: ${order.order_no} (status: ${order.status})`);
       return false;
     }
 
@@ -406,7 +406,7 @@ export default function Orders() {
   });
 
   // Add this debug log to see filtering results
-  console.log(`📋 Orders after filtering: ${filteredOrders.length} / ${orders.length} (excluded ${orders.length - filteredOrders.length} delivered/archived orders)`);
+  console.log(`📋 Orders after filtering: ${filteredOrders.length} / ${orders.length} (excluded ${orders.length - filteredOrders.length} completed/archived orders)`);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-MY', {
