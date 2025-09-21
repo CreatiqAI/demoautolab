@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ResponsiveDataTable, MobileTableCard, MobileTableRow } from '@/components/ui/responsive-table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -702,246 +703,300 @@ export default function Orders() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      {searchTerm || statusFilter !== 'all'
-                        ? 'No orders found matching your criteria.'
-                        : 'No orders yet.'}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredOrders.map((order) => (
-                    <React.Fragment key={order.id}>
-                      <TableRow 
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+            <ResponsiveDataTable
+              data={filteredOrders}
+              columns={[
+                {
+                  key: 'order_no',
+                  header: 'Order',
+                  render: (order) => (
+                    <div>
+                      <div className="font-medium">#{order.order_no}</div>
+                      <div className="text-sm text-muted-foreground">{order.id.slice(0, 8)}</div>
+                    </div>
+                  ),
+                  mobileRender: (order) => (
+                    <div>
+                      <div className="font-medium">#{order.order_no}</div>
+                      <div className="text-xs text-muted-foreground">{order.id.slice(0, 8)}</div>
+                    </div>
+                  )
+                },
+                {
+                  key: 'customer_name',
+                  header: 'Customer',
+                  render: (order) => (
+                    <div>
+                      <div className="font-medium">{order.customer_name}</div>
+                      <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
+                    </div>
+                  ),
+                  mobileRender: (order) => (
+                    <div>
+                      <div className="font-medium">{order.customer_name}</div>
+                      <div className="text-xs text-muted-foreground">{order.customer_phone}</div>
+                    </div>
+                  )
+                },
+                {
+                  key: 'created_at',
+                  header: 'Date',
+                  render: (order) => formatDate(order.created_at),
+                  mobileRender: (order) => (
+                    <span className="text-sm">{formatDate(order.created_at)}</span>
+                  )
+                },
+                {
+                  key: 'total',
+                  header: 'Total',
+                  render: (order) => formatCurrency(order.total),
+                  mobileRender: (order) => (
+                    <span className="font-semibold">{formatCurrency(order.total)}</span>
+                  )
+                },
+                {
+                  key: 'status',
+                  header: 'Status',
+                  render: (order) => (
+                    <CustomStatusBadge status={order.status}>
+                      {getStatusLabel(order.status)}
+                    </CustomStatusBadge>
+                  ),
+                  mobileRender: (order) => (
+                    <CustomStatusBadge status={order.status}>
+                      {getStatusLabel(order.status)}
+                    </CustomStatusBadge>
+                  )
+                },
+                {
+                  key: 'payment_state',
+                  header: 'Payment',
+                  render: (order) => (
+                    <Badge variant={getPaymentBadgeVariant(order.payment_state)}>
+                      {order.payment_state.toLowerCase().replace('_', ' ')}
+                    </Badge>
+                  ),
+                  mobileRender: (order) => (
+                    <Badge variant={getPaymentBadgeVariant(order.payment_state)}>
+                      {order.payment_state.toLowerCase().replace('_', ' ')}
+                    </Badge>
+                  )
+                },
+                {
+                  key: 'actions',
+                  header: 'Actions',
+                  render: (order) => (
+                    <div className="flex justify-end space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateInvoice(order);
+                        }}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        title="Generate Invoice"
                       >
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">#{order.order_no}</div>
-                            <div className="text-sm text-muted-foreground">{order.id.slice(0, 8)}</div>
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteOrder(order);
+                        }}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Delete Order"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ),
+                  mobileRender: (order) => (
+                    <div className="flex justify-end space-x-2 mt-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateInvoice(order);
+                        }}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        title="Generate Invoice"
+                      >
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteOrder(order);
+                        }}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Delete Order"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ),
+                  className: "text-right"
+                }
+              ]}
+              mobileCardRender={(order, index) => (
+                <MobileTableCard key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}>
+                  <MobileTableRow label="Order" value={
+                    <div>
+                      <div className="font-medium">#{order.order_no}</div>
+                      <div className="text-xs text-muted-foreground">{order.id.slice(0, 8)}</div>
+                    </div>
+                  } />
+                  <MobileTableRow label="Customer" value={
+                    <div>
+                      <div className="font-medium">{order.customer_name}</div>
+                      <div className="text-xs text-muted-foreground">{order.customer_phone}</div>
+                    </div>
+                  } />
+                  <MobileTableRow label="Date" value={
+                    <span className="text-sm">{formatDate(order.created_at)}</span>
+                  } />
+                  <MobileTableRow label="Total" value={
+                    <span className="font-semibold">{formatCurrency(order.total)}</span>
+                  } />
+                  <MobileTableRow label="Status" value={
+                    <CustomStatusBadge status={order.status}>
+                      {getStatusLabel(order.status)}
+                    </CustomStatusBadge>
+                  } />
+                  <MobileTableRow label="Payment" value={
+                    <Badge variant={getPaymentBadgeVariant(order.payment_state)}>
+                      {order.payment_state.toLowerCase().replace('_', ' ')}
+                    </Badge>
+                  } />
+                  <MobileTableRow label="Actions" value={
+                    <div className="flex justify-end space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateInvoice(order);
+                        }}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        title="Generate Invoice"
+                      >
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteOrder(order);
+                        }}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Delete Order"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  } />
+                  {expandedOrderId === order.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="space-y-4">
+                        {/* Customer Information */}
+                        <div>
+                          <h4 className="font-medium mb-2 text-sm">Customer Information</h4>
+                          <div className="text-xs space-y-1 bg-gray-50 p-2 rounded">
+                            <p><strong>Name:</strong> {order.customer_name}</p>
+                            <p><strong>Phone:</strong> {order.customer_phone}</p>
+                            {order.customer_email && (
+                              <p><strong>Email:</strong> {order.customer_email}</p>
+                            )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{order.customer_name}</div>
-                            <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>{formatDate(order.created_at)}</TableCell>
-                        <TableCell>{formatCurrency(order.total)}</TableCell>
-                        <TableCell>
-                          <CustomStatusBadge status={order.status}>
-                            {getStatusLabel(order.status)}
-                          </CustomStatusBadge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getPaymentBadgeVariant(order.payment_state)}>
-                            {order.payment_state.toLowerCase().replace('_', ' ')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                generateInvoice(order);
-                              }}
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              title="Generate Invoice"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteOrder(order);
-                              }}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Delete Order"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      {expandedOrderId === order.id && (
-                        <TableRow>
-                          <TableCell colSpan={7} className="bg-muted/30">
-                            <div className="p-6 space-y-6">
-                              {/* Order Details */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                  <h4 className="font-medium mb-2">Customer Information</h4>
-                                  <div className="text-sm space-y-1">
-                                    <p><strong>Name:</strong> {order.customer_name}</p>
-                                    <p><strong>Phone:</strong> {order.customer_phone}</p>
-                                    {order.customer_email && (
-                                      <p><strong>Email:</strong> {order.customer_email}</p>
-                                    )}
-                                  </div>
-                                </div>
+                        </div>
 
-                                <div>
-                                  <h4 className="font-medium mb-2">Delivery Information</h4>
-                                  <div className="text-sm space-y-1">
-                                    <p><strong>Method:</strong> <span className="capitalize">{order.delivery_method}</span></p>
-                                    {order.delivery_address && typeof order.delivery_address === 'object' && (
-                                      <div>
-                                        <p><strong>Full Address:</strong></p>
-                                        <div className="ml-2 text-muted-foreground bg-gray-50 p-2 rounded mt-1">
-                                          {/* Handle new address format (single address field) */}
-                                          {order.delivery_address.address && <p className="whitespace-pre-line">{order.delivery_address.address}</p>}
-                                          
-                                          {/* Handle old address format (multiple fields) - for backward compatibility */}
-                                          {order.delivery_address.street && <p>{order.delivery_address.street}</p>}
-                                          {order.delivery_address.city && <p>{order.delivery_address.city}, {order.delivery_address.state} {order.delivery_address.postcode}</p>}
-                                          {order.delivery_address.country && <p>{order.delivery_address.country}</p>}
-                                          
-                                          {/* Show special delivery notes if available */}
-                                          {order.delivery_address.notes && (
-                                            <p className="mt-2 pt-2 border-t text-xs italic">Notes: {order.delivery_address.notes}</p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
+                        {/* Delivery Information */}
+                        <div>
+                          <h4 className="font-medium mb-2 text-sm">Delivery Information</h4>
+                          <div className="text-xs space-y-1 bg-gray-50 p-2 rounded">
+                            <p><strong>Method:</strong> <span className="capitalize">{order.delivery_method}</span></p>
+                            {order.delivery_address && typeof order.delivery_address === 'object' && (
+                              <div>
+                                <p><strong>Address:</strong></p>
+                                <div className="ml-2 text-muted-foreground bg-white p-1 rounded mt-1 text-xs">
+                                  {order.delivery_address.address && <p className="whitespace-pre-line">{order.delivery_address.address}</p>}
+                                  {order.delivery_address.street && <p>{order.delivery_address.street}</p>}
+                                  {order.delivery_address.city && <p>{order.delivery_address.city}, {order.delivery_address.state} {order.delivery_address.postcode}</p>}
+                                  {order.delivery_address.country && <p>{order.delivery_address.country}</p>}
+                                  {order.delivery_address.notes && (
+                                    <p className="mt-1 pt-1 border-t text-xs italic">Notes: {order.delivery_address.notes}</p>
+                                  )}
                                 </div>
                               </div>
+                            )}
+                          </div>
+                        </div>
 
-                              {/* Clean Order Details */}
-                              {order.order_items && order.order_items.length > 0 && (
-                                <div className="space-y-6">
-                                  {/* Simple Header */}
-                                  <div className="border-b border-gray-200 pb-3">
-                                    <h4 className="text-xl font-semibold text-gray-900">Order Items</h4>
-                                    <p className="text-sm text-gray-600 mt-1">{order.order_items.length} items to prepare</p>
+                        {/* Order Items */}
+                        {order.order_items && order.order_items.length > 0 && (
+                          <div>
+                            <h4 className="font-medium mb-2 text-sm">Order Items</h4>
+                            <div className="space-y-2">
+                              {order.order_items.map((item, itemIndex) => (
+                                <div key={item.id} className="bg-gray-50 p-2 rounded text-xs">
+                                  <div className="flex justify-between items-start mb-1">
+                                    <div className="font-medium text-gray-900">{item.component_name}</div>
+                                    <div className="font-semibold">{formatCurrency(item.total_price)}</div>
                                   </div>
-
-                                  {/* Clean Table */}
-                                  <div className="border border-gray-400 rounded-sm overflow-hidden">
-                                    {/* Table Header */}
-                                    <div className="bg-gray-100 px-6 py-3 border-b border-gray-400">
-                                      <div className="grid grid-cols-10 gap-4 text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                        <div className="col-span-1">Qty</div>
-                                        <div className="col-span-2">SKU Code</div>
-                                        <div className="col-span-4">Product Name</div>
-                                        <div className="col-span-2">Unit Price</div>
-                                        <div className="col-span-1 text-right">Total</div>
+                                  <div className="text-muted-foreground">
+                                    <div>SKU: {item.component_sku}</div>
+                                    <div>Qty: {item.quantity} × {formatCurrency(item.unit_price)}</div>
+                                    {item.product_context && (
+                                      <div className="text-xs mt-1 pl-2 border-l-2 border-gray-300">
+                                        {item.product_context}
                                       </div>
-                                    </div>
-
-                                    {/* Table Rows */}
-                                    <div>
-                                      {order.order_items.map((item, index) => (
-                                        <div key={item.id} className="px-6 py-4 border-b border-gray-300 last:border-b-0">
-                                          <div className="grid grid-cols-10 gap-4 items-center">
-                                            {/* Quantity */}
-                                            <div className="col-span-1">
-                                              <div className="w-8 h-8 border border-gray-400 rounded flex items-center justify-center font-semibold text-sm">
-                                                {item.quantity}
-                                              </div>
-                                            </div>
-
-                                            {/* SKU */}
-                                            <div className="col-span-2">
-                                              <div className="font-mono text-sm font-semibold text-gray-900">
-                                                {item.component_sku}
-                                              </div>
-                                            </div>
-
-                                            {/* Product Name */}
-                                            <div className="col-span-4">
-                                              <div className="font-medium text-gray-900">
-                                                {item.component_name}
-                                              </div>
-                                              {item.product_context && (
-                                                <div className="text-xs text-gray-600 mt-1 pl-3 border-l-2 border-gray-400">
-                                                  {item.product_context}
-                                                </div>
-                                              )}
-                                            </div>
-
-                                            {/* Unit Price */}
-                                            <div className="col-span-2">
-                                              <div className="text-sm text-gray-900">
-                                                {formatCurrency(item.unit_price)}
-                                              </div>
-                                            </div>
-
-                                            {/* Total */}
-                                            <div className="col-span-1 text-right">
-                                              <div className="font-semibold text-gray-900">
-                                                {formatCurrency(item.total_price)}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-
-                                    {/* Order Total */}
-                                    <div className="bg-gray-100 px-6 py-4 border-t border-gray-400">
-                                      <div className="flex justify-between items-center">
-                                        <div>
-                                          <div className="font-semibold text-gray-900">Order Total</div>
-                                          <div className="text-sm text-gray-600">
-                                            {order.order_items.reduce((sum, item) => sum + item.quantity, 0)} items
-                                          </div>
-                                        </div>
-                                        <div className="text-right">
-                                          <div className="text-xl font-bold text-gray-900">
-                                            {formatCurrency(order.total)}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Simple Actions */}
-                                  <div className="flex justify-end gap-3 pt-2">
-                                    <button className="px-4 py-2 border border-gray-400 text-gray-700 text-sm font-medium rounded hover:bg-gray-50 transition-colors">
-                                      Print List
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleMarkComplete(order);
-                                      }}
-                                      className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors"
-                                    >
-                                      Mark Complete
-                                    </button>
+                                    )}
                                   </div>
                                 </div>
-                              )}
+                              ))}
                             </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </React.Fragment>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                            <div className="mt-2 pt-2 border-t border-gray-300 flex justify-between items-center">
+                              <div className="text-xs text-gray-600">
+                                {order.order_items.reduce((sum, item) => sum + item.quantity, 0)} items total
+                              </div>
+                              <div className="font-bold">{formatCurrency(order.total)}</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex justify-end gap-2 pt-2">
+                          <button className="px-3 py-1 border border-gray-400 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors">
+                            Print List
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMarkComplete(order);
+                            }}
+                            className="px-3 py-1 bg-gray-900 text-white text-xs font-medium rounded hover:bg-gray-800 transition-colors"
+                          >
+                            Mark Complete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </MobileTableCard>
+              )}
+              emptyMessage={
+                searchTerm || statusFilter !== 'all'
+                  ? 'No orders found matching your criteria.'
+                  : 'No orders yet.'
+              }
+            />
           )}
         </CardContent>
       </Card>

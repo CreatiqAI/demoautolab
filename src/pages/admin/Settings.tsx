@@ -311,30 +311,36 @@ export default function Settings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="general" className="flex items-center gap-2">
-            <Store className="h-4 w-4" />
-            General
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          <TabsTrigger value="general" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+            <Store className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">General</span>
+            <span className="sm:hidden">Gen</span>
           </TabsTrigger>
-          <TabsTrigger value="business" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" />
-            Business
+          <TabsTrigger value="business" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+            <CreditCard className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Business</span>
+            <span className="sm:hidden">Biz</span>
           </TabsTrigger>
-          <TabsTrigger value="security" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            Security
+          <TabsTrigger value="security" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+            <Shield className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Security</span>
+            <span className="sm:hidden">Sec</span>
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            Notifications
+          <TabsTrigger value="notifications" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+            <Bell className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Notifications</span>
+            <span className="sm:hidden">Notif</span>
           </TabsTrigger>
-          <TabsTrigger value="inventory" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Inventory
+          <TabsTrigger value="inventory" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+            <Package className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Inventory</span>
+            <span className="sm:hidden">Inv</span>
           </TabsTrigger>
-          <TabsTrigger value="system" className="flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            System
+          <TabsTrigger value="system" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+            <Database className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">System</span>
+            <span className="sm:hidden">Sys</span>
           </TabsTrigger>
         </TabsList>
 
@@ -351,7 +357,7 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="storeName">Store Name</Label>
                   <Input
@@ -381,7 +387,7 @@ export default function Settings() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="storePhone">Phone Number</Label>
                   <Input
@@ -423,7 +429,7 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="primaryColor">Primary Color</Label>
                   <div className="flex gap-2">
@@ -467,7 +473,7 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="currency">Currency</Label>
                   <Select
@@ -508,7 +514,7 @@ export default function Settings() {
               </div>
 
               {systemSettings.shippingEnabled && (
-                <div className="grid grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/20">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/20">
                   <div className="space-y-2">
                     <Label htmlFor="shippingRate">Shipping Rate ({systemSettings.currency})</Label>
                     <Input
@@ -614,7 +620,7 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2">
                     <Switch
@@ -736,7 +742,7 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="lowStockThreshold">Low Stock Threshold</Label>
                   <Input
@@ -978,7 +984,7 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h4 className="font-semibold mb-3">Database Status</h4>
                   <div className="space-y-2 text-sm">
@@ -1023,7 +1029,7 @@ export default function Settings() {
 
               <div>
                 <h4 className="font-semibold mb-3">User Roles</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   {USER_ROLES.map((role) => (
                     <div key={role.value} className="flex justify-between">
                       <span>{role.label}:</span>

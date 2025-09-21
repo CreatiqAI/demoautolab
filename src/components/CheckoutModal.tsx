@@ -352,15 +352,15 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[95vh] w-[95vw] max-w-none sm:max-w-lg md:max-w-2xl lg:max-w-4xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl">Checkout</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-xl md:text-2xl">Checkout</DialogTitle>
+          <DialogDescription className="text-sm md:text-base">
             Complete your purchase by providing delivery and payment information
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="grid md:grid-cols-2 gap-8">
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
           {/* Left Column - Order Summary & Forms */}
           <div className="space-y-6">
             {/* Order Summary */}
@@ -368,11 +368,11 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
               <CardHeader>
                 <CardTitle>Order Summary</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 md:space-y-4">
                 {selectedItems.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3">
+                  <div key={item.id} className="flex items-center gap-2 md:gap-3">
                     {item.component_image && (
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                      <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                         <img
                           src={item.component_image}
                           alt={item.name}
@@ -381,13 +381,13 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{item.name}</p>
+                      <p className="font-medium text-xs md:text-sm truncate">{item.name}</p>
                       <p className="text-xs text-muted-foreground">{item.component_sku}</p>
-                      <p className="text-xs text-muted-foreground">From: {item.product_name}</p>
+                      <p className="text-xs text-muted-foreground hidden sm:block">From: {item.product_name}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm">×{item.quantity}</p>
-                      <p className="font-medium">{formatPrice(item.normal_price * item.quantity)}</p>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-xs md:text-sm">×{item.quantity}</p>
+                      <p className="font-medium text-sm md:text-base">{formatPrice(item.normal_price * item.quantity)}</p>
                     </div>
                   </div>
                 ))}
@@ -404,25 +404,25 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
                   {deliveryMethods.map((method) => {
                     const Icon = method.icon;
                     return (
-                      <div key={method.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50">
-                        <RadioGroupItem value={method.id} id={method.id} />
-                        <Icon className="h-5 w-5 text-primary" />
-                        <div className="flex-1">
-                          <Label htmlFor={method.id} className="font-medium cursor-pointer">
+                      <div key={method.id} className="flex items-start space-x-2 md:space-x-3 p-2 md:p-3 border rounded-lg hover:bg-gray-50">
+                        <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
+                        <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <Label htmlFor={method.id} className="font-medium cursor-pointer text-sm md:text-base">
                             {method.name}
                           </Label>
-                          <p className="text-sm text-muted-foreground">{method.description}</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">{method.description}</p>
                           {method.areas && (
                             <Badge variant="outline" className="text-xs mt-1">
                               {method.areas}
                             </Badge>
                           )}
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0">
                           {method.price === 0 ? (
-                            <Badge variant="secondary">FREE</Badge>
+                            <Badge variant="secondary" className="text-xs">FREE</Badge>
                           ) : (
-                            <p className="font-medium">+{formatPrice(method.price)}</p>
+                            <p className="font-medium text-sm">+{formatPrice(method.price)}</p>
                           )}
                         </div>
                       </div>
@@ -438,25 +438,25 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
                 <CardHeader>
                   <CardTitle>Delivery Address</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                <CardContent className="space-y-3 md:space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                     <div>
-                      <Label htmlFor="fullName">Full Name</Label>
+                      <Label htmlFor="fullName" className="text-sm">Full Name</Label>
                       <Input
                         id="fullName"
                         value={customerProfile?.full_name || 'Not set'}
                         readOnly
-                        className="bg-muted cursor-not-allowed"
+                        className="bg-muted cursor-not-allowed text-sm"
                       />
                       <p className="text-xs text-muted-foreground mt-1">From your profile (fixed)</p>
                     </div>
                     <div>
-                      <Label htmlFor="phoneNumber">Phone Number</Label>
+                      <Label htmlFor="phoneNumber" className="text-sm">Phone Number</Label>
                       <Input
                         id="phoneNumber"
                         value={customerProfile?.phone || customerProfile?.phone_e164 || 'Not set'}
                         readOnly
-                        className="bg-muted cursor-not-allowed"
+                        className="bg-muted cursor-not-allowed text-sm"
                       />
                       <p className="text-xs text-muted-foreground mt-1">From your profile (fixed)</p>
                     </div>
@@ -473,13 +473,14 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
                     </p>
                   </div>
                   <div>
-                    <Label htmlFor="notes">Special Instructions</Label>
+                    <Label htmlFor="notes" className="text-sm">Special Instructions</Label>
                     <Textarea
                       id="notes"
                       value={deliveryAddress.notes}
                       onChange={(e) => handleNotesChange(e.target.value)}
                       placeholder="Any special delivery instructions..."
                       rows={2}
+                      className="text-sm"
                     />
                   </div>
                 </CardContent>
@@ -517,17 +518,17 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
                   {paymentMethods.map((method) => {
                     const Icon = method.icon;
                     return (
-                      <div key={method.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50">
-                        <RadioGroupItem value={method.id} id={method.id} />
-                        <Icon className="h-5 w-5 text-primary" />
-                        <div className="flex-1">
-                          <Label htmlFor={method.id} className="font-medium cursor-pointer">
+                      <div key={method.id} className="flex items-start space-x-2 md:space-x-3 p-2 md:p-3 border rounded-lg hover:bg-gray-50">
+                        <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
+                        <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <Label htmlFor={method.id} className="font-medium cursor-pointer text-sm md:text-base">
                             {method.name}
                           </Label>
-                          <p className="text-sm text-muted-foreground">{method.description}</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">{method.description}</p>
                         </div>
                         {method.fee && (
-                          <p className="text-sm font-medium">+{formatPrice(method.fee)}</p>
+                          <p className="text-sm font-medium flex-shrink-0">+{formatPrice(method.fee)}</p>
                         )}
                       </div>
                     );
@@ -541,37 +542,37 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
               <CardHeader>
                 <CardTitle>Order Total</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-2 md:space-y-3">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal ({selectedItems.length} items)</span>
-                  <span>{formatPrice(getSubtotal())}</span>
+                  <span className="font-medium">{formatPrice(getSubtotal())}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Delivery Fee</span>
-                  <span>{getDeliveryFee() === 0 ? 'FREE' : formatPrice(getDeliveryFee())}</span>
+                  <span className="font-medium">{getDeliveryFee() === 0 ? 'FREE' : formatPrice(getDeliveryFee())}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>SST (6%)</span>
-                  <span>{formatPrice(getTax())}</span>
+                  <span className="font-medium">{formatPrice(getTax())}</span>
                 </div>
-                
+
                 <Separator />
-                
-                <div className="flex justify-between text-lg font-semibold">
+
+                <div className="flex justify-between text-base md:text-lg font-semibold">
                   <span>Total</span>
                   <span>{formatPrice(getTotal())}</span>
                 </div>
-                
-                <Button 
-                  className="w-full mt-4" 
+
+                <Button
+                  className="w-full mt-3 md:mt-4 text-sm md:text-base"
                   size="lg"
                   onClick={handlePlaceOrder}
                   disabled={!isAddressComplete() || isPlacingOrder}
                 >
                   {isPlacingOrder ? 'Placing Order...' : `Place Order - ${formatPrice(getTotal())}`}
                 </Button>
-                
-                <div className="text-center mt-4">
+
+                <div className="text-center mt-3 md:mt-4">
                   <p className="text-xs text-muted-foreground">
                     🔒 Secure payment processing
                   </p>
