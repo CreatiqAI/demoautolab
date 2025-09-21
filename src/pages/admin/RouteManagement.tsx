@@ -1204,10 +1204,6 @@ export default function RouteManagement() {
                           <div className="text-muted-foreground">Duration</div>
                           <div className="font-medium">{Math.round(route.total_duration)} min</div>
                         </div>
-                        <div>
-                          <div className="text-muted-foreground">Efficiency</div>
-                          <div className="font-medium">{route.route_efficiency.toFixed(1)}%</div>
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -1371,34 +1367,7 @@ export default function RouteManagement() {
             </div>
 
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled
-                className="text-green-600 hover:text-green-700"
-              >
-                <MapIcon className="h-4 w-4 mr-1" />
-                🧠 OpenAI Enabled
-              </Button>
 
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  console.log('🧪 Testing Google Maps API connection...');
-                  const isWorking = await routeOptimizer.testConnection();
-                  toast({
-                    title: isWorking ? "API Connection Successful" : "API Connection Failed",
-                    description: isWorking
-                      ? "Google Maps Routes API is working correctly!"
-                      : "Check console for error details. Using fallback optimization.",
-                    variant: isWorking ? "default" : "destructive"
-                  });
-                }}
-                disabled={loading}
-                className="text-blue-600 hover:text-blue-700"
-              >
-                <Map className="h-4 w-4 mr-1" />
-                Test API
-              </Button>
               <Button
                 variant="outline"
                 onClick={fetchData}
