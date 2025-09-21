@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   MapPin,
   Navigation,
@@ -23,7 +24,15 @@ import {
   Map,
   Calendar,
   Phone,
-  MapIcon
+  MapIcon,
+  CheckCircle,
+  XCircle,
+  RotateCcw,
+  Eye,
+  History,
+  Trash2,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { routeOptimizer, RouteOptimizer } from '@/services/routeOptimizer';
@@ -63,19 +72,67 @@ interface RouteAssignment {
   id: string;
   driver_id: string;
   driver_name: string;
-  order_ids: string[];
   route_date: string;
-  departure_time?: string;
-  status: 'pending' | 'in_progress' | 'completed';
-  estimated_distance_km: number;
-  estimated_duration_minutes: number;
-  optimized_route: any[];
-  route_efficiency: number;
+  departure_time: string;
+  status: 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+  total_distance: number;
+  total_duration: number;
+  total_driving_time: number;
   estimated_fuel_cost: number;
-  optimization_method?: string;
-  start_address?: string;
-  warnings: string[];
+  route_efficiency: number;
+  optimization_method: string;
   created_at: string;
+  updated_at: string;
+  completed_at?: string;
+  cancelled_at?: string;
+  notes?: string;
+  stops: RouteStop[];
+  orders: RouteOrder[];
+}
+
+interface RouteStop {
+  id: string;
+  route_assignment_id: string;
+  stop_order: number;
+  location_id: string;
+  location_address: string;
+  location_coordinates: { lat: number; lng: number };
+  estimated_arrival_time?: string;
+  actual_arrival_time?: string;
+  estimated_travel_time: number;
+  actual_travel_time?: number;
+  estimated_distance: number;
+  cumulative_time: number;
+  cumulative_distance: number;
+  status: 'pending' | 'arrived' | 'completed' | 'skipped';
+}
+
+interface RouteOrder {
+  id: string;
+  route_assignment_id: string;
+  route_stop_id: string;
+  order_id: string;
+  order_number: string;
+  customer_name: string;
+  customer_phone?: string;
+  delivery_status: 'assigned' | 'out_for_delivery' | 'delivered' | 'failed' | 'returned';
+  delivered_at?: string;
+  delivery_notes?: string;
+  // Full order details with items
+  order_details?: {
+    id: string;
+    total: number;
+    status: string;
+    delivery_address: any;
+    order_items: Array<{
+      id: string;
+      component_sku: string;
+      component_name: string;
+      quantity: number;
+      unit_price: number;
+      total_price: number;
+    }>;
+  };
 }
 
 export default function RouteManagement() {
@@ -94,7 +151,18 @@ export default function RouteManagement() {
     departure_time: new Date().toTimeString().slice(0, 5) // HH:MM format
   });
   const [openaiApiKey] = useState(import.meta.env.VITE_OPENAI_API_KEY || '');
+  const [activeTab, setActiveTab] = useState<'routes' | 'history'>('routes');
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  // Debug: Check if OpenAI API key is loaded
+  useEffect(() => {
+    console.log('🔑 OpenAI API Key loaded:', openaiApiKey ? `${openaiApiKey.substring(0, 20)}...` : 'NOT FOUND');
+    console.log('🌍 All env vars:', {
+      VITE_OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY ? `${import.meta.env.VITE_OPENAI_API_KEY.substring(0, 20)}...` : 'NOT FOUND',
+      VITE_GOOGLE_MAPS_API_KEY: import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? `${import.meta.env.VITE_GOOGLE_MAPS_API_KEY.substring(0, 20)}...` : 'NOT FOUND'
+    });
+  }, [openaiApiKey]);
 
   useEffect(() => {
     fetchData();
@@ -226,9 +294,117 @@ export default function RouteManagement() {
   };
 
   const fetchRouteAssignments = async () => {
-    // Mock route assignments for now
-    const mockRouteAssignments: RouteAssignment[] = [];
-    setRouteAssignments(mockRouteAssignments);
+    try {
+      console.log('📦 Fetching route assignments from database...');
+
+      // Fetch route assignments with related data
+      const { data: routes, error: routesError } = await supabase
+        .from('route_assignments')
+        .select(`
+          *,
+          route_stops (
+            *
+          ),
+          route_orders (
+            *
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (routesError) {
+        console.error('❌ Error fetching route assignments:', routesError);
+        throw routesError;
+      }
+
+      console.log('✅ Fetched route assignments:', routes);
+
+      // Now fetch full order details for each route
+      const transformedRoutes: RouteAssignment[] = [];
+
+      for (const route of routes || []) {
+        // Get all order IDs for this route
+        const orderIds = route.route_orders?.map((ro: any) => ro.order_id) || [];
+
+        // Fetch full order details with items
+        let fullOrderDetails: any[] = [];
+        if (orderIds.length > 0) {
+          const { data: orderData, error: orderError } = await supabase
+            .from('orders')
+            .select(`
+              id,
+              order_no,
+              customer_name,
+              customer_phone,
+              total,
+              status,
+              delivery_address,
+              order_items (
+                id,
+                component_sku,
+                component_name,
+                quantity,
+                unit_price,
+                total_price
+              )
+            `)
+            .in('id', orderIds);
+
+          if (orderError) {
+            console.error('❌ Error fetching order details:', orderError);
+          } else {
+            fullOrderDetails = orderData || [];
+          }
+        }
+
+        // Transform route orders to include full order details
+        const enhancedRouteOrders = (route.route_orders || []).map((routeOrder: any) => {
+          const fullOrder = fullOrderDetails.find(order => order.id === routeOrder.order_id);
+          return {
+            ...routeOrder,
+            order_details: fullOrder ? {
+              id: fullOrder.id,
+              total: fullOrder.total,
+              status: fullOrder.status,
+              delivery_address: fullOrder.delivery_address,
+              order_items: fullOrder.order_items || []
+            } : undefined
+          };
+        });
+
+        // Transform route data to match interface
+        transformedRoutes.push({
+          id: route.id,
+          driver_id: route.driver_id,
+          driver_name: route.driver_name,
+          route_date: route.route_date,
+          departure_time: route.departure_time,
+          status: route.status,
+          total_distance: route.total_distance || 0,
+          total_duration: route.total_duration || 0,
+          total_driving_time: route.total_driving_time || 0,
+          estimated_fuel_cost: route.estimated_fuel_cost || 0,
+          route_efficiency: route.route_efficiency || 0,
+          optimization_method: route.optimization_method || 'Unknown',
+          created_at: route.created_at,
+          updated_at: route.updated_at,
+          completed_at: route.completed_at,
+          cancelled_at: route.cancelled_at,
+          notes: route.notes,
+          stops: route.route_stops || [],
+          orders: enhancedRouteOrders
+        });
+      }
+
+      console.log('✅ Enhanced route assignments with order details:', transformedRoutes);
+      setRouteAssignments(transformedRoutes);
+    } catch (error) {
+      console.error('❌ Error in fetchRouteAssignments:', error);
+      toast({
+        title: "Database Error",
+        description: "Failed to fetch route assignments",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleOrderSelection = (orderId: string, checked: boolean) => {
@@ -426,31 +602,131 @@ export default function RouteManagement() {
       // Optimize the route using AI
       const optimizationResult = await optimizeRoute(validOrders, driver.driver_type);
 
-      // Set starting point (same as in optimizeRoute function)
-      const startAddress = 'AUTO LABS SDN BHD, 17, Jalan 7/95B, Cheras Utama, 56100 Cheras, Kuala Lumpur';
+      console.log('💾 Saving route assignment to database...');
 
-      // Create route assignment with detailed route information
-      const newRouteAssignment: RouteAssignment = {
-        id: `route_${Date.now()}`,
-        driver_id: assignForm.driver_id,
-        driver_name: driver.name,
-        order_ids: validOrders.map(o => o.id),
-        route_date: assignForm.route_date,
-        departure_time: assignForm.departure_time,
-        status: 'pending',
-        estimated_distance_km: optimizationResult.totalDistance,
-        estimated_duration_minutes: optimizationResult.totalDuration,
-        optimized_route: optimizationResult.optimizedStops,
-        route_efficiency: optimizationResult.routeEfficiency,
-        estimated_fuel_cost: optimizationResult.estimatedFuelCost,
-        optimization_method: openaiApiKey ? 'OpenAI + Google Maps' : 'Traditional TSP + Google Maps',
-        start_address: startAddress,
-        warnings: optimizationResult.warnings,
-        created_at: new Date().toISOString()
-      };
+      // Create route assignment in database
+      const { data: routeAssignment, error: routeError } = await supabase
+        .from('route_assignments')
+        .insert({
+          driver_id: assignForm.driver_id,
+          driver_name: driver.name,
+          route_date: assignForm.route_date,
+          departure_time: assignForm.departure_time,
+          status: 'assigned',
+          total_distance: optimizationResult.totalDistance,
+          total_duration: optimizationResult.totalDuration,
+          total_driving_time: optimizationResult.totalDrivingTime || optimizationResult.totalDuration - (optimizationResult.optimizedStops.length * 10), // Estimate driving time
+          estimated_fuel_cost: optimizationResult.estimatedFuelCost,
+          route_efficiency: optimizationResult.routeEfficiency,
+          optimization_method: openaiApiKey ? 'OpenAI + Google Maps' : 'Traditional TSP + Google Maps'
+        })
+        .select()
+        .single();
 
-      // Add to route assignments
-      setRouteAssignments(prev => [...prev, newRouteAssignment]);
+      if (routeError) {
+        console.error('❌ Error creating route assignment:', routeError);
+        throw routeError;
+      }
+
+      console.log('✅ Route assignment created:', routeAssignment);
+
+      // Create route stops
+      const routeStops = optimizationResult.optimizedStops.map((stop, index) => {
+        // Convert estimated arrival time to proper ISO timestamp if it exists
+        let estimatedArrivalTime = null;
+        if (stop.estimatedArrival && stop.estimatedArrival !== 'N/A') {
+          try {
+            // Try to parse the arrival time - if it's just a time string, combine with route date
+            const timeString = stop.estimatedArrival;
+            if (timeString.includes('AM') || timeString.includes('PM')) {
+              // Parse 12-hour format and combine with route date
+              const routeDateTime = new Date(`${assignForm.route_date} ${timeString}`);
+              if (!isNaN(routeDateTime.getTime())) {
+                estimatedArrivalTime = routeDateTime.toISOString();
+              }
+            } else if (timeString.includes('T') || timeString.includes('Z')) {
+              // Already in ISO format
+              estimatedArrivalTime = new Date(timeString).toISOString();
+            }
+          } catch (error) {
+            console.warn('Could not parse estimated arrival time:', stop.estimatedArrival);
+          }
+        }
+
+        return {
+          route_assignment_id: routeAssignment.id,
+          stop_order: index + 1,
+          location_id: stop.location.id,
+          location_address: stop.location.address,
+          location_coordinates: stop.location.coordinates,
+          estimated_arrival_time: estimatedArrivalTime,
+          estimated_travel_time: stop.estimatedTravelTime || 0,
+          estimated_distance: stop.estimatedDistance || 0,
+          cumulative_time: stop.cumulativeTime || 0,
+          cumulative_distance: stop.cumulativeDistance || 0,
+          status: 'pending'
+        };
+      });
+
+      const { data: createdStops, error: stopsError } = await supabase
+        .from('route_stops')
+        .insert(routeStops)
+        .select();
+
+      if (stopsError) {
+        console.error('❌ Error creating route stops:', stopsError);
+        throw stopsError;
+      }
+
+      console.log('✅ Route stops created:', createdStops);
+
+      // Create route orders (map orders to stops)
+      const routeOrders = [];
+      for (let i = 0; i < optimizationResult.optimizedStops.length; i++) {
+        const stop = optimizationResult.optimizedStops[i];
+        const stopRecord = createdStops[i];
+
+        // Map orders to this stop
+        for (const order of stop.location.orders) {
+          const originalOrder = validOrders.find(o => o.id === order.id || o.order_no === order.orderNumber);
+          if (originalOrder) {
+            routeOrders.push({
+              route_assignment_id: routeAssignment.id,
+              route_stop_id: stopRecord.id,
+              order_id: originalOrder.id,
+              order_number: originalOrder.order_no,
+              customer_name: originalOrder.customer_name,
+              customer_phone: originalOrder.customer_phone,
+              delivery_status: 'assigned'
+            });
+          }
+        }
+      }
+
+      const { data: createdOrders, error: ordersError } = await supabase
+        .from('route_orders')
+        .insert(routeOrders)
+        .select();
+
+      if (ordersError) {
+        console.error('❌ Error creating route orders:', ordersError);
+        throw ordersError;
+      }
+
+      console.log('✅ Route orders created:', createdOrders);
+
+      // Update order statuses to 'OUT_FOR_DELIVERY'
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({ status: 'OUT_FOR_DELIVERY' })
+        .in('id', validOrders.map(o => o.id));
+
+      if (orderUpdateError) {
+        console.warn('⚠️ Warning: Could not update order statuses:', orderUpdateError);
+      }
+
+      // Refresh data
+      await fetchData();
 
       // Clear selections and close dialog
       setSelectedOrders(new Set());
@@ -462,7 +738,7 @@ export default function RouteManagement() {
       });
 
       toast({
-        title: "AI Route Optimization Complete",
+        title: "Route Assignment Saved",
         description: `${validOrders.length} orders assigned to ${driver.name} • ${optimizationResult.routeEfficiency}% efficiency • RM ${optimizationResult.estimatedFuelCost.toFixed(2)} fuel cost`
       });
 
@@ -478,62 +754,316 @@ export default function RouteManagement() {
     }
   };
 
+  // Trip Management Functions
+  const handleCompleteTrip = async (routeId: string) => {
+    try {
+      setLoading(true);
+      console.log('✅ Completing trip:', routeId);
+
+      const { error } = await supabase
+        .from('route_assignments')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', routeId);
+
+      if (error) {
+        console.error('❌ Error completing trip:', error);
+        throw error;
+      }
+
+      // Update all associated orders to delivered status
+      const { error: ordersError } = await supabase
+        .from('route_orders')
+        .update({ delivery_status: 'delivered', delivered_at: new Date().toISOString() })
+        .eq('route_assignment_id', routeId);
+
+      if (ordersError) {
+        console.warn('⚠️ Warning: Could not update route orders:', ordersError);
+      }
+
+      // Update order statuses in main orders table
+      const route = routeAssignments.find(r => r.id === routeId);
+      if (route && route.orders.length > 0) {
+        const { error: mainOrdersError } = await supabase
+          .from('orders')
+          .update({ status: 'DELIVERED' })
+          .in('id', route.orders.map(o => o.order_id));
+
+        if (mainOrdersError) {
+          console.warn('⚠️ Warning: Could not update main orders status:', mainOrdersError);
+        }
+      }
+
+      await fetchData();
+
+      toast({
+        title: "Trip Completed",
+        description: "Trip has been marked as completed and moved to history"
+      });
+
+    } catch (error: any) {
+      console.error('Error completing trip:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to complete trip",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelTrip = async (routeId: string, reason?: string) => {
+    try {
+      setLoading(true);
+      console.log('❌ Cancelling trip:', routeId);
+
+      const { error } = await supabase
+        .from('route_assignments')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          notes: reason || 'Trip cancelled'
+        })
+        .eq('id', routeId);
+
+      if (error) {
+        console.error('❌ Error cancelling trip:', error);
+        throw error;
+      }
+
+      // Revert order statuses back to READY_FOR_DELIVERY
+      const route = routeAssignments.find(r => r.id === routeId);
+      if (route && route.orders.length > 0) {
+        const { error: ordersError } = await supabase
+          .from('orders')
+          .update({ status: 'READY_FOR_DELIVERY' })
+          .in('id', route.orders.map(o => o.order_id));
+
+        if (ordersError) {
+          console.warn('⚠️ Warning: Could not revert order statuses:', ordersError);
+        }
+      }
+
+      await fetchData();
+
+      toast({
+        title: "Trip Cancelled",
+        description: "Trip has been cancelled and orders returned to available pool"
+      });
+
+    } catch (error: any) {
+      console.error('Error cancelling trip:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to cancel trip",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReassignTrip = async (routeId: string, newDriverId: string) => {
+    try {
+      setLoading(true);
+      console.log('🔄 Reassigning trip:', routeId, 'to driver:', newDriverId);
+
+      const newDriver = drivers.find(d => d.id === newDriverId);
+      if (!newDriver) {
+        throw new Error('Driver not found');
+      }
+
+      const { error } = await supabase
+        .from('route_assignments')
+        .update({
+          driver_id: newDriverId,
+          driver_name: newDriver.name,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', routeId);
+
+      if (error) {
+        console.error('❌ Error reassigning trip:', error);
+        throw error;
+      }
+
+      await fetchData();
+
+      toast({
+        title: "Trip Reassigned",
+        description: `Trip has been reassigned to ${newDriver.name}`
+      });
+
+    } catch (error: any) {
+      console.error('Error reassigning trip:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reassign trip",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteTrip = async (routeId: string) => {
+    try {
+      setLoading(true);
+      console.log('🗑️ Deleting trip:', routeId);
+
+      const { error } = await supabase
+        .from('route_assignments')
+        .delete()
+        .eq('id', routeId);
+
+      if (error) {
+        console.error('❌ Error deleting trip:', error);
+        throw error;
+      }
+
+      await fetchData();
+
+      toast({
+        title: "Trip Deleted",
+        description: "Trip has been permanently deleted from history"
+      });
+
+    } catch (error: any) {
+      console.error('Error deleting trip:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete trip",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const printRoute = (route: RouteAssignment) => {
-    const selectedOrdersList = orders.filter(order => route.order_ids.includes(order.id));
+    const routeOrders = route.orders || [];
+    const routeStops = route.stops || [];
+
+    // Calculate total items across all orders
+    const totalItems = routeOrders.reduce((total, order) => {
+      return total + (order.order_details?.order_items?.length || 0);
+    }, 0);
 
     const printContent = `
-      <div style="font-family: Arial, sans-serif; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h1>DELIVERY ROUTE SHEET</h1>
-          <p><strong>Date:</strong> ${new Date(route.route_date).toLocaleDateString()}</p>
-          <p><strong>Driver:</strong> ${route.driver_name}</p>
-          <p><strong>Route ID:</strong> ${route.id}</p>
+      <div style="font-family: Arial, sans-serif; padding: 15px; font-size: 12px; line-height: 1.3;">
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 10px;">
+          <h1 style="margin: 0; font-size: 18px;">DELIVERY ROUTE SHEET</h1>
+          <div style="margin-top: 8px; font-size: 11px;">
+            <strong>Date:</strong> ${new Date(route.route_date).toLocaleDateString()} |
+            <strong>Driver:</strong> ${route.driver_name} |
+            <strong>Departure:</strong> ${route.departure_time} |
+            <strong>Route:</strong> ${route.id.substring(0, 8)}...
+          </div>
         </div>
 
-        <div style="margin-bottom: 20px;">
-          <h3>Route Summary</h3>
-          <p><strong>Total Orders:</strong> ${route.order_ids.length}</p>
-          <p><strong>Estimated Distance:</strong> ${route.estimated_distance_km.toFixed(1)} km</p>
-          <p><strong>Estimated Duration:</strong> ${Math.floor(route.estimated_duration_minutes / 60)}h ${route.estimated_duration_minutes % 60}m</p>
+        <!-- Quick Summary -->
+        <div style="background: #f5f5f5; padding: 10px; margin-bottom: 15px; border-radius: 4px; font-size: 11px;">
+          <strong>Summary:</strong> ${routeOrders.length} Orders • ${routeStops.length} Stops • ${totalItems} Items • ${route.total_distance.toFixed(1)} km • ${Math.floor(route.total_duration / 60)}h ${route.total_duration % 60}m
         </div>
 
-        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <!-- Route Table -->
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 15px;">
           <thead>
-            <tr style="background-color: #f5f5f5;">
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Stop #</th>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Order</th>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Customer</th>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Phone</th>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Address</th>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Items</th>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Status</th>
+            <tr style="background-color: #e9ecef;">
+              <th style="border: 1px solid #333; padding: 4px; text-align: center;">#</th>
+              <th style="border: 1px solid #333; padding: 4px; text-align: left;">Address</th>
+              <th style="border: 1px solid #333; padding: 4px; text-align: left;">Customer</th>
+              <th style="border: 1px solid #333; padding: 4px; text-align: left;">Phone</th>
+              <th style="border: 1px solid #333; padding: 4px; text-align: left;">Order#</th>
+              <th style="border: 1px solid #333; padding: 4px; text-align: left;">Items</th>
+              <th style="border: 1px solid #333; padding: 4px; text-align: center;">Time</th>
+              <th style="border: 1px solid #333; padding: 4px; text-align: center;">✓</th>
             </tr>
           </thead>
           <tbody>
-            ${selectedOrdersList.map((order, index) => `
-              <tr>
-                <td style="border: 1px solid #ddd; padding: 8px;">${index + 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${order.order_no}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${order.customer_name}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${order.customer_phone}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${order.delivery_address?.address || 'Address not provided'}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${order.order_items.length} items</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">☐ Delivered</td>
-              </tr>
-            `).join('')}
+            ${routeStops.map((stop, stopIndex) => {
+              const stopOrders = routeOrders.filter(order => order.route_stop_id === stop.id);
+
+              return stopOrders.map((order, orderIndex) => `
+                <tr>
+                  <td style="border: 1px solid #ddd; padding: 4px; text-align: center; font-weight: bold;">${stopIndex + 1}${stopOrders.length > 1 ? String.fromCharCode(97 + orderIndex) : ''}</td>
+                  <td style="border: 1px solid #ddd; padding: 4px; font-size: 9px; max-width: 120px;">${stop.location_address}</td>
+                  <td style="border: 1px solid #ddd; padding: 4px; font-weight: bold;">${order.customer_name}</td>
+                  <td style="border: 1px solid #ddd; padding: 4px;">${order.customer_phone || 'N/A'}</td>
+                  <td style="border: 1px solid #ddd; padding: 4px; font-weight: bold;">${order.order_number}</td>
+                  <td style="border: 1px solid #ddd; padding: 4px;">
+                    ${order.order_details?.order_items?.map(item =>
+                      `${item.quantity}x ${item.component_name.substring(0, 15)}${item.component_name.length > 15 ? '...' : ''}`
+                    ).join('<br>') || 'No items'}
+                  </td>
+                  <td style="border: 1px solid #ddd; padding: 4px; text-align: center;">
+                    ${stop.estimated_arrival_time ? new Date(stop.estimated_arrival_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '___:___'}
+                  </td>
+                  <td style="border: 1px solid #ddd; padding: 4px; text-align: center;">☐</td>
+                </tr>
+              `).join('');
+            }).join('')}
           </tbody>
         </table>
 
-        <div style="margin-top: 30px;">
-          <p><strong>Driver Signature:</strong> _______________________</p>
-          <p><strong>Date Completed:</strong> _______________________</p>
+        <!-- Driver Checklist & Sign-off -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+          <div style="border: 1px solid #333; padding: 8px; border-radius: 4px;">
+            <h3 style="margin: 0 0 8px 0; font-size: 12px;">Pre-Departure Checklist</h3>
+            <div style="font-size: 10px;">
+              <p style="margin: 2px 0;">☐ Fuel Level OK</p>
+              <p style="margin: 2px 0;">☐ Vehicle Inspection</p>
+              <p style="margin: 2px 0;">☐ All Orders Loaded</p>
+              <p style="margin: 2px 0;">☐ Route Reviewed</p>
+            </div>
+          </div>
+
+          <div style="border: 1px solid #333; padding: 8px; border-radius: 4px;">
+            <h3 style="margin: 0 0 8px 0; font-size: 12px;">Route Completion</h3>
+            <div style="font-size: 10px;">
+              <p style="margin: 2px 0;"><strong>Start:</strong> _________ <strong>End:</strong> _________</p>
+              <p style="margin: 2px 0;"><strong>KM:</strong> _________ <strong>Fuel:</strong> _________</p>
+              <p style="margin: 8px 0 2px 0;"><strong>Driver Signature:</strong></p>
+              <div style="border-bottom: 1px solid #333; height: 20px; margin-top: 4px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Notes -->
+        <div style="margin-top: 15px; font-size: 9px; color: #666; border-top: 1px solid #ddd; padding-top: 8px;">
+          <p style="margin: 0;"><strong>Notes:</strong> Contact customer if not available. Mark items as delivered only after customer confirmation. Return undelivered items to warehouse.</p>
         </div>
       </div>
     `;
 
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write(printContent);
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Route Sheet - ${route.driver_name} - ${route.route_date}</title>
+            <meta charset="utf-8">
+            <style>
+              @media print {
+                body { margin: 5px; font-size: 10px; }
+                @page { margin: 0.5in; }
+                table { page-break-inside: avoid; }
+              }
+              @media screen {
+                body { background: #fff; max-width: 8.5in; margin: 0 auto; padding: 20px; }
+              }
+            </style>
+          </head>
+          <body>
+            ${printContent}
+          </body>
+        </html>
+      `);
       printWindow.document.close();
       printWindow.print();
     }
@@ -543,6 +1073,15 @@ export default function RouteManagement() {
     if (filterByDeliveryMethod === 'all') return true;
     return order.delivery_method === filterByDeliveryMethod;
   });
+
+  // Get filtered route assignments
+  const activeRoutes = routeAssignments.filter(route =>
+    route.status === 'assigned' || route.status === 'in_progress'
+  );
+
+  const completedRoutes = routeAssignments.filter(route =>
+    route.status === 'completed' || route.status === 'cancelled'
+  );
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-MY', {
@@ -570,96 +1109,230 @@ export default function RouteManagement() {
         </p>
       </div>
 
-      {/* Active Route Assignments */}
-      {routeAssignments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Route className="h-5 w-5" />
-              Active Route Assignments
-            </CardTitle>
-            <CardDescription>
-              Current routes assigned to drivers
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {routeAssignments.map((route) => (
-                <div key={route.id} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-4">
-                        <h4 className="font-medium">{route.driver_name}</h4>
-                        <Badge variant={route.status === 'pending' ? 'secondary' : route.status === 'in_progress' ? 'default' : 'outline'}>
-                          {route.status.replace('_', ' ')}
-                        </Badge>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'routes' | 'history')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="routes" className="flex items-center gap-2">
+            <Route className="h-4 w-4" />
+            Active Routes ({activeRoutes.length})
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2">
+            <History className="h-4 w-4" />
+            History ({completedRoutes.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="routes" className="space-y-6">
+          {/* Active Route Assignments */}
+          {activeRoutes.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Route className="h-5 w-5" />
+                  Active Route Assignments
+                </CardTitle>
+                <CardDescription>
+                  Current routes assigned to drivers
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {activeRoutes.map((route) => (
+                    <div key={route.id} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <Badge variant={route.status === 'assigned' ? 'secondary' : 'default'}>
+                            {route.status.replace('_', ' ').toUpperCase()}
+                          </Badge>
+                          <div>
+                            <div className="font-medium">{route.driver_name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {new Date(route.route_date).toLocaleDateString()} at {route.departure_time}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedRoute(route);
+                              setIsRouteViewDialogOpen(true);
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Route
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => printRoute(route)}
+                          >
+                            <Printer className="h-4 w-4 mr-1" />
+                            Print
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCompleteTrip(route.id)}
+                            className="text-green-600 hover:text-green-700"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Complete
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCancelTrip(route.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          {new Date(route.route_date).toLocaleDateString()}
-                        </span>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <div className="text-muted-foreground">Orders</div>
+                          <div className="font-medium">{route.orders?.length || 0}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Distance</div>
+                          <div className="font-medium">{route.total_distance.toFixed(1)} km</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Duration</div>
+                          <div className="font-medium">{Math.round(route.total_duration)} min</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Efficiency</div>
+                          <div className="font-medium">{route.route_efficiency.toFixed(1)}%</div>
+                        </div>
                       </div>
-                      <div className="flex gap-4 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Package className="h-4 w-4" />
-                          {route.order_ids.length} orders
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Navigation className="h-4 w-4" />
-                          {route.estimated_distance_km.toFixed(1)} km
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-4 w-4" />
-                          {Math.floor(route.estimated_duration_minutes / 60)}h {route.estimated_duration_minutes % 60}m
-                        </span>
-                        {route.route_efficiency && (
-                          <span className="flex items-center gap-1 text-green-600">
-                            <span className="text-xs">⚡</span>
-                            {route.route_efficiency}% efficient
-                          </span>
-                        )}
-                        {route.estimated_fuel_cost && (
-                          <span className="flex items-center gap-1 text-blue-600">
-                            <span className="text-xs">⛽</span>
-                            RM {route.estimated_fuel_cost.toFixed(2)}
-                          </span>
-                        )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-6">
+          {/* Trip History */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Trip History
+              </CardTitle>
+              <CardDescription>
+                Completed and cancelled trips
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {completedRoutes.length === 0 ? (
+                <div className="text-center py-8">
+                  <History className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No trip history yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {completedRoutes.map((route) => (
+                    <div key={route.id} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <Badge variant={route.status === 'completed' ? 'default' : 'destructive'}>
+                            {route.status.replace('_', ' ').toUpperCase()}
+                          </Badge>
+                          <div>
+                            <div className="font-medium">{route.driver_name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {new Date(route.route_date).toLocaleDateString()} at {route.departure_time}
+                            </div>
+                            {route.completed_at && (
+                              <div className="text-sm text-green-600">
+                                Completed: {formatDate(route.completed_at)}
+                              </div>
+                            )}
+                            {route.cancelled_at && (
+                              <div className="text-sm text-red-600">
+                                Cancelled: {formatDate(route.cancelled_at)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedRoute(route);
+                              setIsRouteViewDialogOpen(true);
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Route
+                          </Button>
+                          {route.status === 'cancelled' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                // Re-enable orders for assignment
+                                handleCancelTrip(route.id, 'Restored from history');
+                              }}
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              <RotateCcw className="h-4 w-4 mr-1" />
+                              Restore
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteTrip(route.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
                       </div>
-                      {route.warnings && route.warnings.length > 0 && (
-                        <div className="mt-2 text-xs text-orange-600">
-                          ⚠️ {route.warnings.join(', ')}
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <div className="text-muted-foreground">Orders</div>
+                          <div className="font-medium">{route.orders?.length || 0}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Distance</div>
+                          <div className="font-medium">{route.total_distance.toFixed(1)} km</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Duration</div>
+                          <div className="font-medium">{Math.round(route.total_duration)} min</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Fuel Cost</div>
+                          <div className="font-medium">RM {route.estimated_fuel_cost.toFixed(2)}</div>
+                        </div>
+                      </div>
+
+                      {route.notes && (
+                        <div className="mt-3 p-3 bg-muted rounded text-sm">
+                          <div className="font-medium mb-1">Notes:</div>
+                          {route.notes}
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedRoute(route);
-                          setIsRouteViewDialogOpen(true);
-                        }}
-                      >
-                        <MapIcon className="h-4 w-4 mr-1" />
-                        View Route
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => printRoute(route)}
-                      >
-                        <Printer className="h-4 w-4 mr-1" />
-                        Print
-                      </Button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
 
       {/* Orders Available for Route Assignment */}
       <Card>
@@ -947,7 +1620,7 @@ export default function RouteManagement() {
                     <Navigation className="h-4 w-4" />
                     <span className="font-medium">Distance</span>
                   </div>
-                  <p className="mt-1 font-semibold">{selectedRoute.estimated_distance_km.toFixed(1)} km</p>
+                  <p className="mt-1 font-semibold">{selectedRoute.total_distance?.toFixed(1) || '0.0'} km</p>
                 </div>
                 <div className="bg-orange-50 p-4 rounded-lg">
                   <div className="flex items-center gap-2 text-orange-700">
@@ -955,7 +1628,7 @@ export default function RouteManagement() {
                     <span className="font-medium">Duration</span>
                   </div>
                   <p className="mt-1 font-semibold">
-                    {Math.floor(selectedRoute.estimated_duration_minutes / 60)}h {selectedRoute.estimated_duration_minutes % 60}m
+                    {Math.floor((selectedRoute.total_duration || 0) / 60)}h {(selectedRoute.total_duration || 0) % 60}m
                   </p>
                 </div>
               </div>
@@ -1006,16 +1679,16 @@ export default function RouteManagement() {
                     </div>
 
                     {/* Route Steps */}
-                    {selectedRoute.optimized_route?.map((stop: any, index: number) => (
+                    {selectedRoute.stops?.map((stop: any, index: number) => (
                       <div key={index}>
                         {/* Travel Arrow */}
                         <div className="flex items-center gap-4 ml-4">
                           <div className="flex-1 border-l-2 border-dashed border-gray-300 pl-8 py-2">
                             <div className="flex items-center gap-2 text-sm text-gray-600">
                               <span>🚗</span>
-                              <span>{stop.estimatedDistance?.toFixed(1) || 'X.X'} km</span>
+                              <span>{stop.estimated_distance?.toFixed(1) || 'X.X'} km</span>
                               <span>•</span>
-                              <span>{stop.estimatedTravelTime || 'XX'} min</span>
+                              <span>{stop.estimated_travel_time || 'XX'} min</span>
                               <span>•</span>
                               <span className="text-blue-600">Traffic-aware route</span>
                             </div>
@@ -1032,18 +1705,28 @@ export default function RouteManagement() {
                               <div className="flex justify-between items-start mb-2">
                                 <div>
                                   <p className="font-medium text-blue-800">
-                                    STOP #{index + 1} - {stop.location?.address?.substring(0, 40)}...
+                                    STOP #{index + 1} - {stop.location_address?.substring(0, 50)}
                                   </p>
-                                  <p className="text-sm text-blue-600 mt-1">
-                                    {stop.location?.totalOrders} orders • {stop.location?.customerNames?.join(', ') || 'Multiple customers'}
-                                  </p>
-                                  <p className="text-xs text-blue-500 mt-1">
-                                    Orders: {stop.location?.orders?.map(order => order.orderNumber || order.orderId || 'Unknown').filter(Boolean).join(', ') || 'N/A'}
-                                  </p>
+                                  {(() => {
+                                    // Get orders for this stop
+                                    const stopOrders = selectedRoute.orders?.filter(order => order.route_stop_id === stop.id) || [];
+                                    const customerNames = [...new Set(stopOrders.map(order => order.customer_name))];
+
+                                    return (
+                                      <>
+                                        <p className="text-sm text-blue-600 mt-1">
+                                          {stopOrders.length} order{stopOrders.length !== 1 ? 's' : ''} • {customerNames.slice(0, 2).join(', ')}{customerNames.length > 2 ? ` +${customerNames.length - 2} more` : ''}
+                                        </p>
+                                        <p className="text-xs text-blue-500 mt-1">
+                                          Orders: {stopOrders.map(order => order.order_number).join(', ') || 'No orders'}
+                                        </p>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                                 <div className="text-right">
                                   <p className="text-sm font-medium text-blue-700">
-                                    🕐 {stop.estimatedArrivalTime || stop.estimatedArrival}
+                                    🕐 {stop.estimated_arrival_time ? new Date(stop.estimated_arrival_time).toLocaleTimeString() : 'TBD'}
                                   </p>
                                   <p className="text-xs text-blue-500">
                                     ⏱️ Service: {(stop.location?.totalOrders || 1) * 10} min
@@ -1055,19 +1738,19 @@ export default function RouteManagement() {
                                 <div className="text-center">
                                   <p className="text-xs text-blue-500">Distance</p>
                                   <p className="font-bold text-blue-700">
-                                    {stop.estimatedDistance?.toFixed(1) || 'X.X'} km
+                                    {stop.estimated_distance?.toFixed(1) || 'X.X'} km
                                   </p>
                                 </div>
                                 <div className="text-center">
                                   <p className="text-xs text-blue-500">Travel Time</p>
                                   <p className="font-bold text-blue-700">
-                                    {stop.estimatedTravelTime || 'XX'} min
+                                    {stop.estimated_travel_time || 'XX'} min
                                   </p>
                                 </div>
                                 <div className="text-center">
                                   <p className="text-xs text-blue-500">Cumulative</p>
                                   <p className="font-bold text-blue-700">
-                                    {stop.cumulativeDistance?.toFixed(1) || 'X.X'} km
+                                    {stop.cumulative_distance?.toFixed(1) || '0.0'} km
                                   </p>
                                 </div>
                               </div>
@@ -1083,7 +1766,7 @@ export default function RouteManagement() {
                     )}
 
                     {/* Return Journey */}
-                    {selectedRoute.optimized_route && selectedRoute.optimized_route.length > 0 && (
+                    {selectedRoute.stops && selectedRoute.stops.length > 0 && (
                       <>
                         {/* Final Travel Arrow */}
                         <div className="flex items-center gap-4 ml-4">
@@ -1106,7 +1789,7 @@ export default function RouteManagement() {
                             <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                               <p className="font-medium text-green-800">END - Return to Warehouse</p>
                               <p className="text-sm text-green-600 mt-1">
-                                Route completed • Total: {selectedRoute.estimated_distance_km.toFixed(1)} km, {Math.floor(selectedRoute.estimated_duration_minutes / 60)}h {selectedRoute.estimated_duration_minutes % 60}m
+                                Route completed • Total: {selectedRoute.total_distance?.toFixed(1) || '0.0'} km, {Math.floor((selectedRoute.total_duration || 0) / 60)}h {(selectedRoute.total_duration || 0) % 60}m
                               </p>
                             </div>
                           </div>
@@ -1115,103 +1798,152 @@ export default function RouteManagement() {
                     )}
                   </div>
 
-                  {/* Optimization Evidence */}
-                  <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <h5 className="font-medium text-yellow-800 mb-2">🧠 Optimization Evidence & Analysis</h5>
-                    <div className="text-sm text-yellow-700 space-y-1">
-                      <p>• <strong>Method:</strong> {selectedRoute.optimization_method || 'Route Optimization Algorithm'}</p>
-                      <p>• <strong>Efficiency:</strong> {selectedRoute.route_efficiency}% improvement vs basic routing</p>
-                      <p>• <strong>Address Consolidation:</strong> {selectedRoute.order_ids.length} orders → {selectedRoute.optimized_route?.length || selectedRoute.order_ids.length} unique stops</p>
-                      <p>• <strong>Traffic Analysis:</strong> Real-time traffic data for accurate timing</p>
-                      <p>• <strong>Fuel Cost:</strong> Estimated RM {selectedRoute.estimated_fuel_cost?.toFixed(2)} total</p>
-                      {selectedRoute.warnings && selectedRoute.warnings.length > 0 && (
-                        <div className="mt-2">
-                          <p className="font-medium">⚠️ Route Warnings:</p>
-                          <ul className="ml-4 list-disc">
-                            {selectedRoute.warnings.map((warning, idx) => (
-                              <li key={idx}>{warning}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
                 </div>
 
                 {/* Order Details Table */}
                 <div>
                   <h5 className="font-medium mb-3 text-gray-700">📋 Location-Based Delivery Summary</h5>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Stop #</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Orders</TableHead>
-                        <TableHead>Customer(s)</TableHead>
-                        <TableHead>Address</TableHead>
-                        <TableHead>Total Items</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedRoute.optimized_route?.map((stop, index) => (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <Badge variant="outline">{index + 1}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">
-                              {stop.location?.address?.substring(0, 30)}...
+                  <div className="space-y-3">
+                    {selectedRoute.stops?.map((stop, stopIndex) => {
+                      // Get orders for this stop from the database
+                      const stopOrders = selectedRoute.orders?.filter(order => order.route_stop_id === stop.id) || [];
+                      const stopId = `stop-${stop.id}`;
+                      const isExpanded = expandedOrders.has(stopId);
+
+                      return (
+                        <div key={stopIndex} className="border rounded-lg">
+                          {/* Stop Header */}
+                          <div
+                            className="p-4 bg-gray-50 border-b cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              const newExpanded = new Set(expandedOrders);
+                              if (isExpanded) {
+                                newExpanded.delete(stopId);
+                              } else {
+                                newExpanded.add(stopId);
+                              }
+                              setExpandedOrders(newExpanded);
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <Badge variant="outline" className="font-bold">
+                                  Stop #{stopIndex + 1}
+                                </Badge>
+                                <div>
+                                  <p className="font-medium text-gray-900">
+                                    {stop.location_address?.substring(0, 60)}{stop.location_address && stop.location_address.length > 60 ? '...' : ''}
+                                  </p>
+                                  <p className="text-sm text-gray-600">
+                                    {stopOrders.length} order{stopOrders.length !== 1 ? 's' : ''} • {[...new Set(stopOrders.map(o => o.customer_name))].join(', ')}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Badge variant="secondary">
+                                  {stopOrders.reduce((total, order) => {
+                                    return total + (order.order_details?.order_items?.length || 0);
+                                  }, 0)} items
+                                </Badge>
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 text-gray-500" />
+                                )}
+                              </div>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              {stop.location?.orders?.map((order, orderIndex) => {
-                                const orderNum = order.orderNumber || order.orderId || 'Unknown';
-                                const foundOrder = orders.find(o => o.order_no === orderNum);
-                                return (
-                                  <div key={orderIndex} className="text-sm">
-                                    <Badge variant="secondary" className="mr-1">
-                                      {orderNum}
-                                    </Badge>
-                                    <span className="text-xs text-muted-foreground">
-                                      ({foundOrder?.order_items?.length || 0} items)
-                                    </span>
-                                  </div>
-                                );
-                              }) || (
-                                <span className="text-xs text-muted-foreground">No order details</span>
-                              )}
+                          </div>
+
+                          {/* Expanded Order Details */}
+                          {isExpanded && (
+                            <div className="p-4">
+                              <div className="space-y-3">
+                                {stopOrders.map((routeOrder, orderIndex) => {
+                                  const fullOrder = routeOrder.order_details;
+                                  const orderId = `order-${routeOrder.id}`;
+                                  const isOrderExpanded = expandedOrders.has(orderId);
+
+                                  return (
+                                    <div key={orderIndex} className="border rounded bg-white">
+                                      {/* Order Header */}
+                                      <div
+                                        className="p-3 bg-blue-50 border-b cursor-pointer hover:bg-blue-100"
+                                        onClick={() => {
+                                          const newExpanded = new Set(expandedOrders);
+                                          if (isOrderExpanded) {
+                                            newExpanded.delete(orderId);
+                                          } else {
+                                            newExpanded.add(orderId);
+                                          }
+                                          setExpandedOrders(newExpanded);
+                                        }}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center space-x-3">
+                                            <Badge variant="default" className="font-bold">
+                                              {routeOrder.order_number}
+                                            </Badge>
+                                            <div>
+                                              <p className="font-medium text-gray-900">
+                                                {routeOrder.customer_name}
+                                              </p>
+                                              <p className="text-sm text-gray-600">
+                                                {routeOrder.customer_phone || 'No phone'} • Status: {routeOrder.delivery_status}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <Badge variant="outline">
+                                              {fullOrder?.order_items?.length || 0} items
+                                            </Badge>
+                                            {isOrderExpanded ? (
+                                              <ChevronDown className="h-4 w-4 text-blue-600" />
+                                            ) : (
+                                              <ChevronRight className="h-4 w-4 text-blue-600" />
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Order Items Details */}
+                                      {isOrderExpanded && fullOrder?.order_items && (
+                                        <div className="p-3">
+                                          <h6 className="font-medium text-gray-800 mb-2">Order Items:</h6>
+                                          <div className="space-y-2">
+                                            {fullOrder.order_items.map((item, itemIndex) => (
+                                              <div key={itemIndex} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                                                <div>
+                                                  <p className="font-medium text-sm">{item.component_name}</p>
+                                                  <p className="text-xs text-gray-600">SKU: {item.component_sku}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                  <p className="font-medium text-sm">Qty: {item.quantity}</p>
+                                                  <p className="text-xs text-gray-600">RM {item.unit_price}</p>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                          <div className="mt-3 pt-2 border-t">
+                                            <p className="font-bold text-right">
+                                              Total: RM {fullOrder.total?.toFixed(2) || '0.00'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {stop.location?.customerNames?.join(', ') || 'N/A'}
-                            </div>
-                          </TableCell>
-                          <TableCell className="max-w-xs">
-                            <div className="truncate text-sm">
-                              {stop.location?.address || 'Address not available'}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {stop.location?.orders?.reduce((total, order) => {
-                                const orderNum = order.orderNumber || order.orderId || '';
-                                const foundOrder = orders.find(o => o.order_no === orderNum);
-                                return total + (foundOrder?.order_items?.length || 0);
-                              }, 0) || 0} items
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      )) || (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground">
-                            No optimized route data available
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                          )}
+                        </div>
+                      );
+                    }) || (
+                      <div className="text-center text-muted-foreground py-8">
+                        No route stops available
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
