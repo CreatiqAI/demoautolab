@@ -136,11 +136,7 @@ export default function Settings() {
   const [categoryForm, setCategoryForm] = useState({
     name: '',
     description: '',
-    slug: '',
-    image_url: '',
-    active: true,
-    sort_order: 0,
-    parent_id: null as string | null
+    active: true
   });
 
   useEffect(() => {
@@ -202,10 +198,22 @@ export default function Settings() {
     try {
       setLoading(true);
 
-      // Prepare form data with proper parent_id conversion
+      // Generate a URL-friendly slug from the name
+      const slug = categoryForm.name.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single
+        .trim();
+
+      // Prepare simplified form data
       const formData = {
-        ...categoryForm,
-        parent_id: categoryForm.parent_id === 'no-parent' ? null : categoryForm.parent_id
+        name: categoryForm.name,
+        description: categoryForm.description || null,
+        slug: slug,
+        active: categoryForm.active,
+        image_url: null,
+        sort_order: 0,
+        parent_id: null
       };
 
       if (editingCategory) {
@@ -247,11 +255,7 @@ export default function Settings() {
     setCategoryForm({
       name: category.name,
       description: category.description || '',
-      slug: category.slug,
-      image_url: category.image_url || '',
-      active: category.active,
-      sort_order: category.sort_order,
-      parent_id: category.parent_id
+      active: category.active
     });
     setEditingCategory(category);
     setIsCategoryDialogOpen(true);
@@ -286,11 +290,7 @@ export default function Settings() {
     setCategoryForm({
       name: '',
       description: '',
-      slug: '',
-      image_url: '',
-      active: true,
-      sort_order: 0,
-      parent_id: null
+      active: true
     });
     setEditingCategory(null);
   };
@@ -808,78 +808,37 @@ export default function Settings() {
 
                     <form onSubmit={handleCategorySubmit} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="name">Name *</Label>
+                        <Label htmlFor="name">Category Name *</Label>
                         <Input
                           id="name"
                           value={categoryForm.name}
                           onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+                          placeholder="e.g., Engine Parts, Suspension, Brakes"
                           required
                         />
+                        <p className="text-sm text-muted-foreground">
+                          URL will be auto-generated from the category name
+                        </p>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="slug">URL Slug *</Label>
-                        <Input
-                          id="slug"
-                          value={categoryForm.slug}
-                          onChange={(e) => setCategoryForm({...categoryForm, slug: e.target.value})}
-                          placeholder="category-url-slug"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="description">Description</Label>
-                        <Input
+                        <Label htmlFor="description">Description (Optional)</Label>
+                        <Textarea
                           id="description"
                           value={categoryForm.description}
                           onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
+                          placeholder="Brief description of this category"
+                          rows={2}
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="image_url">Image URL</Label>
-                        <Input
-                          id="image_url"
-                          value={categoryForm.image_url}
-                          onChange={(e) => setCategoryForm({...categoryForm, image_url: e.target.value})}
-                          placeholder="https://example.com/image.jpg"
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="active"
+                          checked={categoryForm.active}
+                          onCheckedChange={(checked) => setCategoryForm({...categoryForm, active: checked})}
                         />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="sort_order">Sort Order</Label>
-                          <Input
-                            id="sort_order"
-                            type="number"
-                            min="0"
-                            value={categoryForm.sort_order}
-                            onChange={(e) => setCategoryForm({...categoryForm, sort_order: parseInt(e.target.value) || 0})}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="parent_id">Parent Category</Label>
-                          <Select
-                            value={categoryForm.parent_id || 'no-parent'}
-                            onValueChange={(value) => setCategoryForm({...categoryForm, parent_id: value === 'no-parent' ? null : value})}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="No parent" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="no-parent">No parent</SelectItem>
-                              {categories
-                                .filter(cat => cat.id !== editingCategory?.id)
-                                .map((category) => (
-                                  <SelectItem key={category.id} value={category.id}>
-                                    {category.name}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <Label htmlFor="active">Active Category</Label>
                       </div>
 
                       <div className="flex justify-end space-x-2">
@@ -910,9 +869,7 @@ export default function Settings() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead>Slug</TableHead>
-                      <TableHead>Parent</TableHead>
-                      <TableHead>Sort Order</TableHead>
+                      <TableHead>Description</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -921,32 +878,22 @@ export default function Settings() {
                   <TableBody>
                     {categories.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8">
+                        <TableCell colSpan={5} className="text-center py-8">
                           No categories yet. Create your first category!
                         </TableCell>
                       </TableRow>
                     ) : (
                       categories.map((category) => {
-                        const parentCategory = categories.find(cat => cat.id === category.parent_id);
                         return (
                           <TableRow key={category.id}>
                             <TableCell>
-                              <div>
-                                <div className="font-medium">{category.name}</div>
-                                {category.description && (
-                                  <div className="text-sm text-muted-foreground">{category.description}</div>
-                                )}
+                              <div className="font-medium">{category.name}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm text-muted-foreground">
+                                {category.description || '—'}
                               </div>
                             </TableCell>
-                            <TableCell>{category.slug}</TableCell>
-                            <TableCell>
-                              {parentCategory ? (
-                                <Badge variant="outline">{parentCategory.name}</Badge>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell>{category.sort_order}</TableCell>
                             <TableCell>
                               <Badge variant={category.active ? 'default' : 'secondary'}>
                                 {category.active ? 'Active' : 'Inactive'}
@@ -959,6 +906,7 @@ export default function Settings() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleEditCategory(category)}
+                                  title="Edit Category"
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
@@ -966,6 +914,7 @@ export default function Settings() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleDeleteCategory(category.id)}
+                                  title="Delete Category"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>

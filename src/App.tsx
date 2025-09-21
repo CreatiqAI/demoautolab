@@ -36,6 +36,7 @@ import Customers from './pages/admin/CustomersNew';
 import Settings from './pages/admin/Settings';
 import UserManagement from './pages/admin/UserManagement';
 import OrderVerification from './pages/admin/OrderVerification';
+import RouteManagement from './pages/admin/RouteManagement';
 import WarehouseOperations from './pages/admin/WarehouseOperations';
 import KnowledgeBase from './pages/admin/KnowledgeBase';
 import InventoryAlerts from './pages/admin/InventoryAlerts';
@@ -82,6 +83,7 @@ const App = () => (
               <Route path="orders" element={<Orders />} />
               <Route path="archived-orders" element={<ArchivedOrders />} />
               <Route path="order-verification" element={<OrderVerification />} />
+              <Route path="route-management" element={<RouteManagement />} />
               <Route path="warehouse-operations" element={<WarehouseOperations />} />
               <Route path="inventory-alerts" element={<InventoryAlerts />} />
               <Route path="customers" element={<Customers />} />

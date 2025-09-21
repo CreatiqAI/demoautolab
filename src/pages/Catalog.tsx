@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -8,13 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Filter, ShoppingCart, Eye, Package, Store, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Eye, Package, Store, ChevronLeft, ChevronRight } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import PageTransition from '@/components/PageTransition';
-import { Link } from 'react-router-dom';
-import { usePricing } from '@/hooks/usePricing';
-import { useAuth } from '@/hooks/useAuth';
 
 interface Product {
   id: string;
@@ -41,14 +38,6 @@ interface Product {
   }>;
 }
 
-interface Category {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  is_active: boolean;
-  sort_order: number;
-}
 
 interface ProductCategory {
   id: string;
@@ -69,8 +58,6 @@ const Catalog = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12; // Show 12 items per page on mobile
 
-  const { user } = useAuth();
-  const { customerType, pricingMode, getPriceLabel } = usePricing();
 
   // Handle window resize for mobile detection
   useEffect(() => {
@@ -179,7 +166,7 @@ const Catalog = () => {
     if (categoryFromUrl && categoryFromUrl !== selectedCategory) {
       setSelectedCategory(categoryFromUrl);
     }
-  }, [searchParams]);
+  }, [searchParams, searchTerm, selectedBrand, selectedCategory]);
 
   // Update URL when brand changes
   const handleBrandChange = (brand: string) => {
@@ -225,9 +212,9 @@ const Catalog = () => {
           .from('products_new')
           .select('brand')
           .eq('active', true);
-        
+
         if (!error && data) {
-          const uniqueBrands = [...new Set(data.map(item => item.brand).filter(Boolean))];
+          const uniqueBrands = [...new Set(data.map(item => item.brand).filter(Boolean))] as string[];
           return uniqueBrands.map(brand => ({ id: brand, name: brand }));
         } else {
           console.warn('Brands query failed:', error);
@@ -240,12 +227,30 @@ const Catalog = () => {
     },
   });
 
-  const formatPrice = (amount: number) => {
-    return new Intl.NumberFormat('en-MY', {
-      style: 'currency',
-      currency: 'MYR',
-    }).format(amount);
-  };
+  // Fetch categories
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('id, name, slug, description')
+          .eq('active', true)
+          .order('name', { ascending: true });
+
+        if (!error && data) {
+          return data;
+        } else {
+          console.warn('Categories query failed:', error);
+          return [];
+        }
+      } catch (error) {
+        console.warn('Categories query failed:', error);
+        return [];
+      }
+    },
+  });
+
 
   const getProductStatus = (product: Product) => {
     if (!product.active) return { label: 'Unavailable', variant: 'destructive' as const, available: false };
@@ -282,10 +287,10 @@ const Catalog = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         <Header />
 
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
           {/* Clean Header */}
           <div className="text-center mb-12">
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
@@ -296,54 +301,184 @@ const Catalog = () => {
             </p>
           </div>
 
-          {/* Clean Filters */}
-          <div className="mb-10">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="space-y-4 sm:space-y-0 sm:flex sm:gap-4">
-                {/* Search Input */}
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                  <Input
-                    placeholder="Search products, brands, or parts..."
-                    value={searchTerm}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    className="pl-10 h-11 border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
+          {/* Main Layout with Sidebar */}
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Left Sidebar - Quick Filters */}
+            <div className="lg:w-56 flex-shrink-0">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sticky top-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Filters</h3>
+
+                {/* Categories Section */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                    <Package className="h-4 w-4 mr-2" />
+                    Categories
+                  </h4>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => handleCategoryChange('all')}
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                        selectedCategory === 'all'
+                          ? 'bg-blue-100 text-blue-800 font-medium'
+                          : 'text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      All Categories
+                    </button>
+                    {categories.map((category) => (
+                      <button
+                        key={category.id}
+                        onClick={() => handleCategoryChange(category.id)}
+                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                          selectedCategory === category.id
+                            ? 'bg-blue-100 text-blue-800 font-medium'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {category.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Brand Filter */}
-                <div className="w-full sm:w-48">
-                  <Select value={selectedBrand} onValueChange={handleBrandChange}>
-                    <SelectTrigger className="h-11 border-gray-300">
-                      <Filter className="h-4 w-4 mr-2 text-gray-500" />
-                      <SelectValue placeholder="All Brands" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Brands</SelectItem>
-                      {brands.map((brand) => (
-                        <SelectItem key={brand.id} value={brand.id}>
-                          {brand.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Brands Section */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                    <Store className="h-4 w-4 mr-2" />
+                    Car Brands
+                  </h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    <button
+                      onClick={() => handleBrandChange('all')}
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                        selectedBrand === 'all'
+                          ? 'bg-green-100 text-green-800 font-medium'
+                          : 'text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      All Brands
+                    </button>
+                    {brands.map((brand) => (
+                      <button
+                        key={brand.id}
+                        onClick={() => handleBrandChange(brand.id)}
+                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                          selectedBrand === brand.id
+                            ? 'bg-green-100 text-green-800 font-medium'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {brand.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Stats */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="text-sm text-gray-600">
-                  Found {totalProducts} products
-                  {isMobile && totalProducts > itemsPerPage && (
-                    <span className="ml-4">Page {currentPage} of {totalPages}</span>
-                  )}
-                </div>
+                {/* Clear Filters */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedBrand('all');
+                    setSelectedCategory('all');
+                    setSearchParams(new URLSearchParams());
+                  }}
+                  className="w-full"
+                >
+                  Clear All Filters
+                </Button>
               </div>
             </div>
-          </div>
 
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {/* Main Content */}
+            <div className="flex-1">
+              {/* Search Bar */}
+              <div className="mb-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                    <Input
+                      placeholder="Search products, brands, or parts..."
+                      value={searchTerm}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      className="pl-10 h-11 border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Mobile Filters - Show on small screens */}
+                  <div className="lg:hidden mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex gap-3">
+                      <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                        <SelectTrigger className="flex-1">
+                          <Package className="h-4 w-4 mr-2 text-gray-500" />
+                          <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Categories</SelectItem>
+                          {categories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={selectedBrand} onValueChange={handleBrandChange}>
+                        <SelectTrigger className="flex-1">
+                          <Store className="h-4 w-4 mr-2 text-gray-500" />
+                          <SelectValue placeholder="Brand" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Brands</SelectItem>
+                          {brands.map((brand) => (
+                            <SelectItem key={brand.id} value={brand.id}>
+                              {brand.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Results Stats */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-600">
+                        Found {totalProducts} products
+                        {isMobile && totalProducts > itemsPerPage && (
+                          <span className="ml-4">Page {currentPage} of {totalPages}</span>
+                        )}
+                      </div>
+
+                      {/* Active Filters */}
+                      {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
+                        <div className="hidden lg:flex items-center gap-2 text-xs">
+                          <span className="text-gray-500">Active filters:</span>
+                          {selectedCategory !== 'all' && (
+                            <Badge variant="secondary" className="text-xs">
+                              {categories.find(c => c.id === selectedCategory)?.name}
+                            </Badge>
+                          )}
+                          {selectedBrand !== 'all' && (
+                            <Badge variant="secondary" className="text-xs">
+                              {brands.find(b => b.id === selectedBrand)?.name}
+                            </Badge>
+                          )}
+                          {searchTerm && (
+                            <Badge variant="secondary" className="text-xs">
+                              "{searchTerm}"
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Products Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
             {productsLoading ? (
               Array.from({ length: isMobile ? itemsPerPage : 8 }).map((_, i) => (
                 <Card key={i} className="overflow-hidden">
@@ -367,7 +502,13 @@ const Catalog = () => {
                 </p>
                 <Button
                   variant="outline"
-                  onClick={() => {setSearchTerm(''); setSelectedBrand('all'); setSelectedCategory('all')}}
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedBrand('all');
+                    setSelectedCategory('all');
+                    // Clear URL params
+                    setSearchParams(new URLSearchParams());
+                  }}
                 >
                   Clear Filters
                 </Button>
@@ -412,7 +553,7 @@ const Catalog = () => {
                     </CardHeader>
 
                     {/* Product Info */}
-                    <CardContent className="p-4">
+                    <CardContent className="p-3">
                       <div className="space-y-3">
                         <h3 className="font-semibold text-sm line-clamp-2 leading-tight text-gray-900">
                           {product.name}
@@ -471,49 +612,51 @@ const Catalog = () => {
             )}
           </div>
 
-          {/* Mobile Pagination */}
-          {isMobile && totalPages > 1 && (
-            <div className="mt-8">
-              <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200 p-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-2" />
-                  Previous
-                </Button>
+              {/* Mobile Pagination */}
+              {isMobile && totalPages > 1 && (
+                <div className="mt-8">
+                  <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200 p-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-2" />
+                      Previous
+                    </Button>
 
-                <span className="text-sm text-gray-600">
-                  Page {currentPage} of {totalPages}
-                </span>
+                    <span className="text-sm text-gray-600">
+                      Page {currentPage} of {totalPages}
+                    </span>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-2" />
-                </Button>
-              </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Results Summary */}
+              {totalProducts > 0 && (
+                <div className="text-center mt-8 mb-12">
+                  <p className="text-sm text-gray-600">
+                    {isMobile ? (
+                      `Showing ${startIndex + 1}-${Math.min(endIndex, totalProducts)} of ${totalProducts} products`
+                    ) : (
+                      `Showing ${totalProducts} product${totalProducts !== 1 ? 's' : ''}`
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
-          )}
-
-          {/* Results Summary */}
-          {totalProducts > 0 && (
-            <div className="text-center mt-8">
-              <p className="text-sm text-gray-600">
-                {isMobile ? (
-                  `Showing ${startIndex + 1}-${Math.min(endIndex, totalProducts)} of ${totalProducts} products`
-                ) : (
-                  `Showing ${totalProducts} product${totalProducts !== 1 ? 's' : ''}`
-                )}
-              </p>
-            </div>
-          )}
+          </div>
         </div>
 
         <Footer />

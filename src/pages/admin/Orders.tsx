@@ -54,15 +54,28 @@ interface Order {
 
 // Active order statuses only (COMPLETED orders are shown in Archived Orders page)
 const ORDER_STATUS_OPTIONS = [
+  // Payment-related statuses
+  { value: 'PENDING_PAYMENT', label: 'Pending Payment' },
+  { value: 'PAYMENT_PROCESSING', label: 'Payment Processing' },
+  { value: 'PAYMENT_FAILED', label: 'Payment Failed' },
+  { value: 'PENDING_PAYMENT_VERIFICATION', label: 'Pending Payment Verification' },
+  { value: 'PAYMENT_VERIFIED', label: 'Payment Verified' },
+  { value: 'PAYMENT_REJECTED', label: 'Payment Rejected' },
+
+  // Order processing statuses
   { value: 'PLACED', label: 'Placed' },
+  { value: 'PROCESSING', label: 'Processing' },
   { value: 'PENDING_VERIFICATION', label: 'Pending Verification' },
   { value: 'VERIFIED', label: 'Verified' },
   { value: 'PACKING', label: 'Packing' },
   { value: 'DISPATCHED', label: 'Dispatched' },
   { value: 'DELIVERED', label: 'Delivered' },
+
+  // Final statuses
   { value: 'CANCELLED', label: 'Cancelled' },
   { value: 'REJECTED', label: 'Rejected' },
 ];
+
 
 const PAYMENT_STATE_OPTIONS = [
   { value: 'UNPAID', label: 'Unpaid' },
@@ -110,7 +123,6 @@ export default function Orders() {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching orders...');
 
       // Use direct orders query with proper joins for reliability
       let ordersData: any[] = [];
@@ -171,13 +183,11 @@ export default function Orders() {
               .from('orders')
               .select('*', { count: 'exact', head: true });
 
-            console.log('📊 Orders table count check:', { count, error: countError });
 
             throw new Error('Failed to fetch orders - check database connection and permissions');
           }
         }
       } else {
-        console.log('✅ Successfully fetched orders with items:', ordersWithItems.length, 'orders');
         ordersData = ordersWithItems;
       }
 
@@ -206,16 +216,12 @@ export default function Orders() {
         order_items: order.order_items || []
       }));
 
-      console.log('📊 Orders by status:');
       const statusCounts = transformedOrders.reduce((acc, order) => {
         acc[order.status] = (acc[order.status] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
-      console.table(statusCounts);
 
-      console.log('📋 Total orders fetched:', transformedOrders.length);
       const completedOrders = transformedOrders.filter(o => o.status === 'COMPLETED');
-      console.log('✅ Completed orders (will be filtered out for archive):', completedOrders.length);
 
       setOrders(transformedOrders);
 
@@ -274,11 +280,7 @@ export default function Orders() {
 
     try {
       setLoading(true);
-      console.log('🔄 Attempting to mark order as complete:', {
-        orderId: order.id,
-        orderNo: order.order_no,
-        currentStatus: order.status
-      });
+      // Attempting to mark order as complete
 
       // Update order status to COMPLETED (archived status)
       const { data, error } = await supabase
@@ -298,7 +300,6 @@ export default function Orders() {
 
       // Verify the update worked
       if (data && data.length > 0) {
-        console.log('✅ Order successfully updated:', data[0]);
         toast({
           title: "Order Completed",
           description: `Order #${order.order_no} has been marked as completed and moved to archive.`
@@ -357,7 +358,6 @@ export default function Orders() {
         throw new Error(`Failed to delete order: ${orderError.message}`);
       }
 
-      console.log('✅ Order deleted successfully');
 
       toast({
         title: "Order Deleted Successfully",
@@ -389,7 +389,6 @@ export default function Orders() {
 
     // If this order is completed (archived), exclude it regardless of other filters
     if (!isNotCompleted) {
-      console.log(`🔄 Filtered out completed/archived order: ${order.order_no} (status: ${order.status})`);
       return false;
     }
 
@@ -406,7 +405,6 @@ export default function Orders() {
   });
 
   // Add this debug log to see filtering results
-  console.log(`📋 Orders after filtering: ${filteredOrders.length} / ${orders.length} (excluded ${orders.length - filteredOrders.length} completed/archived orders)`);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-MY', {
@@ -535,21 +533,108 @@ export default function Orders() {
     });
   };
 
-  const getStatusBadgeVariant = (status: string) => {
+
+  const getStatusLabel = (status: string): string => {
+    const statusOption = ORDER_STATUS_OPTIONS.find(option => option.value === status);
+    return statusOption ? statusOption.label : status.toLowerCase().replace(/_/g, ' ');
+  };
+
+
+  const getStatusBadgeStyle = (status: string) => {
+
     switch (status) {
-      case 'COMPLETED':
-        return 'default';
+      // Light green for success states
+      case 'PAYMENT_VERIFIED':
+      case 'VERIFIED':
       case 'DELIVERED':
-        return 'default';
+        console.log('🟢 Green badge for:', status);
+        return {
+          backgroundColor: '#dcfce7', // green-100
+          color: '#166534', // green-800
+          borderColor: '#bbf7d0' // green-200
+        };
+
+      // Light yellow for intermediate states
+      case 'PACKING':
+      case 'PICKING': // Added this status from your logs
+        console.log('🟡 Yellow badge for:', status);
+        return {
+          backgroundColor: '#fefce8', // yellow-100
+          color: '#854d0e', // yellow-800
+          borderColor: '#fef3c7' // yellow-200
+        };
+
+      // Light orange for dispatch states
+      case 'DISPATCHED':
+      case 'WAREHOUSE_ASSIGNED': // Added this status from your logs
+        console.log('🟠 Orange badge for:', status);
+        return {
+          backgroundColor: '#fff7ed', // orange-100
+          color: '#9a3412', // orange-800
+          borderColor: '#fed7aa' // orange-200
+        };
+
+      // Light blue for pending payment states
+      case 'PENDING_PAYMENT':
+      case 'PENDING_PAYMENT_VERIFICATION':
+      case 'PAYMENT_PROCESSING':
+      case 'PENDING_VERIFICATION':
+        return {
+          backgroundColor: '#dbeafe', // blue-100
+          color: '#1e40af', // blue-800
+          borderColor: '#bfdbfe' // blue-200
+        };
+
+      // Light purple for processing states
+      case 'PROCESSING':
+        return {
+          backgroundColor: '#f3e8ff', // violet-100
+          color: '#6b21a8', // violet-800
+          borderColor: '#ddd6fe' // violet-200
+        };
+
+      // Light red for error states
+      case 'PAYMENT_FAILED':
+      case 'PAYMENT_REJECTED':
       case 'CANCELLED':
       case 'REJECTED':
-        return 'destructive';
-      case 'DISPATCHED':
-        return 'secondary';
+        return {
+          backgroundColor: '#fef2f2', // red-100
+          color: '#991b1b', // red-800
+          borderColor: '#fecaca' // red-200
+        };
+
+      // Light gray for initial/archived states
+      case 'PLACED':
+      case 'COMPLETED':
+        console.log('⚫ Gray badge for:', status);
+        return {
+          backgroundColor: '#f3f4f6', // gray-100
+          color: '#1f2937', // gray-800
+          borderColor: '#e5e7eb' // gray-200
+        };
+
       default:
-        return 'outline';
+        return {
+          backgroundColor: '#dbeafe', // blue-100
+          color: '#1e40af', // blue-800
+          borderColor: '#bfdbfe' // blue-200
+        };
     }
   };
+
+  const CustomStatusBadge = ({ status, children }: { status: string; children: React.ReactNode }) => {
+    const style = getStatusBadgeStyle(status);
+    return (
+      <span
+        className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors"
+        style={style}
+      >
+        {children}
+      </span>
+    );
+  };
+
 
   const getPaymentBadgeVariant = (state: string) => {
     switch (state) {
@@ -583,7 +668,7 @@ export default function Orders() {
           <CardDescription>
             View and manage all customer orders
           </CardDescription>
-          
+
           <div className="flex items-center space-x-4">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -594,7 +679,7 @@ export default function Orders() {
                 className="pl-8"
               />
             </div>
-            
+
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Filter by status" />
@@ -610,7 +695,7 @@ export default function Orders() {
             </Select>
           </div>
         </CardHeader>
-        
+
         <CardContent>
           {loading && orders.length === 0 ? (
             <div className="flex items-center justify-center py-8">
@@ -633,8 +718,8 @@ export default function Orders() {
                 {filteredOrders.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8">
-                      {searchTerm || statusFilter !== 'all' 
-                        ? 'No orders found matching your criteria.' 
+                      {searchTerm || statusFilter !== 'all'
+                        ? 'No orders found matching your criteria.'
                         : 'No orders yet.'}
                     </TableCell>
                   </TableRow>
@@ -660,9 +745,9 @@ export default function Orders() {
                         <TableCell>{formatDate(order.created_at)}</TableCell>
                         <TableCell>{formatCurrency(order.total)}</TableCell>
                         <TableCell>
-                          <Badge variant={getStatusBadgeVariant(order.status)}>
-                            {order.status.toLowerCase().replace('_', ' ')}
-                          </Badge>
+                          <CustomStatusBadge status={order.status}>
+                            {getStatusLabel(order.status)}
+                          </CustomStatusBadge>
                         </TableCell>
                         <TableCell>
                           <Badge variant={getPaymentBadgeVariant(order.payment_state)}>
@@ -879,10 +964,12 @@ export default function Orders() {
                   <div className="space-y-2 text-sm">
                     <div><span className="font-medium">Order #:</span> {selectedOrder.order_no}</div>
                     <div><span className="font-medium">Date:</span> {formatDate(selectedOrder.created_at)}</div>
-                    <div><span className="font-medium">Status:</span> 
-                      <Badge className="ml-2" variant={getStatusBadgeVariant(selectedOrder.status)}>
-                        {selectedOrder.status.toLowerCase().replace('_', ' ')}
-                      </Badge>
+                    <div><span className="font-medium">Status:</span>
+                      <span className="ml-2">
+                        <CustomStatusBadge status={selectedOrder.status}>
+                          {getStatusLabel(selectedOrder.status)}
+                        </CustomStatusBadge>
+                      </span>
                     </div>
                     <div><span className="font-medium">Payment:</span> 
                       <Badge className="ml-2" variant={getPaymentBadgeVariant(selectedOrder.payment_state)}>

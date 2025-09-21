@@ -726,8 +726,6 @@ export default function ProductsPro() {
                             <Input
                               id="year_from"
                               type="number"
-                              min="2000"
-                              max="2030"
                               value={formData.year_from}
                               onChange={(e) => setFormData(prev => ({ ...prev, year_from: parseInt(e.target.value) || new Date().getFullYear() }))}
                             />
@@ -737,8 +735,6 @@ export default function ProductsPro() {
                             <Input
                               id="year_to"
                               type="number"
-                              min="2000"
-                              max="2030"
                               value={formData.year_to}
                               onChange={(e) => setFormData(prev => ({ ...prev, year_to: parseInt(e.target.value) || new Date().getFullYear() }))}
                             />

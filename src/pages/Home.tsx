@@ -168,7 +168,7 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      <style jsx>{`
+      <style>{`
         @keyframes fadeInUp {
           from {
             opacity: 0;
@@ -393,66 +393,66 @@ const Home = () => {
                 <div className="flex space-x-12 w-max animate-scroll">
                   {/* Original sequence */}
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=HONDA" alt="Honda" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">HONDA</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=TOYOTA" alt="Toyota" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">TOYOTA</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=NISSAN" alt="Nissan" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">NISSAN</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=MAZDA" alt="Mazda" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">MAZDA</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=PERODUA" alt="Perodua" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">PERODUA</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=PROTON" alt="Proton" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">PROTON</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=BMW" alt="BMW" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">BMW</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=MERCEDES" alt="Mercedes" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">MERCEDES</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=AUDI" alt="Audi" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">AUDI</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=LEXUS" alt="Lexus" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">LEXUS</span>
                   </div>
 
                   {/* Duplicate sequence for seamless loop */}
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=HONDA" alt="Honda" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">HONDA</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=TOYOTA" alt="Toyota" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">TOYOTA</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=NISSAN" alt="Nissan" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">NISSAN</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=MAZDA" alt="Mazda" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">MAZDA</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=PERODUA" alt="Perodua" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">PERODUA</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=PROTON" alt="Proton" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">PROTON</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=BMW" alt="BMW" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">BMW</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=MERCEDES" alt="Mercedes" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">MERCEDES</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=AUDI" alt="Audi" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">AUDI</span>
                   </div>
                   <div className="flex items-center justify-center w-32 h-16 p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20 transition-all duration-300 hover:scale-105">
-                    <img src="https://via.placeholder.com/120x60/FFFFFF/CCCCCC?text=LEXUS" alt="Lexus" className="h-8 object-contain opacity-90" />
+                    <span className="text-white/90 font-bold text-lg tracking-wide">LEXUS</span>
                   </div>
                 </div>
               </div>

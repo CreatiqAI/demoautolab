@@ -12,24 +12,17 @@ import { CustomerTypeManager } from '@/components/admin/CustomerTypeManager';
 
 interface CustomerProfile {
   id: string;
-  user_id: string;
+  user_id: string | null;
   full_name: string;
   phone: string | null;
   email: string | null;
-  customer_type: 'normal' | 'merchant';
-  pricing_type: string;
+  customer_type: string | null;
   date_of_birth: string | null;
   gender: string | null;
   address: any;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  auth_email: string | null;
-  auth_phone: string | null;
-  email_confirmed_at: string | null;
-  phone_confirmed_at: string | null;
-  registered_at: string;
-  last_sign_in_at: string | null;
+  preferences: any;
+  is_active: boolean | null;
+  updated_at: string | null;
 }
 
 export default function Customers() {
@@ -47,16 +40,15 @@ export default function Customers() {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      
-      // Query customer_list view with pricing info directly
+
+      // Query customer_profiles table with all customer data
       const { data, error } = await supabase
-        .from('customer_list')
+        .from('customer_profiles')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      
-      // customer_list view already includes auth data
+
       setCustomers(data || []);
 
     } catch (error: any) {
@@ -77,10 +69,10 @@ export default function Customers() {
       customer.full_name?.toLowerCase().includes(searchLower) ||
       customer.email?.toLowerCase().includes(searchLower) ||
       customer.phone?.toLowerCase().includes(searchLower) ||
-      customer.auth_email?.toLowerCase().includes(searchLower) ||
-      customer.auth_phone?.toLowerCase().includes(searchLower)
+      customer.id?.toLowerCase().includes(searchLower)
     );
   });
+
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
@@ -135,8 +127,8 @@ export default function Customers() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Customer Type</TableHead>
-                  <TableHead>Registration</TableHead>
-                  <TableHead>Last Login</TableHead>
+                  <TableHead>Last Updated</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -166,16 +158,16 @@ export default function Customers() {
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          {(customer.email || customer.auth_email) && (
+                          {customer.email && (
                             <div className="flex items-center gap-1 text-sm">
                               <Mail className="h-3 w-3" />
-                              {customer.email || customer.auth_email}
+                              {customer.email}
                             </div>
                           )}
-                          {(customer.phone || customer.auth_phone) && (
+                          {customer.phone && (
                             <div className="flex items-center gap-1 text-sm">
                               <Phone className="h-3 w-3" />
-                              {customer.phone || customer.auth_phone}
+                              {customer.phone}
                             </div>
                           )}
                         </div>
@@ -189,12 +181,12 @@ export default function Customers() {
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">
                           <Calendar className="h-3 w-3" />
-                          {formatDate(customer.registered_at)}
+                          {formatDate(customer.updated_at)}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          {formatDate(customer.last_sign_in_at)}
+                          {customer.customer_type || 'normal'}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -250,14 +242,14 @@ export default function Customers() {
                   <h4 className="font-semibold mb-3">Contact Information</h4>
                   <div className="space-y-2 text-sm">
                     <div><span className="font-medium">Email:</span> {
-                      selectedCustomer.email || selectedCustomer.auth_email || 'Not provided'
+                      selectedCustomer.email || 'Not provided'
                     }</div>
                     <div><span className="font-medium">Phone:</span> {
-                      selectedCustomer.phone || selectedCustomer.auth_phone || 'Not provided'
+                      selectedCustomer.phone || 'Not provided'
                     }</div>
-                    <div><span className="font-medium">Verified:</span> 
+                    <div><span className="font-medium">Customer Type:</span>
                       <Badge variant="outline" className="ml-2">
-                        {selectedCustomer.email_confirmed_at || selectedCustomer.phone_confirmed_at ? 'Verified' : 'Unverified'}
+                        {selectedCustomer.customer_type || 'normal'}
                       </Badge>
                     </div>
                   </div>
@@ -289,9 +281,9 @@ export default function Customers() {
                 <div>
                   <h4 className="font-semibold mb-3">Account Information</h4>
                   <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Registered:</span> {formatDate(selectedCustomer.registered_at)}</div>
-                    <div><span className="font-medium">Last Login:</span> {formatDate(selectedCustomer.last_sign_in_at)}</div>
-                    <div><span className="font-medium">Status:</span> 
+                    <div><span className="font-medium">Last Updated:</span> {formatDate(selectedCustomer.updated_at)}</div>
+                    <div><span className="font-medium">User ID:</span> {selectedCustomer.user_id || 'Not linked'}</div>
+                    <div><span className="font-medium">Status:</span>
                       <Badge variant={selectedCustomer.is_active ? "default" : "destructive"} className="ml-2">
                         {selectedCustomer.is_active ? 'Active' : 'Inactive'}
                       </Badge>
@@ -304,9 +296,11 @@ export default function Customers() {
                   <div className="space-y-2 text-sm">
                     <div><span className="font-medium">Total Orders:</span> 0</div>
                     <div><span className="font-medium">Total Spent:</span> RM 0.00</div>
-                    <div><span className="font-medium">Customer Since:</span> {
-                      Math.ceil((Date.now() - new Date(selectedCustomer.registered_at).getTime()) / (1000 * 60 * 60 * 24))
-                    } days</div>
+                    <div><span className="font-medium">Profile Created:</span> {
+                      selectedCustomer.updated_at
+                        ? Math.ceil((Date.now() - new Date(selectedCustomer.updated_at).getTime()) / (1000 * 60 * 60 * 24))
+                        : 0
+                    } days ago</div>
                   </div>
                 </div>
               </div>
