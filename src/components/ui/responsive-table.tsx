@@ -83,6 +83,9 @@ interface ResponsiveDataTableProps<T> {
   mobileCardRender?: (item: T, index: number) => React.ReactNode;
   emptyMessage?: string;
   className?: string;
+  onRowClick?: (item: T) => void;
+  expandedRowId?: string | null;
+  expandedRowRender?: (item: T) => React.ReactNode;
 }
 
 export function ResponsiveDataTable<T extends Record<string, any>>({
@@ -90,7 +93,10 @@ export function ResponsiveDataTable<T extends Record<string, any>>({
   columns,
   mobileCardRender,
   emptyMessage = "No data available",
-  className
+  className,
+  onRowClick,
+  expandedRowId,
+  expandedRowRender
 }: ResponsiveDataTableProps<T>) {
   const defaultMobileCard = (item: T, index: number) => (
     <MobileTableCard key={index}>
@@ -138,13 +144,28 @@ export function ResponsiveDataTable<T extends Record<string, any>>({
       </TableHeader>
       <TableBody>
         {data.map((item, index) => (
-          <TableRow key={index}>
-            {columns.map((column) => (
-              <TableCell key={String(column.key)} className={cn(column.className)}>
-                {column.render ? column.render(item) : item[column.key as keyof T]}
-              </TableCell>
-            ))}
-          </TableRow>
+          <React.Fragment key={index}>
+            <TableRow
+              className={cn(
+                onRowClick && "cursor-pointer hover:bg-muted/50",
+                expandedRowId === item.id && "bg-muted/30"
+              )}
+              onClick={() => onRowClick?.(item)}
+            >
+              {columns.map((column) => (
+                <TableCell key={String(column.key)} className={cn(column.className)}>
+                  {column.render ? column.render(item) : item[column.key as keyof T]}
+                </TableCell>
+              ))}
+            </TableRow>
+            {expandedRowId === item.id && expandedRowRender && (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="p-0">
+                  {expandedRowRender(item)}
+                </TableCell>
+              </TableRow>
+            )}
+          </React.Fragment>
         ))}
       </TableBody>
     </ResponsiveTable>

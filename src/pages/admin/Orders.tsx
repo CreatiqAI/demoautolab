@@ -705,6 +705,135 @@ export default function Orders() {
           ) : (
             <ResponsiveDataTable
               data={filteredOrders}
+              onRowClick={(order) => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+              expandedRowId={expandedOrderId}
+              expandedRowRender={(order) => (
+                <div className="px-6 py-4 bg-gray-50 border-t">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Customer Information */}
+                    <div>
+                      <h4 className="font-medium mb-3 text-sm text-gray-900">Customer Information</h4>
+                      <div className="space-y-2 text-sm">
+                        <div><span className="font-medium text-gray-600">Name:</span> <span className="text-gray-900">{order.customer_name}</span></div>
+                        <div><span className="font-medium text-gray-600">Phone:</span> <span className="text-gray-900">{order.customer_phone}</span></div>
+                        {order.customer_email && (
+                          <div><span className="font-medium text-gray-600">Email:</span> <span className="text-gray-900">{order.customer_email}</span></div>
+                        )}
+                        <div><span className="font-medium text-gray-600">Payment Method:</span> <span className="text-gray-900 capitalize">{order.payment_method}</span></div>
+                      </div>
+                    </div>
+
+                    {/* Delivery Information */}
+                    <div>
+                      <h4 className="font-medium mb-3 text-sm text-gray-900">Delivery Information</h4>
+                      <div className="space-y-2 text-sm">
+                        <div><span className="font-medium text-gray-600">Method:</span> <span className="text-gray-900 capitalize">{order.delivery_method}</span></div>
+                        <div><span className="font-medium text-gray-600">Fee:</span> <span className="text-gray-900">{order.delivery_fee === 0 ? 'FREE' : formatCurrency(order.delivery_fee)}</span></div>
+                        {order.delivery_address && typeof order.delivery_address === 'object' && order.delivery_address.address && (
+                          <div>
+                            <span className="font-medium text-gray-600">Address:</span>
+                            <div className="text-gray-900 mt-1 text-xs bg-white p-2 rounded border">
+                              {order.delivery_address.address}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Order Summary */}
+                    <div>
+                      <h4 className="font-medium mb-3 text-sm text-gray-900">Order Summary</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Subtotal:</span>
+                          <span className="text-gray-900">{formatCurrency(order.subtotal)}</span>
+                        </div>
+                        {order.discount > 0 && (
+                          <div className="flex justify-between">
+                            <span className="font-medium text-gray-600">Discount:</span>
+                            <span className="text-red-600">-{formatCurrency(order.discount)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Delivery:</span>
+                          <span className="text-gray-900">{order.delivery_fee === 0 ? 'FREE' : formatCurrency(order.delivery_fee)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">SST (6%):</span>
+                          <span className="text-gray-900">{formatCurrency(order.tax)}</span>
+                        </div>
+                        <div className="flex justify-between font-semibold border-t pt-2">
+                          <span className="text-gray-900">Total:</span>
+                          <span className="text-gray-900">{formatCurrency(order.total)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Order Items */}
+                  {order.order_items && order.order_items.length > 0 && (
+                    <div className="mt-6">
+                      <h4 className="font-medium mb-3 text-sm text-gray-900">Order Items ({order.order_items.length} items)</h4>
+                      <div className="bg-white rounded-lg border overflow-hidden">
+                        <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-100 text-xs font-medium text-gray-600 border-b">
+                          <div className="col-span-1">#</div>
+                          <div className="col-span-2">SKU</div>
+                          <div className="col-span-4">Component Name</div>
+                          <div className="col-span-1 text-center">Qty</div>
+                          <div className="col-span-2 text-right">Unit Price</div>
+                          <div className="col-span-2 text-right">Total</div>
+                        </div>
+                        <div className="divide-y">
+                          {order.order_items.map((item, itemIndex) => (
+                            <div key={item.id} className="grid grid-cols-12 gap-4 px-4 py-3 text-sm">
+                              <div className="col-span-1 text-gray-500">{itemIndex + 1}</div>
+                              <div className="col-span-2">
+                                <code className="text-xs bg-gray-100 px-2 py-1 rounded">{item.component_sku}</code>
+                              </div>
+                              <div className="col-span-4">
+                                <div className="font-medium text-gray-900">{item.component_name}</div>
+                                {item.product_context && (
+                                  <div className="text-xs text-gray-500 mt-1">{item.product_context}</div>
+                                )}
+                              </div>
+                              <div className="col-span-1 text-center text-gray-900">{item.quantity}</div>
+                              <div className="col-span-2 text-right text-gray-900">{formatCurrency(item.unit_price)}</div>
+                              <div className="col-span-2 text-right font-medium text-gray-900">{formatCurrency(item.total_price)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="mt-6 flex justify-end gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        generateInvoice(order);
+                      }}
+                      className="text-blue-700 border-blue-300 hover:bg-blue-100 hover:border-blue-400 hover:text-blue-800"
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Generate Invoice
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkComplete(order);
+                      }}
+                      className="text-green-700 border-green-300 hover:bg-green-100 hover:border-green-400 hover:text-green-800"
+                    >
+                      Mark Complete
+                    </Button>
+                  </div>
+                </div>
+              )}
               columns={[
                 {
                   key: 'order_no',
