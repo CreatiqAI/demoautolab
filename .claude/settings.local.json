@@ -43,7 +43,10 @@
       "Bash(cat:*)",
       "Bash(git reset:*)",
       "Bash(curl:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm run lint)",
+      "Bash(npx eslint:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

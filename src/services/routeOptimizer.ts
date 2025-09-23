@@ -55,6 +55,12 @@ export class RouteOptimizer {
   constructor(openaiApiKey?: string) {
     this.apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     this.openaiApiKey = openaiApiKey;
+    console.log('🏗️ RouteOptimizer created with:', {
+      hasGoogleKey: !!this.apiKey,
+      hasOpenAIKey: !!this.openaiApiKey,
+      openaiKeyLength: this.openaiApiKey?.length || 0,
+      openaiKeyPrefix: this.openaiApiKey?.substring(0, 10) || 'NO KEY'
+    });
     if (!this.apiKey) {
       console.warn('⚠️ Google Maps API key not found. Route optimization will use fallback mode.');
       console.log('💡 To enable AI route optimization:');
@@ -768,6 +774,12 @@ Respond in JSON format:
    * Call OpenAI API for intelligent location-based route optimization
    */
   private async callOpenAIForLocationOptimization(routeData: any): Promise<LocationGroup[]> {
+    console.log('🔍 DEBUG: OpenAI API key check:', {
+      hasKey: !!this.openaiApiKey,
+      keyLength: this.openaiApiKey?.length || 0,
+      keyPrefix: this.openaiApiKey?.substring(0, 10) || 'NO KEY'
+    });
+
     if (!this.openaiApiKey) {
       console.warn('⚠️ OpenAI API key not provided, using basic location ordering');
       return routeData.deliveryLocations.map((loc: any, index: number) => ({
