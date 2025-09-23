@@ -337,7 +337,7 @@ export default function WarehouseOperations() {
       </div>
 
       {/* Status Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
         {STATUS_WORKFLOW.map(({ status }) => (
           <StatusCard key={status} status={status} count={getOrdersByStatus(status).length} />
         ))}
@@ -345,13 +345,47 @@ export default function WarehouseOperations() {
 
       {/* Orders by Status Tabs */}
       <Tabs value={currentTab} onValueChange={(value) => setCurrentTab(value as OrderStatus)} className="w-full">
-        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
+        {/* Desktop Tabs - Hidden on mobile/tablet */}
+        <TabsList className="hidden lg:grid w-full grid-cols-7">
           {STATUS_WORKFLOW.map(({ status, label }) => (
             <TabsTrigger key={status} value={status} className="text-xs">
               {label} ({getOrdersByStatus(status).length})
             </TabsTrigger>
           ))}
         </TabsList>
+
+        {/* Mobile/Tablet Dropdown - Hidden on desktop */}
+        <div className="lg:hidden mb-4">
+          <Label htmlFor="status-select" className="sr-only">Select Status</Label>
+          <Select value={currentTab} onValueChange={(value) => setCurrentTab(value as OrderStatus)}>
+            <SelectTrigger className="w-full">
+              <SelectValue>
+                <div className="flex items-center gap-2">
+                  {React.createElement(getStatusInfo(currentTab).icon, { className: "h-4 w-4" })}
+                  <span className="font-medium">{getStatusInfo(currentTab).label}</span>
+                  <Badge variant="secondary" className="ml-auto">
+                    {getOrdersByStatus(currentTab).length}
+                  </Badge>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_WORKFLOW.map(({ status, label, icon: Icon }) => (
+                <SelectItem key={status} value={status}>
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4" />
+                      <span>{label}</span>
+                    </div>
+                    <Badge variant="secondary" className="ml-2">
+                      {getOrdersByStatus(status).length}
+                    </Badge>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {STATUS_WORKFLOW.map(({ status, label, description }) => (
           <TabsContent key={status} value={status}>
@@ -370,60 +404,277 @@ export default function WarehouseOperations() {
                     <p>No orders in {label.toLowerCase()} status</p>
                   </div>
                 ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Order</TableHead>
-                          <TableHead>Customer</TableHead>
-                          <TableHead>Items</TableHead>
-                          <TableHead>Delivery</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead className="text-center">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {getOrdersByStatus(status).map((order) => (
-                          <React.Fragment key={order.id}>
-                            <TableRow 
-                              className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
-                            >
-                              <TableCell>
-                                <div>
-                                  <p className="font-medium">{order.order_no}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatDate(order.created_at)}
-                                  </p>
-                                </div>
+                  <>
+                    {/* Desktop Table */}
+                    <div className="hidden md:block rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Order</TableHead>
+                            <TableHead>Customer</TableHead>
+                            <TableHead>Items</TableHead>
+                            <TableHead>Delivery</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead className="text-center">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {getOrdersByStatus(status).map((order) => (
+                            <React.Fragment key={order.id}>
+                              <TableRow
+                                className="cursor-pointer hover:bg-muted/50"
+                                onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+                              >
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium">{order.order_no}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatDate(order.created_at)}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium">{order.customer_name}</p>
+                                    <p className="text-sm text-muted-foreground">{order.customer_phone}</p>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <ShoppingCart className="h-4 w-4" />
+                                    {order.order_items.length} items
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <p className="capitalize">{order.delivery_method}</p>
+                                  {order.estimated_delivery_date && (
+                                    <p className="text-xs text-muted-foreground">
+                                      ETA: {formatDate(order.estimated_delivery_date)}
+                                    </p>
+                                  )}
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  {formatCurrency(order.total)}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedOrder(order);
+                                    const validNextStatuses = getValidNextStatuses(order.status as OrderStatus);
+                                    setNewStatus(validNextStatuses[0]?.status || 'PICKING');
+                                  }}
+                                >
+                                  <ArrowRight className="h-4 w-4 mr-1" />
+                                  Process
+                                </Button>
                               </TableCell>
-                              <TableCell>
-                                <div>
-                                  <p className="font-medium">{order.customer_name}</p>
-                                  <p className="text-sm text-muted-foreground">{order.customer_phone}</p>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <ShoppingCart className="h-4 w-4" />
-                                  {order.order_items.length} items
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <p className="capitalize">{order.delivery_method}</p>
-                                {order.estimated_delivery_date && (
-                                  <p className="text-xs text-muted-foreground">
-                                    ETA: {formatDate(order.estimated_delivery_date)}
-                                  </p>
+                            </TableRow>
+                              {expandedOrderId === order.id && (
+                                <TableRow>
+                                  <TableCell colSpan={6} className="bg-muted/30">
+                                    <div className="p-4 space-y-4">
+                                      <div className="grid md:grid-cols-2 gap-4">
+                                        {/* Delivery Address */}
+                                        <div>
+                                          <h4 className="font-medium mb-2 flex items-center gap-2">
+                                            <MapPin className="h-4 w-4" />
+                                            Delivery Address
+                                          </h4>
+                                          {order.delivery_address ? (
+                                            <div className="bg-gray-50 p-3 rounded-md text-sm">
+                                              <p className="font-medium">
+                                                {order.delivery_address.fullName || order.customer_name}
+                                              </p>
+                                              <p className="text-muted-foreground">
+                                                {order.delivery_address.phoneNumber || order.customer_phone}
+                                              </p>
+                                              <div className="mt-2 space-y-1">
+                                                {/* Handle new address format (single address field) */}
+                                                {order.delivery_address.address && (
+                                                  <p className="whitespace-pre-line">{order.delivery_address.address}</p>
+                                                )}
+
+                                                {/* Handle old address format (multiple fields) - for backward compatibility */}
+                                                {order.delivery_address.address_line_1 && (
+                                                  <p>{order.delivery_address.address_line_1}</p>
+                                                )}
+                                                {order.delivery_address.address_line_2 && (
+                                                  <p>{order.delivery_address.address_line_2}</p>
+                                                )}
+                                                {order.delivery_address.city && order.delivery_address.postal_code && (
+                                                  <p>{order.delivery_address.postal_code} {order.delivery_address.city}</p>
+                                                )}
+                                                {order.delivery_address.state && (
+                                                  <p>{order.delivery_address.state}</p>
+                                                )}
+
+                                                {/* Show special delivery notes if available */}
+                                                {order.delivery_address.notes && (
+                                                  <div className="mt-2 pt-2 border-t border-gray-200">
+                                                    <p className="text-xs font-medium text-gray-600">Special Instructions:</p>
+                                                    <p className="text-xs text-gray-700 italic">{order.delivery_address.notes}</p>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <p className="text-sm text-muted-foreground">No address provided</p>
+                                          )}
+                                        </div>
+
+                                        {/* Warehouse Picking List */}
+                                        <div>
+                                          <h4 className="font-medium mb-2 flex items-center gap-2">
+                                            <Package className="h-4 w-4" />
+                                            Picking List ({order.order_items.length} items)
+                                          </h4>
+                                          <div className="space-y-2">
+                                            {order.order_items.map((item) => (
+                                              <div key={item.id} className="bg-white border rounded-lg p-3">
+                                                <div className="flex items-center justify-between">
+                                                  <div className="flex items-center gap-3">
+                                                    <Badge variant="secondary" className="text-lg font-bold px-2 py-1">
+                                                      {item.quantity}
+                                                    </Badge>
+                                                    <div>
+                                                      <p className="font-mono font-bold text-sm text-blue-600">{item.component_sku}</p>
+                                                      <p className="text-sm font-medium">{item.component_name}</p>
+                                                      {item.product_context && (
+                                                        <p className="text-xs text-muted-foreground">For: {item.product_context}</p>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                  <div className="text-right text-sm text-muted-foreground">
+                                                    {formatCurrency(item.unit_price)} each
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Processing Notes */}
+                                      {order.processing_notes && (
+                                        <div>
+                                          <h4 className="font-medium mb-2 flex items-center gap-2">
+                                            <FileText className="h-4 w-4" />
+                                            Processing Notes
+                                          </h4>
+                                          <p className="text-sm text-muted-foreground bg-yellow-50 p-3 rounded-md">{order.processing_notes}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile/Tablet Cards */}
+                    <div className="md:hidden space-y-4">
+                      {getOrdersByStatus(status).map((order) => (
+                        <Card key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}>
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <h3 className="font-semibold text-lg">{order.order_no}</h3>
+                                <p className="text-sm text-muted-foreground">{formatDate(order.created_at)}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-lg">{formatCurrency(order.total)}</p>
+                                <Badge className={`${getStatusInfo(order.status as OrderStatus).color} text-xs`}>
+                                  {getStatusInfo(order.status as OrderStatus).label}
+                                </Badge>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium">{order.customer_name}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm">{order.customer_phone}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm">{order.order_items.length} items</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Truck className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm capitalize">{order.delivery_method}</span>
+                              </div>
+                            </div>
+
+                            {expandedOrderId === order.id && (
+                              <div className="mt-4 pt-4 border-t space-y-4">
+                                {/* Delivery Address for Mobile */}
+                                {order.delivery_address && (
+                                  <div>
+                                    <h4 className="font-medium mb-2 flex items-center gap-2">
+                                      <MapPin className="h-4 w-4" />
+                                      Delivery Address
+                                    </h4>
+                                    <div className="bg-gray-50 p-3 rounded-md text-sm">
+                                      <p className="font-medium">
+                                        {order.delivery_address.fullName || order.customer_name}
+                                      </p>
+                                      <p className="text-muted-foreground">
+                                        {order.delivery_address.phoneNumber || order.customer_phone}
+                                      </p>
+                                      {order.delivery_address.address && (
+                                        <p className="mt-2 whitespace-pre-line">{order.delivery_address.address}</p>
+                                      )}
+                                    </div>
+                                  </div>
                                 )}
-                              </TableCell>
-                              <TableCell className="font-medium">
-                                {formatCurrency(order.total)}
-                              </TableCell>
-                              <TableCell className="text-center">
+
+                                {/* Order Items for Mobile */}
+                                <div>
+                                  <h4 className="font-medium mb-2 flex items-center gap-2">
+                                    <Package className="h-4 w-4" />
+                                    Items ({order.order_items.length})
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {order.order_items.map((item) => (
+                                      <div key={item.id} className="bg-white border rounded-lg p-3">
+                                        <div className="flex justify-between items-start">
+                                          <div className="flex-1">
+                                            <p className="font-mono text-sm font-bold text-blue-600">{item.component_sku}</p>
+                                            <p className="text-sm font-medium">{item.component_name}</p>
+                                            {item.product_context && (
+                                              <p className="text-xs text-muted-foreground">For: {item.product_context}</p>
+                                            )}
+                                          </div>
+                                          <div className="text-right ml-3">
+                                            <Badge variant="secondary" className="text-sm font-bold">
+                                              {item.quantity}
+                                            </Badge>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                              {formatCurrency(item.unit_price)} each
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="mt-4 pt-3 border-t">
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="w-full"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedOrder(order);
@@ -431,114 +682,15 @@ export default function WarehouseOperations() {
                                   setNewStatus(validNextStatuses[0]?.status || 'PICKING');
                                 }}
                               >
-                                <ArrowRight className="h-4 w-4 mr-1" />
-                                Process
+                                <ArrowRight className="h-4 w-4 mr-2" />
+                                Process Order
                               </Button>
-                            </TableCell>
-                          </TableRow>
-                          {expandedOrderId === order.id && (
-                            <TableRow>
-                              <TableCell colSpan={6} className="bg-muted/30">
-                                <div className="p-4 space-y-4">
-                                  <div className="grid md:grid-cols-2 gap-4">
-                                    {/* Delivery Address */}
-                                    <div>
-                                      <h4 className="font-medium mb-2 flex items-center gap-2">
-                                        <MapPin className="h-4 w-4" />
-                                        Delivery Address
-                                      </h4>
-                                      {order.delivery_address ? (
-                                        <div className="bg-gray-50 p-3 rounded-md text-sm">
-                                          <p className="font-medium">
-                                            {order.delivery_address.fullName || order.customer_name}
-                                          </p>
-                                          <p className="text-muted-foreground">
-                                            {order.delivery_address.phoneNumber || order.customer_phone}
-                                          </p>
-                                          <div className="mt-2 space-y-1">
-                                            {/* Handle new address format (single address field) */}
-                                            {order.delivery_address.address && (
-                                              <p className="whitespace-pre-line">{order.delivery_address.address}</p>
-                                            )}
-                                            
-                                            {/* Handle old address format (multiple fields) - for backward compatibility */}
-                                            {order.delivery_address.address_line_1 && (
-                                              <p>{order.delivery_address.address_line_1}</p>
-                                            )}
-                                            {order.delivery_address.address_line_2 && (
-                                              <p>{order.delivery_address.address_line_2}</p>
-                                            )}
-                                            {order.delivery_address.city && order.delivery_address.postal_code && (
-                                              <p>{order.delivery_address.postal_code} {order.delivery_address.city}</p>
-                                            )}
-                                            {order.delivery_address.state && (
-                                              <p>{order.delivery_address.state}</p>
-                                            )}
-                                            
-                                            {/* Show special delivery notes if available */}
-                                            {order.delivery_address.notes && (
-                                              <div className="mt-2 pt-2 border-t border-gray-200">
-                                                <p className="text-xs font-medium text-gray-600">Special Instructions:</p>
-                                                <p className="text-xs text-gray-700 italic">{order.delivery_address.notes}</p>
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <p className="text-sm text-muted-foreground">No address provided</p>
-                                      )}
-                                    </div>
-
-                                    {/* Warehouse Picking List */}
-                                    <div>
-                                      <h4 className="font-medium mb-2 flex items-center gap-2">
-                                        <Package className="h-4 w-4" />
-                                        Picking List ({order.order_items.length} items)
-                                      </h4>
-                                      <div className="space-y-2">
-                                        {order.order_items.map((item) => (
-                                          <div key={item.id} className="bg-white border rounded-lg p-3">
-                                            <div className="flex items-center justify-between">
-                                              <div className="flex items-center gap-3">
-                                                <Badge variant="secondary" className="text-lg font-bold px-2 py-1">
-                                                  {item.quantity}
-                                                </Badge>
-                                                <div>
-                                                  <p className="font-mono font-bold text-sm text-blue-600">{item.component_sku}</p>
-                                                  <p className="text-sm font-medium">{item.component_name}</p>
-                                                  {item.product_context && (
-                                                    <p className="text-xs text-muted-foreground">For: {item.product_context}</p>
-                                                  )}
-                                                </div>
-                                              </div>
-                                              <div className="text-right text-sm text-muted-foreground">
-                                                {formatCurrency(item.unit_price)} each
-                                              </div>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Processing Notes */}
-                                  {order.processing_notes && (
-                                    <div>
-                                      <h4 className="font-medium mb-2 flex items-center gap-2">
-                                        <FileText className="h-4 w-4" />
-                                        Processing Notes
-                                      </h4>
-                                      <p className="text-sm text-muted-foreground bg-yellow-50 p-3 rounded-md">{order.processing_notes}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </React.Fragment>
+                            </div>
+                          </CardContent>
+                        </Card>
                       ))}
-                    </TableBody>
-                  </Table>
+                    </div>
+                  </>
                 </div>
               )}
             </CardContent>
