@@ -691,9 +691,8 @@ export default function WarehouseOperations() {
                       ))}
                     </div>
                   </>
-                </div>
-              )}
-            </CardContent>
+                )}
+              </CardContent>
           </Card>
         </TabsContent>
       ))}
