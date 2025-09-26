@@ -44,6 +44,7 @@ interface ProductFormData {
   slug: string;
   active: boolean;
   featured: boolean;
+  keywords: string[];
   images: Array<{ url: string; is_primary: boolean; alt_text?: string }>;
   selectedComponents: SelectedComponent[];
 }
@@ -95,6 +96,7 @@ export default function ProductsPro() {
     slug: '',
     active: true,
     featured: false,
+    keywords: [],
     images: [],
     selectedComponents: []
   });
@@ -377,7 +379,8 @@ export default function ProductsPro() {
         screen_size: formData.screen_size,
         slug: formData.slug,
         active: formData.active,
-        featured: formData.featured
+        featured: formData.featured,
+        keywords: formData.keywords
       };
 
       let product;
@@ -489,6 +492,7 @@ export default function ProductsPro() {
       slug: '',
       active: true,
       featured: false,
+      keywords: [],
       images: [],
       selectedComponents: []
     });
@@ -545,6 +549,7 @@ export default function ProductsPro() {
         slug: product.slug || '',
         active: product.active ?? true,
         featured: product.featured ?? false,
+        keywords: product.keywords || [],
         images: formattedImages,
         selectedComponents: components
       });
@@ -770,6 +775,51 @@ export default function ProductsPro() {
                         placeholder="Detailed product description..."
                         rows={4}
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="keywords">SEO Keywords (Max 5)</Label>
+                      <div className="space-y-2">
+                        <Input
+                          id="keywords"
+                          placeholder="Enter keyword and press Enter to add"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const keyword = e.currentTarget.value.trim();
+                              if (keyword && formData.keywords.length < 5 && !formData.keywords.includes(keyword)) {
+                                setFormData(prev => ({ ...prev, keywords: [...prev.keywords, keyword] }));
+                                e.currentTarget.value = '';
+                              }
+                            }
+                          }}
+                        />
+                        {formData.keywords.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {formData.keywords.map((keyword, index) => (
+                              <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                                {keyword}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      keywords: prev.keywords.filter((_, i) => i !== index)
+                                    }));
+                                  }}
+                                  className="ml-1 text-xs hover:text-red-500"
+                                  title="Remove keyword"
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Keywords help customers find your product. Press Enter after typing each keyword. {formData.keywords.length}/5 keywords used.
+                        </p>
+                      </div>
                     </div>
 
                     <div className="pt-6 pb-8 border-t">

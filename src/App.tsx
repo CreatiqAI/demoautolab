@@ -26,7 +26,6 @@ import Products from './pages/admin/Products';
 import ProductsAdvanced from './pages/admin/ProductsAdvanced';
 import ProductsEnhanced from './pages/admin/ProductsEnhanced';
 import ProductsEnhancedV2 from './pages/admin/ProductsEnhancedV2';
-import ProductsSimple from './pages/admin/ProductsSimple';
 import ComponentLibrary from './pages/admin/ComponentLibrary';
 import ComponentLibraryPro from './pages/admin/ComponentLibraryPro';
 import ProductsPro from './pages/admin/ProductsPro';
