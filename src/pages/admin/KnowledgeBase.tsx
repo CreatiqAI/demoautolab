@@ -137,7 +137,7 @@ export default function KnowledgeBase() {
 
   const fetchEntries = async () => {
     const { data, error } = await supabase
-      .from('knowledge_base')
+      .from('knowledge_base' as any)
       .select(`
         *,
         kb_documents!source_document_id (
@@ -150,19 +150,19 @@ export default function KnowledgeBase() {
     if (error) {
       throw error;
     }
-    setEntries(data || []);
+    setEntries((data as any) || []);
   };
 
   const fetchDocuments = async () => {
     const { data, error } = await supabase
-      .from('kb_documents')
+      .from('kb_documents' as any)
       .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
       throw error;
     }
-    setDocuments(data || []);
+    setDocuments((data as any) || []);
   };
 
   const checkProcessingStatuses = async () => {
@@ -263,14 +263,14 @@ export default function KnowledgeBase() {
       
       if (editingEntry) {
         const { error } = await supabase
-          .from('knowledge_base')
+          .from('knowledge_base' as any)
           .update({
             title: formData.title,
             content: formData.content,
             category: formData.category,
             tags: tagsArray,
             updated_at: new Date().toISOString()
-          })
+          } as any)
           .eq('id', editingEntry.id);
 
         if (error) throw error;
@@ -281,7 +281,7 @@ export default function KnowledgeBase() {
         });
       } else {
         const { error } = await supabase
-          .from('knowledge_base')
+          .from('knowledge_base' as any)
           .insert({
             title: formData.title,
             content: formData.content,
@@ -290,7 +290,7 @@ export default function KnowledgeBase() {
             source: 'manual',
             ai_generated: false,
             is_approved: true
-          });
+          } as any);
 
         if (error) throw error;
         
@@ -332,7 +332,7 @@ export default function KnowledgeBase() {
   const handleDeleteEntry = async (id: string) => {
     try {
       const { error } = await supabase
-        .from('knowledge_base')
+        .from('knowledge_base' as any)
         .delete()
         .eq('id', id);
 

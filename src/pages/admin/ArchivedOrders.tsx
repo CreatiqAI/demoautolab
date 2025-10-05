@@ -67,7 +67,7 @@ export default function ArchivedOrders() {
 
       // Direct query with order items for completed orders
       const { data: archivedOrdersWithItems, error: archivedError } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .select(`
           *,
           order_items (
@@ -88,7 +88,7 @@ export default function ArchivedOrders() {
 
         // Fallback: Basic completed orders query without items
         const { data: basicData, error: basicError } = await supabase
-          .from('orders')
+          .from('orders' as any)
           .select('*')
           .eq('status', 'COMPLETED')
           .order('updated_at', { ascending: false });
@@ -153,7 +153,7 @@ export default function ArchivedOrders() {
 
       // Update order status to DISPATCHED (active status)
       const { error } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .update({
           status: 'DISPATCHED',
           updated_at: new Date().toISOString()

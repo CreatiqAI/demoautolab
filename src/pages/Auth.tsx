@@ -56,15 +56,41 @@ const Auth = () => {
 
     setLoading(true);
     const normalizedPhone = normalizePhone(loginForm.phone);
-    
+
     const { error } = await signIn(normalizedPhone, loginForm.password);
-    
+
     if (error) {
       toast.error(error.message || 'Failed to sign in');
-    } else {
-      toast.success('Welcome back!');
+      setLoading(false);
+      return;
+    }
+
+    // Check if user is a merchant
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from('customer_profiles' as any)
+          .select('customer_type')
+          .eq('user_id', user.id)
+          .single();
+
+        if ((profile as any)?.customer_type === 'merchant') {
+          toast.success('Welcome back!');
+          navigate('/');
+        } else {
+          toast.success('Welcome back!');
+          navigate('/');
+        }
+      } else {
+        navigate('/');
+      }
+    } catch (err) {
+      console.error('Error checking user type:', err);
       navigate('/');
     }
+
     setLoading(false);
   };
 
@@ -128,19 +154,19 @@ const Auth = () => {
     
     try {
       // Try the admin login function first
-      const { data, error } = await supabase.rpc('admin_login', {
+      const { data, error } = await (supabase.rpc as any)('admin_login', {
         p_username: adminForm.username,
         p_password: adminForm.password
       });
 
-      if (!error && data && data.success) {
-        toast.success(`Welcome back, ${data.admin.username}!`);
+      if (!error && data && (data as any).success) {
+        toast.success(`Welcome back, ${(data as any).admin.username}!`);
         // Store admin session data
-        localStorage.setItem('admin_user', JSON.stringify(data.admin));
+        localStorage.setItem('admin_user', JSON.stringify((data as any).admin));
         // Redirect to admin panel
         navigate('/admin');
       } else if (!error && data) {
-        toast.error(data.message || 'Invalid username or password');
+        toast.error((data as any).message || 'Invalid username or password');
       } else {
         // Fallback: Show message about database setup
         console.warn('Admin login function failed:', error);
@@ -296,6 +322,20 @@ const Auth = () => {
               </TabsContent>
 
               <TabsContent value="signup">
+                {/* Merchant Registration Link */}
+                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <p className="text-sm text-blue-900 dark:text-blue-100">
+                    Are you a business?
+                    <Button
+                      variant="link"
+                      onClick={() => navigate('/merchant-register')}
+                      className="text-blue-600 dark:text-blue-400 p-0 h-auto ml-1"
+                    >
+                      Register as a Merchant
+                    </Button>
+                  </p>
+                </div>
+
                 <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signup-username">Username</Label>

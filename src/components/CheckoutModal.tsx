@@ -12,16 +12,21 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AddressAutocompleteSimple from './AddressAutocompleteSimple';
-import { 
-  Truck, 
-  MapPin, 
-  Car, 
+import {
+  Truck,
+  MapPin,
+  Car,
   Package,
   CreditCard,
   Smartphone,
   Building2,
-  Wallet
+  Wallet,
+  Tag,
+  Check,
+  X,
+  Loader2 as LoaderIcon
 } from 'lucide-react';
 
 interface CartItem {
@@ -143,6 +148,14 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
     notes: ''
   });
 
+  // Voucher state
+  const [voucherCode, setVoucherCode] = useState('');
+  const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [appliedVoucherId, setAppliedVoucherId] = useState<string | null>(null);
+  const [voucherValidationMsg, setVoucherValidationMsg] = useState('');
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
+  const [availableVouchers, setAvailableVouchers] = useState<any[]>([]);
+
   // Fetch customer profile when modal opens
   useEffect(() => {
     const fetchCustomerProfile = async () => {
@@ -161,7 +174,26 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         }
         
         setCustomerProfile(profile);
-        
+
+        // Fetch available vouchers for this customer and order amount
+        if (profile?.id) {
+          try {
+            // Calculate order amount (subtotal + delivery fee)
+            const subtotal = selectedItems.reduce((total, item) => total + (item.normal_price * item.quantity), 0);
+            const deliveryFee = deliveryMethods.find(m => m.id === selectedDelivery)?.price || 0;
+            const orderAmount = subtotal + deliveryFee;
+
+            const { data: vouchers } = await supabase.rpc('get_available_vouchers_for_checkout', {
+              p_customer_id: profile.id,
+              p_order_amount: orderAmount
+            });
+            setAvailableVouchers(vouchers || []);
+          } catch (voucherError) {
+            console.error('Error fetching vouchers:', voucherError);
+            setAvailableVouchers([]);
+          }
+        }
+
         // Reset delivery address
         if (profile) {
           setDeliveryAddress({
@@ -175,7 +207,7 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
     };
     
     fetchCustomerProfile();
-  }, [isOpen, user]);
+  }, [isOpen, user, selectedDelivery]); // Re-fetch vouchers when delivery method changes
 
   const formatPrice = (amount: number) => {
     return new Intl.NumberFormat('en-MY', {
@@ -199,7 +231,8 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
   };
 
   const getTotal = () => {
-    return getSubtotal() + getDeliveryFee() + getTax();
+    const baseTotal = getSubtotal() + getDeliveryFee() + getTax();
+    return baseTotal - voucherDiscount;
   };
 
   const needsDeliveryAddress = selectedDelivery !== 'self-pickup';
@@ -224,6 +257,75 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
       return customerProfile && (customerProfile.phone || customerProfile.phone_e164);
     }
     return deliveryAddress.address.trim().length > 0;
+  };
+
+  // Voucher validation function
+  const handleValidateVoucher = async (code?: string) => {
+    const codeToValidate = code || voucherCode;
+
+    if (!codeToValidate.trim()) {
+      setVoucherValidationMsg('Please select a voucher');
+      return;
+    }
+
+    if (!customerProfile) {
+      setVoucherValidationMsg('Customer profile not loaded');
+      return;
+    }
+
+    setIsValidatingVoucher(true);
+    setVoucherValidationMsg('');
+
+    try {
+      const orderAmount = getSubtotal() + getDeliveryFee() + getTax();
+
+      const { data, error } = await supabase.rpc('validate_voucher', {
+        p_voucher_code: codeToValidate.trim(),
+        p_customer_id: customerProfile.id,
+        p_order_amount: orderAmount
+      });
+
+      if (error) throw error;
+
+      const result = data[0];
+
+      if (result.valid) {
+        setVoucherDiscount(result.discount_amount);
+        setAppliedVoucherId(result.voucher_id);
+        setVoucherValidationMsg(`✓ Voucher applied! You save ${formatPrice(result.discount_amount)}`);
+        toast({
+          title: "Voucher Applied!",
+          description: `You save ${formatPrice(result.discount_amount)}`,
+        });
+      } else {
+        setVoucherDiscount(0);
+        setAppliedVoucherId(null);
+        setVoucherValidationMsg(`✗ ${result.message}`);
+        toast({
+          title: "Invalid Voucher",
+          description: result.message,
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      console.error('Voucher validation error:', error);
+      setVoucherValidationMsg('Error validating voucher');
+      toast({
+        title: "Validation Error",
+        description: "Failed to validate voucher code",
+        variant: "destructive"
+      });
+    } finally {
+      setIsValidatingVoucher(false);
+    }
+  };
+
+  // Remove applied voucher
+  const handleRemoveVoucher = () => {
+    setVoucherCode('');
+    setVoucherDiscount(0);
+    setAppliedVoucherId(null);
+    setVoucherValidationMsg('');
   };
 
   const handlePlaceOrder = async () => {
@@ -282,7 +384,10 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         discount: 0,
         shipping_fee: deliveryFee,
         total: total,
-        status: 'PENDING_PAYMENT'
+        status: 'PENDING_PAYMENT',
+        voucher_id: appliedVoucherId,
+        voucher_code: voucherCode || null,
+        voucher_discount: voucherDiscount
       };
 
       // Prepare order items - the SQL function will look up component_id by SKU
@@ -312,7 +417,26 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
       // Success! Order created, now redirect to payment gateway
       const orderNumber = orderResult?.order_number || 'N/A';
       const orderId = orderResult?.order_id;
-      
+
+      // Apply voucher if one was used
+      if (appliedVoucherId && voucherCode && voucherDiscount > 0) {
+        try {
+          const { error: voucherError } = await supabase.rpc('apply_voucher_to_order', {
+            p_order_id: orderId,
+            p_voucher_code: voucherCode,
+            p_customer_id: customerProfile.id,
+            p_order_amount: subtotal + deliveryFee + tax,
+            p_discount_amount: voucherDiscount
+          });
+
+          if (voucherError) {
+            console.error('Error applying voucher:', voucherError);
+          }
+        } catch (voucherErr) {
+          console.error('Voucher application failed:', voucherErr);
+        }
+      }
+
       toast({
         title: "Order Created!",
         description: `Your order ${orderNumber} has been created. Please complete payment to confirm your order.`
@@ -537,6 +661,89 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
               </CardContent>
             </Card>
 
+            {/* Voucher Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Tag className="h-5 w-5" />
+                  Apply Voucher
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!appliedVoucherId ? (
+                  <>
+                    {availableVouchers.length > 0 ? (
+                      <>
+                        <Select
+                          value={voucherCode}
+                          onValueChange={(value) => {
+                            setVoucherCode(value);
+                            // Auto-validate immediately with the selected code
+                            handleValidateVoucher(value);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a voucher to apply" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableVouchers.map((voucher) => (
+                              <SelectItem key={voucher.id} value={voucher.code}>
+                                <div className="flex items-center justify-between gap-4 w-full">
+                                  <div>
+                                    <span className="font-medium">{voucher.code}</span>
+                                    <span className="text-xs text-muted-foreground ml-2">
+                                      {voucher.discount_type === 'PERCENTAGE'
+                                        ? `${voucher.discount_value}% OFF`
+                                        : `RM ${voucher.discount_value} OFF`}
+                                    </span>
+                                  </div>
+                                  {voucher.min_purchase_amount > 0 && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Min RM {voucher.min_purchase_amount}
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {voucherValidationMsg && (
+                          <p className={`text-sm ${voucherValidationMsg.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>
+                            {voucherValidationMsg}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No vouchers available for this order
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-600" />
+                        <span className="font-medium text-green-800">Voucher Applied</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveVoucher}
+                        className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-green-700">Code: <Badge variant="outline" className="ml-1">{voucherCode}</Badge></span>
+                      <span className="text-sm font-medium text-green-800">-{formatPrice(voucherDiscount)}</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Order Total */}
             <Card>
               <CardHeader>
@@ -555,6 +762,16 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
                   <span>SST (6%)</span>
                   <span className="font-medium">{formatPrice(getTax())}</span>
                 </div>
+
+                {voucherDiscount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span className="flex items-center gap-1">
+                      <Tag className="h-3 w-3" />
+                      Voucher Discount
+                    </span>
+                    <span className="font-medium">-{formatPrice(voucherDiscount)}</span>
+                  </div>
+                )}
 
                 <Separator />
 

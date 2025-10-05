@@ -19,7 +19,8 @@ import {
   BookOpen,
   Bell,
   Archive,
-  Route
+  Tag,
+  Crown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -31,9 +32,10 @@ const navigation = [
   { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
   { name: 'Order Verification', href: '/admin/order-verification', icon: CheckCircle },
   { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
-  { name: 'Route Management', href: '/admin/route-management', icon: Route },
   { name: 'Archived Orders', href: '/admin/archived-orders', icon: Archive },
   { name: 'Customers', href: '/admin/customers', icon: Users },
+  { name: 'Vouchers', href: '/admin/vouchers', icon: Tag },
+  { name: 'Premium Partners', href: '/admin/premium-partners', icon: Crown },
   { name: 'Staff Management', href: '/admin/users', icon: UserCog },
   { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
   { name: 'Settings', href: '/admin/settings', icon: Settings },

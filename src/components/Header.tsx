@@ -1,29 +1,31 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { 
-  Search, 
-  ShoppingCart, 
-  User, 
-  Menu, 
-  Car, 
+import {
+  ShoppingCart,
+  User,
+  Menu,
+  Car,
   Phone,
   MapPin,
-  LogOut
+  LogOut,
+  Tag,
+  Crown
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCartDB';
 import ProfileModal from './ProfileModal';
+import { supabase } from '@/lib/supabase';
 
 const Header = () => {
   const { user, signOut } = useAuth();
   const { getTotalItems } = useCart();
   const navigate = useNavigate();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isMerchant, setIsMerchant] = useState<boolean | null>(null); // null = loading, true/false = loaded
 
   const handleLogoClick = () => {
     navigate('/');
@@ -33,6 +35,41 @@ const Header = () => {
     await signOut();
     navigate('/');
   };
+
+  // Check if user is a merchant - optimized to prevent flickering
+  useEffect(() => {
+    const checkMerchantStatus = async () => {
+      if (!user) {
+        setIsMerchant(false);
+        return;
+      }
+
+      // Check localStorage cache first to prevent flickering
+      const cachedStatus = localStorage.getItem(`merchant_status_${user.id}`);
+      if (cachedStatus !== null) {
+        setIsMerchant(cachedStatus === 'true');
+      }
+
+      try {
+        const { data: profile } = await supabase
+          .from('customer_profiles')
+          .select('customer_type')
+          .eq('user_id', user.id)
+          .single();
+
+        const isMerchantUser = profile?.customer_type === 'merchant';
+        setIsMerchant(isMerchantUser);
+
+        // Cache the result
+        localStorage.setItem(`merchant_status_${user.id}`, String(isMerchantUser));
+      } catch (error) {
+        console.error('Error checking merchant status:', error);
+        setIsMerchant(false);
+      }
+    };
+
+    checkMerchantStatus();
+  }, [user]);
 
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
@@ -64,7 +101,7 @@ const Header = () => {
 
       {/* Main header */}
       <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-8 lg:gap-12">
           {/* Logo - Updated name and made clickable */}
           <div onClick={handleLogoClick} className="flex items-center gap-2 sm:gap-3 group cursor-pointer">
             <div className="p-1.5 sm:p-2 bg-gradient-hero rounded-lg transition-smooth">
@@ -77,30 +114,37 @@ const Header = () => {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-6 lg:gap-8">
-            <Link to="/catalog" className="text-foreground hover:text-primary transition-fast font-medium text-sm lg:text-base">
+          <nav className="hidden md:flex items-center gap-8 lg:gap-10">
+            <Link to="/catalog" className="text-foreground hover:text-primary transition-fast font-medium text-sm lg:text-base whitespace-nowrap">
               Catalog
             </Link>
+            <Link to="/find-shops" className="text-foreground hover:text-primary transition-fast font-medium text-sm lg:text-base whitespace-nowrap">
+              Find Shops
+            </Link>
             {user && (
-              <Link to="/my-orders" className="text-foreground hover:text-primary transition-fast font-medium text-sm lg:text-base">
-                My Orders
-              </Link>
+              <>
+                <Link to="/my-orders" className="text-foreground hover:text-primary transition-fast font-medium text-sm lg:text-base whitespace-nowrap">
+                  My Orders
+                </Link>
+                <Link to="/my-vouchers" className="text-foreground hover:text-primary transition-fast font-medium text-sm lg:text-base flex items-center gap-1.5 whitespace-nowrap">
+                  <Tag className="h-4 w-4" />
+                  My Vouchers
+                </Link>
+                {isMerchant && (
+                  <Link to="/premium-partner" className="text-foreground hover:text-primary transition-fast font-medium text-sm lg:text-base flex items-center gap-1.5 whitespace-nowrap">
+                    <Crown className="h-4 w-4 text-yellow-600" />
+                    Premium Partner
+                  </Link>
+                )}
+              </>
             )}
           </nav>
 
-          {/* Search Bar */}
-          <div className="hidden md:flex items-center flex-1 max-w-lg mx-4 lg:mx-8">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search car parts, brands, models..." 
-                className="pl-10 pr-4 w-full text-sm"
-              />
-            </div>
-          </div>
+          {/* Spacer */}
+          <div className="flex-1"></div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Cart */}
             {user ? (
               <Button variant="ghost" size="icon" className="relative" asChild>
@@ -154,24 +198,30 @@ const Header = () => {
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] sm:w-80">
                 <div className="flex flex-col gap-4 sm:gap-6 mt-4 sm:mt-6">
-                  {/* Mobile Search */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      placeholder="Search parts..." 
-                      className="pl-10 text-sm"
-                    />
-                  </div>
-
                   {/* Mobile Navigation */}
                   <nav className="flex flex-col gap-3 sm:gap-4">
                     <Link to="/catalog" className="text-foreground hover:text-primary transition-fast font-medium py-2 text-base">
                       Catalog
                     </Link>
+                    <Link to="/find-shops" className="text-foreground hover:text-primary transition-fast font-medium py-2 text-base">
+                      Find Shops
+                    </Link>
                     {user && (
-                      <Link to="/my-orders" className="text-foreground hover:text-primary transition-fast font-medium py-2 text-base">
-                        My Orders
-                      </Link>
+                      <>
+                        <Link to="/my-orders" className="text-foreground hover:text-primary transition-fast font-medium py-2 text-base">
+                          My Orders
+                        </Link>
+                        <Link to="/my-vouchers" className="text-foreground hover:text-primary transition-fast font-medium py-2 text-base flex items-center gap-2">
+                          <Tag className="h-4 w-4" />
+                          My Vouchers
+                        </Link>
+                        {isMerchant && (
+                          <Link to="/premium-partner" className="text-foreground hover:text-primary transition-fast font-medium py-2 text-base flex items-center gap-2">
+                            <Crown className="h-4 w-4 text-yellow-600" />
+                            Premium Partner
+                          </Link>
+                        )}
+                      </>
                     )}
                   </nav>
 

@@ -52,8 +52,8 @@ export default function UserManagement() {
       let usersData: any[] = [];
       
       // Try the admin users function first
-      const { data: functionData, error: functionError } = await supabase
-        .rpc('get_admin_users');
+      const { data: functionData, error: functionError } = await (supabase
+        .rpc as any)('get_admin_users');
 
       if (!functionError && functionData) {
         usersData = functionData;
@@ -62,7 +62,7 @@ export default function UserManagement() {
         
         // Fallback: try to query admin profiles directly
         const { data: viewData, error: viewError } = await supabase
-          .from('admin_profiles')
+          .from('admin_profiles' as any)
           .select('*')
           .order('created_at', { ascending: false });
 

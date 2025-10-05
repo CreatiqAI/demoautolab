@@ -14,6 +14,7 @@ import Catalog from './pages/Catalog';
 import ProductDetails from './pages/ProductDetails';
 import Cart from './pages/Cart';
 import MyOrders from './pages/MyOrders';
+import MyVouchers from './pages/MyVouchers';
 import PaymentGateway from './pages/PaymentGateway';
 import NotFound from "./pages/NotFound";
 import CreateAdmin from './pages/CreateAdmin';
@@ -24,22 +25,29 @@ import ProtectedAdminRoute from './components/admin/ProtectedAdminRoute';
 import Dashboard from './pages/admin/Dashboard';
 import Products from './pages/admin/Products';
 import ProductsAdvanced from './pages/admin/ProductsAdvanced';
-import ProductsEnhanced from './pages/admin/ProductsEnhanced';
-import ProductsEnhancedV2 from './pages/admin/ProductsEnhancedV2';
-import ComponentLibrary from './pages/admin/ComponentLibrary';
 import ComponentLibraryPro from './pages/admin/ComponentLibraryPro';
 import ProductsPro from './pages/admin/ProductsPro';
 import Orders from './pages/admin/Orders';
 import ArchivedOrders from './pages/admin/ArchivedOrders';
-import Customers from './pages/admin/CustomersNew';
+import Customers from './pages/admin/Customers';
 import Settings from './pages/admin/Settings';
 import UserManagement from './pages/admin/UserManagement';
 import OrderVerification from './pages/admin/OrderVerification';
-import RouteManagement from './pages/admin/RouteManagement';
 import WarehouseOperations from './pages/admin/WarehouseOperations';
 import KnowledgeBase from './pages/admin/KnowledgeBase';
 import InventoryAlerts from './pages/admin/InventoryAlerts';
+import VoucherManagement from './pages/admin/VoucherManagement';
 import AdminRegister from './pages/AdminRegister';
+import MerchantRegister from './pages/MerchantRegister';
+// Merchant pages - Only accessible by merchant users
+import MerchantWallet from './pages/MerchantWallet';
+import MerchantPromotions from './pages/MerchantPromotions';
+import PremiumPartner from './pages/PremiumPartner';
+// Public pages
+import FindShops from './pages/FindShops';
+import ShopDetails from './pages/ShopDetails';
+// Admin - Premium Partners
+import PremiumPartners from './pages/admin/PremiumPartners';
 import ScrollToTop from './components/ScrollToTop';
 
 const queryClient = new QueryClient();
@@ -53,7 +61,7 @@ const App = () => (
             <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <ScrollToTop />
           <Routes>
             <Route path="/" element={<Home />} />
@@ -61,9 +69,16 @@ const App = () => (
             <Route path="/product/:id" element={<ProductDetails />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/my-orders" element={<MyOrders />} />
+            <Route path="/my-vouchers" element={<MyVouchers />} />
             <Route path="/payment-gateway" element={<PaymentGateway />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/admin-register" element={<AdminRegister />} />
+            <Route path="/merchant-register" element={<MerchantRegister />} />
+            <Route path="/merchant/wallet" element={<MerchantWallet />} />
+            <Route path="/merchant/promotions" element={<MerchantPromotions />} />
+            <Route path="/premium-partner" element={<PremiumPartner />} />
+            <Route path="/find-shops" element={<FindShops />} />
+            <Route path="/shop/:shopId" element={<ShopDetails />} />
             <Route path="/create-admin" element={<CreateAdmin />} />
             <Route path="/create-first-admin" element={<CreateFirstAdmin />} />
             <Route path="/direct-admin-setup" element={<DirectAdminSetup />} />
@@ -82,10 +97,11 @@ const App = () => (
               <Route path="orders" element={<Orders />} />
               <Route path="archived-orders" element={<ArchivedOrders />} />
               <Route path="order-verification" element={<OrderVerification />} />
-              <Route path="route-management" element={<RouteManagement />} />
               <Route path="warehouse-operations" element={<WarehouseOperations />} />
               <Route path="inventory-alerts" element={<InventoryAlerts />} />
               <Route path="customers" element={<Customers />} />
+              <Route path="vouchers" element={<VoucherManagement />} />
+              <Route path="premium-partners" element={<PremiumPartners />} />
               <Route path="knowledge-base" element={<KnowledgeBase />} />
               <Route path="users" element={<UserManagement />} />
               <Route path="settings" element={<Settings />} />

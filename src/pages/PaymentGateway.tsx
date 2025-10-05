@@ -97,19 +97,18 @@ export default function PaymentGateway() {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Try to call payment processing function
-      const { data, error } = await supabase
-        .rpc('process_payment_response', {
-          p_order_id: orderData.orderId,
-          p_payment_success: success,
-          p_gateway_response: {
-            timestamp: new Date().toISOString(),
-            method: orderData.paymentMethod,
-            amount: orderData.total,
-            reference: `PAY-${Date.now()}`,
-            success: success,
-            message: success ? 'Payment processed successfully' : 'Payment processing failed'
-          }
-        });
+      const { error } = await (supabase.rpc as any)('process_payment_response', {
+        p_order_id: orderData.orderId,
+        p_payment_success: success,
+        p_gateway_response: {
+          timestamp: new Date().toISOString(),
+          method: orderData.paymentMethod,
+          amount: orderData.total,
+          reference: `PAY-${Date.now()}`,
+          success: success,
+          message: success ? 'Payment processed successfully' : 'Payment processing failed'
+        }
+      });
 
       // If function doesn't exist, fall back to direct order update
       if (error?.code === '42883') { // Function does not exist

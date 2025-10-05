@@ -3,68 +3,85 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ResponsiveDataTable, MobileTableCard, MobileTableRow } from '@/components/ui/responsive-table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Eye, Search, Edit, MapPin, ChevronDown, Users } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Tables, Enums } from '@/integrations/supabase/types';
+import { CustomerTypeManager } from '@/components/admin/CustomerTypeManager';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 
-type Profile = Tables<'profiles'> & {
-  addresses: Tables<'addresses'>[];
-  orders: Array<{ id: string; order_no: string; total: number; status: string; created_at: string }>;
-};
+interface CustomerProfile {
+  id: string;
+  user_id: string | null;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+  customer_type: string | null;
+  date_of_birth: string | null;
+  gender: string | null;
+  address: any;
+  preferences: any;
+  is_active: boolean | null;
+  updated_at: string | null;
+}
 
-const USER_ROLES: Array<{ value: Enums<'user_role'>; label: string }> = [
-  { value: 'customer', label: 'Customer' },
-  { value: 'merchant', label: 'Merchant' },
-  { value: 'staff', label: 'Staff' },
-  { value: 'admin', label: 'Admin' },
-];
+interface MerchantApplication {
+  id: string;
+  customer_id: string;
+  code_id: string;
+  company_name: string;
+  business_registration_no: string | null;
+  tax_id: string | null;
+  business_type: string;
+  address: string | null;
+  status: string;
+  created_at: string;
+  rejection_reason: string | null;
+  customer_profiles: {
+    full_name: string;
+    phone: string | null;
+    email: string | null;
+  };
+  merchant_codes: {
+    code: string;
+    description: string | null;
+  };
+}
 
 export default function Customers() {
-  const [customers, setCustomers] = useState<Profile[]>([]);
+  const [customers, setCustomers] = useState<CustomerProfile[]>([]);
+  const [applications, setApplications] = useState<MerchantApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [selectedCustomer, setSelectedCustomer] = useState<Profile | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
+  const [selectedApplication, setSelectedApplication] = useState<MerchantApplication | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isApplicationDialogOpen, setIsApplicationDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
   const { toast } = useToast();
-
-  const [editForm, setEditForm] = useState({
-    full_name: '',
-    phone_e164: '',
-    role: '' as Enums<'user_role'>,
-    credit_limit: 0,
-    is_phone_verified: false,
-    whatsapp_opt_in: false
-  });
 
   useEffect(() => {
     fetchCustomers();
+    fetchMerchantApplications();
   }, []);
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
+
+      // Query customer_profiles table with all customer data
       const { data, error } = await supabase
-        .from('profiles')
-        .select(`
-          *,
-          addresses(*),
-          orders(id, order_no, total, status, created_at)
-        `)
-        .order('created_at', { ascending: false });
+        .from('customer_profiles' as any)
+        .select('*')
+        .order('updated_at', { ascending: false});
 
       if (error) throw error;
-      setCustomers(data || []);
-    } catch (error) {
+
+      setCustomers((data as any) || []);
+
+    } catch (error: any) {
       console.error('Error fetching customers:', error);
       toast({
         title: "Error",
@@ -76,66 +93,115 @@ export default function Customers() {
     }
   };
 
-  const handleQuickRoleChange = async (customerId: string, newRole: Enums<'user_role'>) => {
-    setLoading(true);
+  const fetchMerchantApplications = async () => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', customerId);
+      // Fetch merchant registrations first
+      const { data: registrations, error: regError } = await supabase
+        .from('merchant_registrations' as any)
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      console.log('📋 Fetched registrations:', registrations);
+      console.log('❌ Registration error:', regError);
 
-      toast({
-        title: "Success",
-        description: `Customer role updated to ${newRole}`
-      });
+      if (regError) {
+        console.error('Error fetching registrations:', regError);
+        throw regError;
+      }
 
-      fetchCustomers();
+      if (!registrations || registrations.length === 0) {
+        console.log('⚠️ No registrations found');
+        setApplications([]);
+        return;
+      }
+
+      console.log(`✅ Found ${registrations.length} registrations`);
+
+      // Fetch customer profiles
+      const customerIds = (registrations as any[]).map((r: any) => r.customer_id);
+      console.log('👥 Fetching customers for IDs:', customerIds);
+
+      const { data: customers, error: custError } = await supabase
+        .from('customer_profiles' as any)
+        .select('id, full_name, phone, email')
+        .in('id', customerIds);
+
+      console.log('👥 Customers data:', customers);
+      console.log('❌ Customers error:', custError);
+
+      if (custError) {
+        console.error('Error fetching customers:', custError);
+      }
+
+      // Fetch merchant codes
+      const codeIds = (registrations as any[]).map((r: any) => r.code_id);
+      console.log('🎫 Fetching codes for IDs:', codeIds);
+
+      const { data: codes, error: codeError } = await supabase
+        .from('merchant_codes' as any)
+        .select('id, code, description')
+        .in('id', codeIds);
+
+      console.log('🎫 Codes data:', codes);
+      console.log('❌ Codes error:', codeError);
+
+      if (codeError) {
+        console.error('Error fetching codes:', codeError);
+      }
+
+      // Manually join the data
+      const enrichedApplications = (registrations as any[]).map((reg: any) => ({
+        ...reg,
+        customer_profiles: (customers as any)?.find((c: any) => c.id === (reg as any).customer_id) || {
+          full_name: 'Unknown',
+          phone: null,
+          email: null
+        },
+        merchant_codes: (codes as any)?.find((mc: any) => mc.id === (reg as any).code_id) || {
+          code: 'Unknown',
+          description: null
+        }
+      }));
+
+      console.log('✨ Enriched applications:', enrichedApplications);
+      setApplications(enrichedApplications);
     } catch (error: any) {
-      console.error('Error updating customer role:', error);
+      console.error('Error fetching applications:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to update customer role",
+        description: `Failed to fetch merchant applications: ${error.message}`,
         variant: "destructive"
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleUpdateCustomer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCustomer) return;
-
-    setLoading(true);
+  const handleApproveApplication = async (applicationId: string) => {
     try {
+      setLoading(true);
+
       const { error } = await supabase
-        .from('profiles')
+        .from('merchant_registrations' as any)
         .update({
-          full_name: editForm.full_name,
-          phone_e164: editForm.phone_e164,
-          role: editForm.role,
-          credit_limit: editForm.credit_limit,
-          is_phone_verified: editForm.is_phone_verified,
-          whatsapp_opt_in: editForm.whatsapp_opt_in
+          status: 'APPROVED',
+          approved_at: new Date().toISOString()
         })
-        .eq('id', selectedCustomer.id);
+        .eq('id', applicationId);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Customer updated successfully"
+        description: "Merchant application approved successfully! Wallet created automatically.",
       });
 
-      setIsEditDialogOpen(false);
+      setIsApplicationDialogOpen(false);
+      fetchMerchantApplications();
       fetchCustomers();
     } catch (error: any) {
-      console.error('Error updating customer:', error);
+      console.error('Error approving application:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to update customer",
+        description: error.message || "Failed to approve application",
         variant: "destructive"
       });
     } finally {
@@ -143,216 +209,205 @@ export default function Customers() {
     }
   };
 
-  const openEditDialog = (customer: Profile) => {
-    setSelectedCustomer(customer);
-    setEditForm({
-      full_name: customer.full_name,
-      phone_e164: customer.phone_e164,
-      role: customer.role,
-      credit_limit: customer.credit_limit || 0,
-      is_phone_verified: customer.is_phone_verified || false,
-      whatsapp_opt_in: customer.whatsapp_opt_in || false
-    });
-    setIsEditDialogOpen(true);
+  const handleRejectApplication = async (applicationId: string) => {
+    if (!rejectionReason.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide a reason for rejection",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const { error } = await supabase
+        .from('merchant_registrations' as any)
+        .update({
+          status: 'REJECTED',
+          rejection_reason: rejectionReason
+        })
+        .eq('id', applicationId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Merchant application rejected",
+      });
+
+      setIsApplicationDialogOpen(false);
+      setRejectionReason('');
+      fetchMerchantApplications();
+    } catch (error: any) {
+      console.error('Error rejecting application:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject application",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const openViewDialog = (customer: Profile) => {
-    setSelectedCustomer(customer);
-    setIsViewDialogOpen(true);
+  const openApplicationDialog = (application: MerchantApplication) => {
+    setSelectedApplication(application);
+    setRejectionReason('');
+    setIsApplicationDialogOpen(true);
   };
 
   const filteredCustomers = customers.filter(customer => {
-    const matchesSearch = 
-      customer.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone_e164.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesRole = roleFilter === 'all' || customer.role === roleFilter;
-
-    return matchesSearch && matchesRole;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      customer.full_name?.toLowerCase().includes(searchLower) ||
+      customer.email?.toLowerCase().includes(searchLower) ||
+      customer.phone?.toLowerCase().includes(searchLower) ||
+      customer.id?.toLowerCase().includes(searchLower)
+    );
   });
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-MY', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
-  const getRoleBadgeVariant = (role: Enums<'user_role'>) => {
-    switch (role) {
-      case 'admin':
-        return 'destructive';
-      case 'staff':
-        return 'default';
-      case 'merchant':
-        return 'secondary';
-      default:
-        return 'outline';
-    }
-  };
-
-  const getCustomerStats = (customer: Profile) => {
-    const orders = customer.orders || [];
-    return {
-      totalOrders: orders.length,
-      totalSpent: orders.reduce((sum, order) => sum + order.total, 0),
-      lastOrderDate: orders.length > 0 ? orders[0].created_at : null
-    };
+  const openViewDialog = (customer: CustomerProfile) => {
+    setSelectedCustomer(customer);
+    setIsViewDialogOpen(true);
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Customers</h2>
-        <p className="text-muted-foreground">Manage customer accounts and information</p>
+        <p className="text-muted-foreground">Manage your customer base and their information</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Customer Management</CardTitle>
-          <CardDescription>
-            View and manage all customer accounts
-          </CardDescription>
-          
-          <div className="flex items-center space-x-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search customers..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                {USER_ROLES.map((role) => (
-                  <SelectItem key={role.value} value={role.value}>
-                    {role.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        
-        <CardContent>
-          {loading && customers.length === 0 ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Orders</TableHead>
-                  <TableHead>Total Spent</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCustomers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      {searchTerm || roleFilter !== 'all' 
-                        ? 'No customers found matching your criteria.' 
-                        : 'No customers yet.'}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredCustomers.map((customer) => {
-                    const stats = getCustomerStats(customer);
-                    return (
-                      <TableRow key={customer.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{customer.full_name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              Joined {formatDate(customer.created_at)}
+      <Tabs defaultValue="customers" className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="customers" className="flex items-center gap-2">
+            <User className="h-4 w-4" />
+            Customers
+          </TabsTrigger>
+          <TabsTrigger value="applications" className="flex items-center gap-2 relative">
+            <Store className="h-4 w-4" />
+            Merchant Applications
+            {applications.filter(app => app.status === 'PENDING').length > 0 && (
+              <Badge variant="destructive" className="ml-2 px-2 py-0.5 text-xs">
+                {applications.filter(app => app.status === 'PENDING').length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="customers">
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Directory</CardTitle>
+              <CardDescription>
+                All registered customers who use your automotive parts service
+              </CardDescription>
+
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search customers..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Contact</TableHead>
+                      <TableHead>Customer Type</TableHead>
+                      <TableHead>Last Updated</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCustomers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8">
+                          {searchTerm ? 'No customers found matching your search.' : 'No customers registered yet.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredCustomers.map((customer) => (
+                        <TableRow key={customer.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-blue-100 rounded-full">
+                                <User className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <div className="font-medium">{customer.full_name}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  ID: {customer.id.slice(0, 8)}...
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div>{customer.phone_e164}</div>
-                            <div className="flex items-center gap-1 mt-1">
-                              {customer.is_phone_verified && (
-                                <Badge variant="outline" className="text-xs">Verified</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              {customer.email && (
+                                <div className="flex items-center gap-1 text-sm">
+                                  <Mail className="h-3 w-3" />
+                                  {customer.email}
+                                </div>
                               )}
-                              {customer.whatsapp_opt_in && (
-                                <Badge variant="outline" className="text-xs">WhatsApp</Badge>
+                              {customer.phone && (
+                                <div className="flex items-center gap-1 text-sm">
+                                  <Phone className="h-3 w-3" />
+                                  {customer.phone}
+                                </div>
                               )}
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                className="h-auto p-1 hover:bg-muted"
-                                disabled={loading}
-                              >
-                                <Badge variant={getRoleBadgeVariant(customer.role)} className="cursor-pointer">
-                                  <Users className="h-3 w-3 mr-1" />
-                                  {customer.role.charAt(0).toUpperCase() + customer.role.slice(1)}
-                                  <ChevronDown className="h-3 w-3 ml-1" />
-                                </Badge>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="min-w-[120px]">
-                              {USER_ROLES.map((role) => (
-                                <DropdownMenuItem
-                                  key={role.value}
-                                  onClick={() => handleQuickRoleChange(customer.id, role.value)}
-                                  disabled={customer.role === role.value || loading}
-                                  className="cursor-pointer"
-                                >
-                                  <Badge 
-                                    variant={getRoleBadgeVariant(role.value)} 
-                                    className="text-xs"
-                                  >
-                                    {role.label}
-                                  </Badge>
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                        <TableCell>{stats.totalOrders}</TableCell>
-                        <TableCell>{formatCurrency(stats.totalSpent)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {customer.credit_limit && customer.credit_limit > 0 && (
-                              <Badge variant="secondary" className="text-xs">
-                                Credit: {formatCurrency(customer.credit_limit)}
-                              </Badge>
-                            )}
-                            {customer.addresses.length > 0 && (
-                              <MapPin className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
+                          </TableCell>
+                          <TableCell>
+                            <CustomerTypeManager
+                              customer={customer as any}
+                              onCustomerTypeUpdate={fetchCustomers}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-sm">
+                              <Calendar className="h-3 w-3" />
+                              {formatDate(customer.updated_at)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {customer.customer_type || 'normal'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={customer.is_active ? "default" : "destructive"}>
+                              {customer.is_active ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -360,32 +415,119 @@ export default function Customers() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="applications">
+          <Card>
+            <CardHeader>
+              <CardTitle>Merchant Applications</CardTitle>
+              <CardDescription>
+                Review and approve merchant registration requests
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Applicant</TableHead>
+                      <TableHead>Company</TableHead>
+                      <TableHead>Business Type</TableHead>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Applied Date</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {applications.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8">
+                          No merchant applications yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      applications.map((application) => (
+                        <TableRow key={application.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{application.customer_profiles.full_name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {application.customer_profiles.phone}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{application.company_name}</div>
+                              {application.business_registration_no && (
+                                <div className="text-sm text-muted-foreground">
+                                  {application.business_registration_no}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{application.business_type}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{application.merchant_codes.code}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {formatDate(application.created_at)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                application.status === 'APPROVED' ? 'default' :
+                                application.status === 'REJECTED' ? 'destructive' :
+                                'secondary'
+                              }
+                            >
+                              {application.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => openEditDialog(customer)}
+                              onClick={() => openApplicationDialog(application)}
                             >
-                              <Edit className="h-4 w-4" />
+                              <Eye className="h-4 w-4" />
                             </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-      {/* View Customer Dialog */}
+      {/* Customer Details Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Customer Details</DialogTitle>
             <DialogDescription>
-              Complete customer information and order history
+              Complete customer profile and information
             </DialogDescription>
           </DialogHeader>
 
@@ -396,202 +538,244 @@ export default function Customers() {
                   <h4 className="font-semibold mb-3">Personal Information</h4>
                   <div className="space-y-2 text-sm">
                     <div><span className="font-medium">Full Name:</span> {selectedCustomer.full_name}</div>
-                    <div><span className="font-medium">Phone:</span> {selectedCustomer.phone_e164}</div>
-                    <div><span className="font-medium">Role:</span> 
-                      <Badge className="ml-2" variant={getRoleBadgeVariant(selectedCustomer.role)}>
-                        {selectedCustomer.role.charAt(0).toUpperCase() + selectedCustomer.role.slice(1)}
-                      </Badge>
-                    </div>
-                    <div><span className="font-medium">Joined:</span> {formatDate(selectedCustomer.created_at)}</div>
-                    <div>
-                      <span className="font-medium">Verification:</span>
-                      <div className="flex gap-1 mt-1">
-                        <Badge variant={selectedCustomer.is_phone_verified ? "default" : "secondary"}>
-                          Phone {selectedCustomer.is_phone_verified ? 'Verified' : 'Not Verified'}
-                        </Badge>
-                        <Badge variant={selectedCustomer.whatsapp_opt_in ? "default" : "secondary"}>
-                          WhatsApp {selectedCustomer.whatsapp_opt_in ? 'Opted In' : 'Opted Out'}
-                        </Badge>
-                      </div>
-                    </div>
-                    {selectedCustomer.credit_limit && selectedCustomer.credit_limit > 0 && (
-                      <div><span className="font-medium">Credit Limit:</span> {formatCurrency(selectedCustomer.credit_limit)}</div>
-                    )}
+                    <div><span className="font-medium">Gender:</span> {selectedCustomer.gender || 'Not specified'}</div>
+                    <div><span className="font-medium">Date of Birth:</span> {
+                      selectedCustomer.date_of_birth
+                        ? formatDate(selectedCustomer.date_of_birth)
+                        : 'Not provided'
+                    }</div>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="font-semibold mb-3">Order Summary</h4>
+                  <h4 className="font-semibold mb-3">Contact Information</h4>
                   <div className="space-y-2 text-sm">
-                    {(() => {
-                      const stats = getCustomerStats(selectedCustomer);
-                      return (
-                        <>
-                          <div><span className="font-medium">Total Orders:</span> {stats.totalOrders}</div>
-                          <div><span className="font-medium">Total Spent:</span> {formatCurrency(stats.totalSpent)}</div>
-                          {stats.lastOrderDate && (
-                            <div><span className="font-medium">Last Order:</span> {formatDate(stats.lastOrderDate)}</div>
-                          )}
-                        </>
-                      );
-                    })()}
+                    <div><span className="font-medium">Email:</span> {
+                      selectedCustomer.email || 'Not provided'
+                    }</div>
+                    <div><span className="font-medium">Phone:</span> {
+                      selectedCustomer.phone || 'Not provided'
+                    }</div>
+                    <div><span className="font-medium">Customer Type:</span>
+                      <Badge variant="outline" className="ml-2">
+                        {selectedCustomer.customer_type || 'normal'}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {selectedCustomer.addresses.length > 0 && (
+              {selectedCustomer.address && (
                 <div>
-                  <h4 className="font-semibold mb-3">Addresses</h4>
-                  <div className="space-y-3">
-                    {selectedCustomer.addresses.map((address) => (
-                      <div key={address.id} className="border rounded-lg p-3">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="font-medium">{address.label}</span>
-                          {address.is_default && (
-                            <Badge variant="outline" className="text-xs">Default</Badge>
-                          )}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          <div>{address.line1}</div>
-                          {address.line2 && <div>{address.line2}</div>}
-                          <div>{address.city}, {address.state} {address.postcode}</div>
-                          <div>{address.country}</div>
-                        </div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Address
+                  </h4>
+                  <div className="text-sm bg-gray-50 p-3 rounded-lg">
+                    {typeof selectedCustomer.address === 'object' ? (
+                      <div>
+                        {selectedCustomer.address.address && <div>{selectedCustomer.address.address}</div>}
+                        {selectedCustomer.address.city && selectedCustomer.address.state && (
+                          <div>{selectedCustomer.address.city}, {selectedCustomer.address.state} {selectedCustomer.address.postcode}</div>
+                        )}
                       </div>
-                    ))}
+                    ) : (
+                      <div>{selectedCustomer.address}</div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {selectedCustomer.orders.length > 0 && (
+              <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <h4 className="font-semibold mb-3">Recent Orders</h4>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Order #</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedCustomer.orders.slice(0, 10).map((order) => (
-                        <TableRow key={order.id}>
-                          <TableCell>{order.order_no}</TableCell>
-                          <TableCell>{formatDate(order.created_at)}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {order.status.toLowerCase().replace('_', ' ')}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">{formatCurrency(order.total)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <h4 className="font-semibold mb-3">Account Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="font-medium">Last Updated:</span> {formatDate(selectedCustomer.updated_at)}</div>
+                    <div><span className="font-medium">User ID:</span> {selectedCustomer.user_id || 'Not linked'}</div>
+                    <div><span className="font-medium">Status:</span>
+                      <Badge variant={selectedCustomer.is_active ? "default" : "destructive"} className="ml-2">
+                        {selectedCustomer.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                <div>
+                  <h4 className="font-semibold mb-3">Customer Metrics</h4>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="font-medium">Total Orders:</span> 0</div>
+                    <div><span className="font-medium">Total Spent:</span> RM 0.00</div>
+                    <div><span className="font-medium">Profile Created:</span> {
+                      selectedCustomer.updated_at
+                        ? Math.ceil((Date.now() - new Date(selectedCustomer.updated_at).getTime()) / (1000 * 60 * 60 * 24))
+                        : 0
+                    } days ago</div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Edit Customer Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+      {/* Merchant Application Review Dialog */}
+      <Dialog open={isApplicationDialogOpen} onOpenChange={setIsApplicationDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Update Customer</DialogTitle>
+            <DialogTitle>Merchant Application Review</DialogTitle>
             <DialogDescription>
-              Update customer information and permissions
+              Review business details and approve or reject the merchant application
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleUpdateCustomer} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="full_name">Full Name</Label>
-              <Input
-                id="full_name"
-                value={editForm.full_name}
-                onChange={(e) => setEditForm({...editForm, full_name: e.target.value})}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone_e164">Phone</Label>
-              <Input
-                id="phone_e164"
-                value={editForm.phone_e164}
-                onChange={(e) => setEditForm({...editForm, phone_e164: e.target.value})}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select
-                value={editForm.role}
-                onValueChange={(value) => setEditForm({...editForm, role: value as Enums<'user_role'>})}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {USER_ROLES.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="credit_limit">Credit Limit</Label>
-              <Input
-                id="credit_limit"
-                type="number"
-                min="0"
-                step="0.01"
-                value={editForm.credit_limit}
-                onChange={(e) => setEditForm({...editForm, credit_limit: parseFloat(e.target.value) || 0})}
-              />
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="is_phone_verified"
-                  checked={editForm.is_phone_verified}
-                  onCheckedChange={(checked) => setEditForm({...editForm, is_phone_verified: checked})}
-                />
-                <Label htmlFor="is_phone_verified">Phone Verified</Label>
+          {selectedApplication && (
+            <div className="space-y-6">
+              {/* Status Header */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <h4 className="font-semibold text-lg">Application Status</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Submitted on {formatDate(selectedApplication.created_at)}
+                  </p>
+                </div>
+                <Badge
+                  variant={
+                    selectedApplication.status === 'APPROVED' ? 'default' :
+                    selectedApplication.status === 'REJECTED' ? 'destructive' :
+                    'secondary'
+                  }
+                  className="text-lg px-4 py-2"
+                >
+                  {selectedApplication.status === 'PENDING' && <Clock className="h-4 w-4 mr-2" />}
+                  {selectedApplication.status === 'APPROVED' && <CheckCircle className="h-4 w-4 mr-2" />}
+                  {selectedApplication.status === 'REJECTED' && <XCircle className="h-4 w-4 mr-2" />}
+                  {selectedApplication.status}
+                </Badge>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="whatsapp_opt_in"
-                  checked={editForm.whatsapp_opt_in}
-                  onCheckedChange={(checked) => setEditForm({...editForm, whatsapp_opt_in: checked})}
-                />
-                <Label htmlFor="whatsapp_opt_in">WhatsApp Opt-in</Label>
-              </div>
-            </div>
+              {/* Applicant Information */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Applicant Details
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="font-medium">Name:</span> {selectedApplication.customer_profiles.full_name}</div>
+                    <div><span className="font-medium">Email:</span> {selectedApplication.customer_profiles.email || 'Not provided'}</div>
+                    <div><span className="font-medium">Phone:</span> {selectedApplication.customer_profiles.phone || 'Not provided'}</div>
+                  </div>
+                </div>
 
-            <div className="flex justify-end space-x-2">
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Business Details
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="font-medium">Company Name:</span> {selectedApplication.company_name}</div>
+                    <div><span className="font-medium">Business Type:</span> {selectedApplication.business_type}</div>
+                    <div><span className="font-medium">Registration Code Used:</span>
+                      <Badge variant="outline" className="ml-2">
+                        {selectedApplication.merchant_codes.code}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Registration Details */}
+              <div>
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <Briefcase className="h-4 w-4" />
+                  Registration Information
+                </h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium">Business Registration No:</span>
+                    <div className="mt-1 text-muted-foreground">
+                      {selectedApplication.business_registration_no || 'Not provided'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="font-medium">Tax ID:</span>
+                    <div className="mt-1 text-muted-foreground">
+                      {selectedApplication.tax_id || 'Not provided'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Business Address */}
+              {selectedApplication.address && (
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Business Address
+                  </h4>
+                  <div className="text-sm bg-gray-50 p-3 rounded-lg">
+                    {selectedApplication.address}
+                  </div>
+                </div>
+              )}
+
+              {/* Code Description */}
+              {selectedApplication.merchant_codes.description && (
+                <div>
+                  <h4 className="font-semibold mb-2">Registration Code Details</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedApplication.merchant_codes.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Rejection Reason (if rejected) */}
+              {selectedApplication.status === 'REJECTED' && selectedApplication.rejection_reason && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <h4 className="font-semibold mb-2 text-red-900">Rejection Reason</h4>
+                  <p className="text-sm text-red-800">{selectedApplication.rejection_reason}</p>
+                </div>
+              )}
+
+              {/* Rejection Reason Input (for pending applications) */}
+              {selectedApplication.status === 'PENDING' && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm">Rejection Reason (optional)</h4>
+                  <Textarea
+                    placeholder="Provide a reason if rejecting this application..."
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    className="min-h-[100px]"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This field is required if you choose to reject the application.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedApplication && selectedApplication.status === 'PENDING' && (
+            <DialogFooter className="flex gap-2">
               <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsEditDialogOpen(false)}
+                variant="destructive"
+                onClick={() => handleRejectApplication(selectedApplication.id)}
+                disabled={loading}
               >
-                Cancel
+                <XCircle className="h-4 w-4 mr-2" />
+                Reject Application
               </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? 'Updating...' : 'Update Customer'}
+              <Button
+                variant="default"
+                onClick={() => handleApproveApplication(selectedApplication.id)}
+                disabled={loading}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Approve Application
               </Button>
-            </div>
-          </form>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </div>

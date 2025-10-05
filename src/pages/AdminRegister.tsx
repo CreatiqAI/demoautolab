@@ -79,14 +79,14 @@ export default function AdminRegister() {
     try {
       // Create admin profile directly without Supabase Auth
       const { error: profileError } = await supabase
-        .from('admin_profiles')
+        .from('admin_profiles' as any)
         .insert([{
           username: formData.username,
           full_name: formData.username,
           role: formData.role,
           password_hash: formData.password, // In production, this should be properly hashed
           is_active: true
-        }]);
+        } as any]);
 
       if (profileError) {
         console.error('Profile creation error:', profileError);

@@ -42,6 +42,8 @@ interface Order {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  voucher_code: string | null;
+  voucher_discount: number | null;
   order_items: Array<{
     id: string;
     component_sku: string;
@@ -130,7 +132,7 @@ export default function Orders() {
 
       // Direct query with order items - more reliable than RPC functions
       const { data: ordersWithItems, error: ordersError } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .select(`
           *,
           order_items (
@@ -150,7 +152,7 @@ export default function Orders() {
 
         // Fallback: Basic orders query without items
         const { data: basicData, error: basicError } = await supabase
-          .from('orders')
+          .from('orders' as any)
           .select('*')
           .order('created_at', { ascending: false });
 
@@ -165,7 +167,7 @@ export default function Orders() {
 
           // Let's also try without ordering to see if that's the issue
           const { data: simpleData, error: simpleError } = await supabase
-            .from('orders')
+            .from('orders' as any)
             .select('*')
             .limit(10);
 
@@ -181,7 +183,7 @@ export default function Orders() {
 
             // Check table existence and permissions
             const { count, error: countError } = await supabase
-              .from('orders')
+              .from('orders' as any)
               .select('*', { count: 'exact', head: true });
 
 
@@ -214,6 +216,8 @@ export default function Orders() {
         notes: order.notes || '',
         created_at: order.created_at,
         updated_at: order.updated_at,
+        voucher_code: order.voucher_code || null,
+        voucher_discount: order.voucher_discount || null,
         order_items: order.order_items || []
       }));
 
@@ -243,7 +247,7 @@ export default function Orders() {
     try {
       // Direct table update approach
       const { error: directError } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .update({
           status: editForm.status as any,
           payment_state: editForm.payment_state as any,
@@ -285,7 +289,7 @@ export default function Orders() {
 
       // Update order status to COMPLETED (archived status)
       const { data, error } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .update({
           status: 'COMPLETED',
           updated_at: new Date().toISOString()
@@ -341,7 +345,7 @@ export default function Orders() {
 
       // First delete order items
       const { error: itemsError } = await supabase
-        .from('order_items')
+        .from('order_items' as any)
         .delete()
         .eq('order_id', order.id);
 
@@ -351,7 +355,7 @@ export default function Orders() {
 
       // Then delete the order
       const { error: orderError } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .delete()
         .eq('id', order.id);
 
@@ -748,6 +752,12 @@ export default function Orders() {
                           <span className="font-medium text-gray-600">Subtotal:</span>
                           <span className="text-gray-900">{formatCurrency(order.subtotal)}</span>
                         </div>
+                        {order.voucher_code && order.voucher_discount && (
+                          <div className="flex justify-between">
+                            <span className="font-medium text-gray-600">Voucher ({order.voucher_code}):</span>
+                            <span className="text-green-600">-{formatCurrency(order.voucher_discount)}</span>
+                          </div>
+                        )}
                         {order.discount > 0 && (
                           <div className="flex justify-between">
                             <span className="font-medium text-gray-600">Discount:</span>
@@ -974,33 +984,33 @@ export default function Orders() {
                 }
               ]}
               mobileCardRender={(order, index) => (
-                <MobileTableCard key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}>
+                <MobileTableCard key={(order as any).id} className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedOrderId(expandedOrderId === (order as any).id ? null : (order as any).id)}>
                   <MobileTableRow label="Order" value={
                     <div>
-                      <div className="font-medium">#{order.order_no}</div>
-                      <div className="text-xs text-muted-foreground">{order.id.slice(0, 8)}</div>
+                      <div className="font-medium">#{(order as any).order_no}</div>
+                      <div className="text-xs text-muted-foreground">{(order as any).id.slice(0, 8)}</div>
                     </div>
                   } />
                   <MobileTableRow label="Customer" value={
                     <div>
-                      <div className="font-medium">{order.customer_name}</div>
-                      <div className="text-xs text-muted-foreground">{order.customer_phone}</div>
+                      <div className="font-medium">{(order as any).customer_name}</div>
+                      <div className="text-xs text-muted-foreground">{(order as any).customer_phone}</div>
                     </div>
                   } />
                   <MobileTableRow label="Date" value={
-                    <span className="text-sm">{formatDate(order.created_at)}</span>
+                    <span className="text-sm">{formatDate((order as any).created_at)}</span>
                   } />
                   <MobileTableRow label="Total" value={
-                    <span className="font-semibold">{formatCurrency(order.total)}</span>
+                    <span className="font-semibold">{formatCurrency((order as any).total)}</span>
                   } />
                   <MobileTableRow label="Status" value={
-                    <CustomStatusBadge status={order.status}>
-                      {getStatusLabel(order.status)}
+                    <CustomStatusBadge status={(order as any).status}>
+                      {getStatusLabel((order as any).status)}
                     </CustomStatusBadge>
                   } />
                   <MobileTableRow label="Payment" value={
-                    <Badge variant={getPaymentBadgeVariant(order.payment_state)}>
-                      {order.payment_state.toLowerCase().replace('_', ' ')}
+                    <Badge variant={getPaymentBadgeVariant((order as any).payment_state)}>
+                      {(order as any).payment_state.toLowerCase().replace('_', ' ')}
                     </Badge>
                   } />
                   <MobileTableRow label="Actions" value={
@@ -1256,6 +1266,12 @@ export default function Orders() {
                     <span>Subtotal:</span>
                     <span>{formatCurrency(selectedOrder.subtotal)}</span>
                   </div>
+                  {selectedOrder.voucher_code && selectedOrder.voucher_discount && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Voucher ({selectedOrder.voucher_code}):</span>
+                      <span>-{formatCurrency(selectedOrder.voucher_discount)}</span>
+                    </div>
+                  )}
                   {selectedOrder.discount > 0 && (
                     <div className="flex justify-between">
                       <span>Discount:</span>

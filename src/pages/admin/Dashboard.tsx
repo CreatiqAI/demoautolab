@@ -36,8 +36,7 @@ export default function Dashboard() {
       let ordersData: any[] = [];
       
       // Try the admin function first (same as Orders.tsx)
-      const { data: functionData, error: functionError } = await supabase
-        .rpc('get_admin_orders');
+      const { data: functionData, error: functionError } = await (supabase.rpc as any)('get_admin_orders');
 
       if (!functionError && functionData) {
         ordersData = functionData;
@@ -46,7 +45,7 @@ export default function Dashboard() {
         
         // Fallback: Try the enhanced admin view
         const { data: viewData, error: viewError } = await supabase
-          .from('admin_orders_enhanced')
+          .from('admin_orders_enhanced' as any)
           .select('*')
           .order('created_at', { ascending: false });
 
@@ -57,7 +56,7 @@ export default function Dashboard() {
           
           // Final fallback: Basic orders query
           const { data: basicData, error: basicError } = await supabase
-            .from('orders')
+            .from('orders' as any)
             .select('*')
             .order('created_at', { ascending: false });
 
@@ -71,7 +70,7 @@ export default function Dashboard() {
       let productsData: any[] = [];
       try {
         const { data, error } = await supabase
-          .from('component_library')
+          .from('component_library' as any)
           .select('*')
           .eq('is_active', true)
           .order('created_at', { ascending: false });
@@ -87,7 +86,7 @@ export default function Dashboard() {
       let customersData: any[] = [];
       try {
         const { data, error } = await supabase
-          .from('customer_profiles')
+          .from('customer_profiles' as any)
           .select('*')
           .order('created_at', { ascending: false });
         

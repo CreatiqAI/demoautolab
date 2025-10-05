@@ -31,6 +31,8 @@ interface CustomerOrder {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  voucher_code: string | null;
+  voucher_discount: number | null;
   order_items: Array<{
     id: string;
     component_sku: string;
@@ -87,38 +89,45 @@ export default function MyOrders() {
     try {
       setLoading(true);
       let ordersData: any[] = [];
-      
-      // Try the new simplified function first
-      const { data: myOrdersData, error: myOrdersError } = await supabase
-        .rpc('get_my_orders');
 
-      if (!myOrdersError && myOrdersData) {
-        ordersData = myOrdersData;
+      // Use direct query with explicit column selection including voucher fields
+      const { data: ordersWithItems, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            id,
+            component_sku,
+            component_name,
+            product_context,
+            quantity,
+            unit_price,
+            total_price
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (!ordersError && ordersWithItems) {
+        ordersData = ordersWithItems;
       } else {
-        console.warn('get_my_orders failed, trying get_customer_orders:', myOrdersError);
+        console.warn('Direct orders query failed:', ordersError);
 
-        // Try the parametrized customer orders function
-        const { data: functionData, error: functionError } = await supabase
-          .rpc('get_customer_orders', { customer_user_id: user.id });
+        // Fallback: Try basic query without items
+        const { data: basicData, error: basicError } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
 
-        if (!functionError && functionData) {
-          ordersData = functionData;
+        if (!basicError && basicData) {
+          ordersData = basicData.map(order => ({
+            ...order,
+            order_items: []
+          }));
         } else {
-          console.warn('get_customer_orders failed, trying direct query:', functionError);
-
-          // Fallback: Try direct query with user_id
-          const { data: directData, error: directError } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false });
-
-          if (!directError && directData) {
-            ordersData = directData;
-          } else {
-            console.warn('Direct user_id query failed:', directError);
-            ordersData = [];
-          }
+          console.warn('All order queries failed:', basicError);
+          ordersData = [];
         }
       }
 
@@ -143,6 +152,8 @@ export default function MyOrders() {
         notes: order.notes || '',
         created_at: order.created_at,
         updated_at: order.updated_at,
+        voucher_code: order.voucher_code || null,
+        voucher_discount: order.voucher_discount || null,
         order_items: order.order_items || []
       }));
 
@@ -516,6 +527,12 @@ export default function MyOrders() {
                       <span>Subtotal:</span>
                       <span>{formatCurrency(selectedOrder.subtotal)}</span>
                     </div>
+                    {selectedOrder.voucher_code && selectedOrder.voucher_discount && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Voucher ({selectedOrder.voucher_code}):</span>
+                        <span>-{formatCurrency(selectedOrder.voucher_discount)}</span>
+                      </div>
+                    )}
                     {selectedOrder.discount > 0 && (
                       <div className="flex justify-between">
                         <span>Discount:</span>

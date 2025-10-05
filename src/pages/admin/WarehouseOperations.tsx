@@ -97,7 +97,7 @@ export default function WarehouseOperations() {
 
       // Get orders with warehouse statuses and their items
       const { data: ordersWithItems, error: ordersError } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .select(`
           *,
           order_items (
@@ -105,7 +105,7 @@ export default function WarehouseOperations() {
             quantity, unit_price, total_price
           )
         `)
-        .in('status', warehouseStatuses)
+        .in('status', warehouseStatuses as any)
         .order('created_at', { ascending: false });
 
       let ordersData: any[] = [];
@@ -118,27 +118,27 @@ export default function WarehouseOperations() {
 
         // Fallback: Get orders without items first
         const { data: basicData, error: basicError } = await supabase
-          .from('orders')
+          .from('orders' as any)
           .select('*')
-          .in('status', warehouseStatuses)
+          .in('status', warehouseStatuses as any)
           .order('created_at', { ascending: false });
 
         if (!basicError && basicData) {
-          ordersData = basicData.map(order => ({ ...order, order_items: [] }));
+          ordersData = (basicData as any[]).map((order: any) => ({ ...order, order_items: [] }));
           console.log('✅ Fetched warehouse orders without items (fallback):', ordersData.length);
         } else {
           console.warn('Direct warehouse query failed, trying all orders and filtering:', basicError);
 
           // Final fallback: Get all orders and filter in JavaScript
           const { data: allData, error: allError } = await supabase
-            .from('orders')
+            .from('orders' as any)
             .select('*')
             .order('created_at', { ascending: false });
 
           if (!allError && allData) {
-            ordersData = allData
-              .filter(order => warehouseStatuses.includes(order.status))
-              .map(order => ({ ...order, order_items: [] }));
+            ordersData = (allData as any[])
+              .filter((order: any) => warehouseStatuses.includes(order.status))
+              .map((order: any) => ({ ...order, order_items: [] }));
             console.log('✅ Filtered warehouse orders from all orders:', ordersData.length);
           } else {
             console.error('❌ All warehouse order queries failed:', allError);
@@ -206,9 +206,9 @@ export default function WarehouseOperations() {
 
       // Update order to WAREHOUSE_ASSIGNED status
       const { error } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .update({
-          status: 'WAREHOUSE_ASSIGNED',
+          status: 'WAREHOUSE_ASSIGNED' as any,
           updated_at: new Date().toISOString()
         })
         .eq('id', orderId);
@@ -242,9 +242,9 @@ export default function WarehouseOperations() {
 
       // Update order status directly
       const { error } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .update({
-          status: status,
+          status: status as any,
           updated_at: new Date().toISOString()
         })
         .eq('id', orderId);
@@ -464,7 +464,7 @@ export default function WarehouseOperations() {
                                     e.stopPropagation();
                                     setSelectedOrder(order);
                                     const validNextStatuses = getValidNextStatuses(order.status as OrderStatus);
-                                    setNewStatus(validNextStatuses[0]?.status || 'PICKING');
+                                    setNewStatus((validNextStatuses[0]?.status as OrderStatus) || 'PICKING');
                                   }}
                                 >
                                   <ArrowRight className="h-4 w-4 mr-1" />
@@ -679,7 +679,7 @@ export default function WarehouseOperations() {
                                   e.stopPropagation();
                                   setSelectedOrder(order);
                                   const validNextStatuses = getValidNextStatuses(order.status as OrderStatus);
-                                  setNewStatus(validNextStatuses[0]?.status || 'PICKING');
+                                  setNewStatus((validNextStatuses[0]?.status as OrderStatus) || 'PICKING');
                                 }}
                               >
                                 <ArrowRight className="h-4 w-4 mr-2" />

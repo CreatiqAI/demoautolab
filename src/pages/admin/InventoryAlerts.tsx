@@ -7,9 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertTriangle,
   Package,
@@ -19,16 +17,7 @@ import {
   CheckCircle2,
   Clock,
   Bell,
-  Users,
-  Plus,
-  Edit,
-  Truck,
-  Phone,
-  Mail,
-  MapPin,
-  ShoppingCart,
-  FileText,
-  Building2
+  ShoppingCart
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
@@ -57,49 +46,13 @@ interface InventoryAlert {
   created_at: string;
 }
 
-interface Supplier {
-  id: string;
-  name: string;
-  company_name: string;
-  contact_person: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  country: string;
-  payment_terms: string;
-  lead_time_days: number;
-  minimum_order_amount: number;
-  is_active: boolean;
-  notes: string;
-  created_at: string;
-}
-
 const InventoryAlerts = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'critical' | 'warning' | 'info'>('all');
-  const [activeTab, setActiveTab] = useState('alerts');
-  const [supplierFormOpen, setSupplierFormOpen] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [restockDialogOpen, setRestockDialogOpen] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<InventoryAlert | null>(null);
-
-  // Supplier form data
-  const [supplierForm, setSupplierForm] = useState({
-    name: '',
-    company_name: '',
-    contact_person: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
-    payment_terms: 'NET 30',
-    lead_time_days: 7,
-    minimum_order_amount: 0,
-    notes: ''
-  });
 
   // Restock form data
   const [restockForm, setRestockForm] = useState({
@@ -111,93 +64,106 @@ const InventoryAlerts = () => {
   const { data: alerts = [], isLoading: alertsLoading, refetch: refetchAlerts } = useQuery({
     queryKey: ['inventory-alerts', searchTerm, filterStatus],
     queryFn: async (): Promise<InventoryAlert[]> => {
+      // Query component_library directly and generate alerts on frontend
       let query = supabase
-        .from('active_stock_alerts_detailed')
-        .select('*');
+        .from('component_library' as any)
+        .select('*')
+        .eq('is_active', true);
 
-      // Apply filters
+      // Apply search filter
       if (searchTerm) {
-        query = query.or(`component_name.ilike.%${searchTerm}%,component_sku.ilike.%${searchTerm}%`);
+        query = query.or(`name.ilike.%${searchTerm}%,component_sku.ilike.%${searchTerm}%`);
       }
 
-      if (filterStatus !== 'all') {
-        query = query.eq('alert_level', filterStatus);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const { data, error } = await query.order('stock_level', { ascending: true });
 
       if (error) {
         console.error('Error fetching alerts:', error);
         throw error;
       }
 
-      return data || [];
+      // Generate alerts from components with low stock
+      const allAlerts = (data || []).map((component: any) => {
+        const minStock = component.min_stock_level || 10;
+        const maxStock = component.max_stock_level || 100;
+        const reorderPoint = component.reorder_point || 15;
+        const currentStock = component.stock_level || 0;
+        const suggestedQty = Math.max(0, maxStock - currentStock);
+
+        let alertType: 'low_stock' | 'out_of_stock' | 'reorder_suggestion' = 'low_stock';
+        let alertLevel: 'info' | 'warning' | 'critical' = 'info';
+        let message = '';
+        let suggestedAction = '';
+
+        // Determine alert level and message
+        if (currentStock === 0) {
+          alertType = 'out_of_stock';
+          alertLevel = 'critical';
+          message = `OUT OF STOCK: ${component.name} (${component.component_sku})`;
+          suggestedAction = `Create immediate restock order for ${maxStock} units`;
+        } else if (currentStock <= minStock * 0.5) {
+          alertType = 'low_stock';
+          alertLevel = 'critical';
+          message = `CRITICAL LOW STOCK: ${component.name} - Only ${currentStock} units remaining (Min: ${minStock})`;
+          suggestedAction = `Urgent restock needed. Order ${suggestedQty} units`;
+        } else if (currentStock < minStock) {
+          alertType = 'low_stock';
+          alertLevel = 'warning';
+          message = `LOW STOCK: ${component.name} - ${currentStock} units (Min: ${minStock})`;
+          suggestedAction = `Restock recommended. Order ${suggestedQty} units`;
+        } else if (currentStock <= reorderPoint) {
+          alertType = 'reorder_suggestion';
+          alertLevel = 'info';
+          message = `REORDER POINT: ${component.name} - ${currentStock} units (Reorder at: ${reorderPoint})`;
+          suggestedAction = `Consider ordering ${suggestedQty} units`;
+        } else {
+          // Stock is good, skip this component
+          return null;
+        }
+
+        return {
+          id: component.id,
+          inventory_id: component.id,
+          component_sku: component.component_sku,
+          component_name: component.name,
+          category_name: component.component_type || 'General',
+          current_stock: currentStock,
+          min_stock_level: minStock,
+          max_stock_level: maxStock,
+          reorder_point: reorderPoint,
+          unit_cost: component.merchant_price || 0,
+          location: component.warehouse_location || 'Main Warehouse',
+          supplier_name: 'Default Supplier',
+          supplier_company: 'Auto Lab Supplies',
+          supplier_lead_time: 7,
+          alert_type: alertType,
+          alert_level: alertLevel,
+          message: message,
+          suggested_action: suggestedAction,
+          suggested_reorder_quantity: suggestedQty,
+          suggested_reorder_cost: suggestedQty * (component.merchant_price || 0),
+          created_at: component.updated_at || component.created_at
+        };
+      }).filter(alert => alert !== null);
+
+      // Apply alert level filter
+      const filteredAlerts = filterStatus === 'all'
+        ? allAlerts
+        : allAlerts.filter(alert => alert.alert_level === filterStatus);
+
+      return filteredAlerts;
     },
     refetchInterval: 30000, // Refresh every 30 seconds
-  });
-
-  // Fetch suppliers
-  const { data: suppliers = [], isLoading: suppliersLoading, refetch: refetchSuppliers } = useQuery({
-    queryKey: ['suppliers'],
-    queryFn: async (): Promise<Supplier[]> => {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .order('name');
-
-      if (error) {
-        console.error('Error fetching suppliers:', error);
-        throw error;
-      }
-
-      return data || [];
-    },
-  });
-
-  // Create/Update supplier mutation
-  const supplierMutation = useMutation({
-    mutationFn: async (supplier: Partial<Supplier>) => {
-      if (editingSupplier) {
-        const { error } = await supabase
-          .from('suppliers')
-          .update(supplier)
-          .eq('id', editingSupplier.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('suppliers')
-          .insert([supplier]);
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      setSupplierFormOpen(false);
-      setEditingSupplier(null);
-      resetSupplierForm();
-      toast({
-        title: "Success",
-        description: `Supplier ${editingSupplier ? 'updated' : 'created'} successfully`,
-      });
-    },
-    onError: (error) => {
-      console.error('Supplier error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save supplier",
-        variant: "destructive",
-      });
-    },
   });
 
   // Create restock order mutation
   const restockMutation = useMutation({
     mutationFn: async ({ alert, quantity, notes }: { alert: InventoryAlert; quantity: number; notes: string }) => {
       // First, create the restock order
-      const { data: orderNumber } = await supabase.rpc('generate_order_number');
+      const { data: orderNumber } = await (supabase.rpc as any)('generate_order_number');
 
       const { data: restockOrder, error: orderError } = await supabase
-        .from('restock_orders')
+        .from('restock_orders' as any)
         .insert([{
           order_number: orderNumber,
           supplier_id: alert.inventory_id, // This should be the supplier ID from the inventory
@@ -212,14 +178,14 @@ const InventoryAlerts = () => {
 
       // Then create the order item
       const { error: itemError } = await supabase
-        .from('restock_order_items')
+        .from('restock_order_items' as any)
         .insert([{
-          restock_order_id: restockOrder.id,
+          restock_order_id: (restockOrder as any).id,
           inventory_id: alert.inventory_id,
           quantity_ordered: quantity,
           unit_cost: alert.unit_cost,
           notes: `Restock for low stock alert: ${alert.message}`
-        }]);
+        } as any]);
 
       if (itemError) throw itemError;
 
@@ -232,7 +198,7 @@ const InventoryAlerts = () => {
       setRestockForm({ quantity: 0, notes: '' });
       toast({
         title: "Success",
-        description: `Restock order ${data.order_number} created successfully`,
+        description: `Restock order ${(data as any).order_number} created successfully`,
       });
     },
     onError: (error) => {
@@ -244,40 +210,6 @@ const InventoryAlerts = () => {
       });
     },
   });
-
-  const resetSupplierForm = () => {
-    setSupplierForm({
-      name: '',
-      company_name: '',
-      contact_person: '',
-      email: '',
-      phone: '',
-      address: '',
-      city: '',
-      payment_terms: 'NET 30',
-      lead_time_days: 7,
-      minimum_order_amount: 0,
-      notes: ''
-    });
-  };
-
-  const handleEditSupplier = (supplier: Supplier) => {
-    setEditingSupplier(supplier);
-    setSupplierForm({
-      name: supplier.name,
-      company_name: supplier.company_name || '',
-      contact_person: supplier.contact_person || '',
-      email: supplier.email || '',
-      phone: supplier.phone || '',
-      address: supplier.address || '',
-      city: supplier.city || '',
-      payment_terms: supplier.payment_terms || 'NET 30',
-      lead_time_days: supplier.lead_time_days || 7,
-      minimum_order_amount: supplier.minimum_order_amount || 0,
-      notes: supplier.notes || ''
-    });
-    setSupplierFormOpen(true);
-  };
 
   const handleCreateRestock = (alert: InventoryAlert) => {
     setSelectedAlert(alert);
@@ -347,9 +279,9 @@ const InventoryAlerts = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Bell className="h-6 w-6 text-red-500" />
-            Inventory Management
+            Inventory Alerts
           </h1>
-          <p className="text-gray-600 mt-1">Monitor stock levels and manage suppliers</p>
+          <p className="text-gray-600 mt-1">Monitor stock levels and low inventory alerts</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={() => refetchAlerts()} variant="outline" size="sm">
@@ -411,24 +343,17 @@ const InventoryAlerts = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Active Suppliers</p>
-                <p className="text-2xl font-bold text-gray-900">{suppliers.filter(s => s.is_active).length}</p>
+                <p className="text-sm text-gray-600">Total Alerts</p>
+                <p className="text-2xl font-bold text-gray-900">{alerts.length}</p>
               </div>
-              <Building2 className="h-8 w-8 text-gray-500" />
+              <Package className="h-8 w-8 text-gray-500" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="alerts">Stock Alerts</TabsTrigger>
-          <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
-        </TabsList>
-
-        {/* Stock Alerts Tab */}
-        <TabsContent value="alerts" className="space-y-4">
+      {/* Stock Alerts Content */}
+      <div className="space-y-4">
           {/* Filters */}
           <Card>
             <CardContent className="p-4">
@@ -545,259 +470,7 @@ const InventoryAlerts = () => {
               })
             )}
           </div>
-        </TabsContent>
-
-        {/* Suppliers Tab */}
-        <TabsContent value="suppliers" className="space-y-4">
-          {/* Add Supplier Button */}
-          <div className="flex justify-end">
-            <Dialog open={supplierFormOpen} onOpenChange={setSupplierFormOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Supplier
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>{editingSupplier ? 'Edit Supplier' : 'Add New Supplier'}</DialogTitle>
-                  <DialogDescription>
-                    {editingSupplier ? 'Update supplier information' : 'Create a new supplier for inventory restocking'}
-                  </DialogDescription>
-                </DialogHeader>
-
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  supplierMutation.mutate(supplierForm);
-                }} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="name">Supplier Name *</Label>
-                      <Input
-                        id="name"
-                        value={supplierForm.name}
-                        onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="company_name">Company Name</Label>
-                      <Input
-                        id="company_name"
-                        value={supplierForm.company_name}
-                        onChange={(e) => setSupplierForm({ ...supplierForm, company_name: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="contact_person">Contact Person</Label>
-                      <Input
-                        id="contact_person"
-                        value={supplierForm.contact_person}
-                        onChange={(e) => setSupplierForm({ ...supplierForm, contact_person: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={supplierForm.email}
-                        onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="phone">Phone</Label>
-                      <Input
-                        id="phone"
-                        value={supplierForm.phone}
-                        onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="city">City</Label>
-                      <Input
-                        id="city"
-                        value={supplierForm.city}
-                        onChange={(e) => setSupplierForm({ ...supplierForm, city: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="address">Address</Label>
-                    <Input
-                      id="address"
-                      value={supplierForm.address}
-                      onChange={(e) => setSupplierForm({ ...supplierForm, address: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="payment_terms">Payment Terms</Label>
-                      <Select value={supplierForm.payment_terms} onValueChange={(value) => setSupplierForm({ ...supplierForm, payment_terms: value })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NET 15">NET 15</SelectItem>
-                          <SelectItem value="NET 30">NET 30</SelectItem>
-                          <SelectItem value="NET 45">NET 45</SelectItem>
-                          <SelectItem value="COD">Cash on Delivery</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="lead_time_days">Lead Time (Days)</Label>
-                      <Input
-                        id="lead_time_days"
-                        type="number"
-                        value={supplierForm.lead_time_days}
-                        onChange={(e) => setSupplierForm({ ...supplierForm, lead_time_days: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="minimum_order_amount">Min Order Amount (RM)</Label>
-                      <Input
-                        id="minimum_order_amount"
-                        type="number"
-                        step="0.01"
-                        value={supplierForm.minimum_order_amount}
-                        onChange={(e) => setSupplierForm({ ...supplierForm, minimum_order_amount: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="notes">Notes</Label>
-                    <Textarea
-                      id="notes"
-                      value={supplierForm.notes}
-                      onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setSupplierFormOpen(false);
-                        setEditingSupplier(null);
-                        resetSupplierForm();
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={supplierMutation.isPending}>
-                      {supplierMutation.isPending ? 'Saving...' : (editingSupplier ? 'Update' : 'Create')}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {/* Suppliers List */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {suppliersLoading ? (
-              <Card className="col-span-full">
-                <CardContent className="p-8 text-center">
-                  <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
-                  <p className="text-gray-600">Loading suppliers...</p>
-                </CardContent>
-              </Card>
-            ) : suppliers.length === 0 ? (
-              <Card className="col-span-full">
-                <CardContent className="p-8 text-center">
-                  <Users className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Suppliers Found</h3>
-                  <p className="text-gray-600">Add your first supplier to get started.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              suppliers.map((supplier) => (
-                <Card key={supplier.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="font-semibold text-gray-900">{supplier.name}</h3>
-                        <p className="text-sm text-gray-600">{supplier.company_name}</p>
-                      </div>
-                      <Badge variant={supplier.is_active ? 'default' : 'secondary'}>
-                        {supplier.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-2 text-sm">
-                      {supplier.contact_person && (
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-gray-400" />
-                          <span>{supplier.contact_person}</span>
-                        </div>
-                      )}
-                      {supplier.email && (
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-gray-400" />
-                          <span>{supplier.email}</span>
-                        </div>
-                      )}
-                      {supplier.phone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-gray-400" />
-                          <span>{supplier.phone}</span>
-                        </div>
-                      )}
-                      {supplier.city && (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-gray-400" />
-                          <span>{supplier.city}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100 text-xs">
-                      <div>
-                        <span className="text-gray-500">Payment Terms:</span>
-                        <p className="font-medium">{supplier.payment_terms}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Lead Time:</span>
-                        <p className="font-medium">{supplier.lead_time_days} days</p>
-                      </div>
-                    </div>
-
-                    {supplier.minimum_order_amount > 0 && (
-                      <div className="mt-2 text-xs">
-                        <span className="text-gray-500">Min Order:</span>
-                        <span className="font-medium ml-1">{formatCurrency(supplier.minimum_order_amount)}</span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end gap-2 mt-4">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEditSupplier(supplier)}
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+      </div>
 
       {/* Restock Dialog */}
       <Dialog open={restockDialogOpen} onOpenChange={setRestockDialogOpen}>

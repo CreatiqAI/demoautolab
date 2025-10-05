@@ -162,7 +162,7 @@ export default function ProductsPro() {
 
       // Try with category join first
       let { data, error } = await supabase
-        .from('products_new')
+        .from('products_new' as any)
         .select(`
           *,
           categories!products_new_category_id_fkey(
@@ -177,7 +177,7 @@ export default function ProductsPro() {
       if (error) {
         console.warn('Category join failed, fetching products without categories:', error);
         const fallbackResult = await supabase
-          .from('products_new')
+          .from('products_new' as any)
           .select('*')
           .order('created_at', { ascending: false });
 
@@ -186,8 +186,8 @@ export default function ProductsPro() {
       }
 
       if (error) throw error;
-      setProducts(data || []);
-      setFilteredProducts(data || []);
+      setProducts((data as any) || []);
+      setFilteredProducts((data as any) || []);
     } catch (error: any) {
       console.error('Error fetching products:', error);
       toast({
@@ -203,13 +203,13 @@ export default function ProductsPro() {
   const fetchCategories = async () => {
     try {
       const { data, error } = await supabase
-        .from('categories')
+        .from('categories' as any)
         .select('id, name, description, active')
         .eq('active', true)
         .order('name');
 
       if (error) throw error;
-      setCategories(data || []);
+      setCategories((data as any) || []);
     } catch (error: any) {
       console.error('Error fetching categories:', error);
       toast({
@@ -223,11 +223,11 @@ export default function ProductsPro() {
   const fetchAllComponents = async () => {
     try {
       // Try using the helper function first
-      const { data: functionData, error: functionError } = await supabase
-        .rpc('get_active_components');
+      const { data: functionData, error: functionError } = await (supabase
+        .rpc as any)('get_active_components');
 
       if (!functionError && functionData) {
-        setAllComponents(functionData);
+        setAllComponents((functionData as any));
         return;
       }
 
@@ -235,13 +235,13 @@ export default function ProductsPro() {
 
       // Fallback to direct table query
       const { data, error } = await supabase
-        .from('component_library')
+        .from('component_library' as any)
         .select('id, component_sku, name, description, component_type, stock_level, normal_price, merchant_price, default_image_url')
         .eq('is_active', true)
         .order('name');
 
       if (error) throw error;
-      setAllComponents(data || []);
+      setAllComponents((data as any) || []);
     } catch (error: any) {
       console.error('Error fetching components:', error);
       toast({
@@ -255,16 +255,16 @@ export default function ProductsPro() {
   const searchComponents = async (term: string) => {
     try {
       setSearchLoading(true);
-      const { data, error } = await supabase
-        .rpc('search_components', { search_term: term });
+      const { data, error } = await (supabase
+        .rpc as any)('search_components', { search_term: term });
 
       if (error) throw error;
-      setSearchResults(data || []);
+      setSearchResults((data as any) || []);
     } catch (error: any) {
       console.error('Component search error:', error);
       // Fallback to direct query if function doesn't exist
       const { data, error: fallbackError } = await supabase
-        .from('component_library')
+        .from('component_library' as any)
         .select('id, component_sku, name, description, component_type, stock_level, normal_price, merchant_price, default_image_url')
         .ilike('component_sku', `%${term}%`)
         .eq('is_active', true)
@@ -277,7 +277,7 @@ export default function ProductsPro() {
           variant: "destructive"
         });
       } else {
-        setSearchResults(data || []);
+        setSearchResults((data as any) || []);
       }
     } finally {
       setSearchLoading(false);
@@ -289,8 +289,8 @@ export default function ProductsPro() {
     if (!name.trim()) return '';
     
     try {
-      const { data, error } = await supabase
-        .rpc('generate_unique_slug', { 
+      const { data, error } = await (supabase
+        .rpc as any)('generate_unique_slug', { 
           base_name: name,
           table_name: 'products_new'
         });
@@ -387,7 +387,7 @@ export default function ProductsPro() {
       if (editingProduct) {
         // Update existing product
         const { data: updatedProduct, error: productError } = await supabase
-          .from('products_new')
+          .from('products_new' as any)
           .update(productData)
           .eq('id', editingProduct.id)
           .select()
@@ -398,7 +398,7 @@ export default function ProductsPro() {
       } else {
         // Create new product
         const { data: newProduct, error: productError } = await supabase
-          .from('products_new')
+          .from('products_new' as any)
           .insert([productData])
           .select()
           .single();
@@ -411,7 +411,7 @@ export default function ProductsPro() {
       if (editingProduct) {
         // Clear existing images for edit mode
         await supabase
-          .from('product_images_new')
+          .from('product_images_new' as any)
           .delete()
           .eq('product_id', product.id);
       }
@@ -426,7 +426,7 @@ export default function ProductsPro() {
         }));
 
         const { error: imageError } = await supabase
-          .from('product_images_new')
+          .from('product_images_new' as any)
           .insert(imageInserts);
         
         if (imageError) throw imageError;
@@ -436,7 +436,7 @@ export default function ProductsPro() {
       if (editingProduct) {
         // Clear existing component relationships for edit mode
         await supabase
-          .from('product_components')
+          .from('product_components' as any)
           .delete()
           .eq('product_id', product.id);
       }
@@ -447,7 +447,7 @@ export default function ProductsPro() {
         
         // Direct link between product and component (no variants needed)
         const { error: linkError } = await supabase
-          .from('product_components')
+          .from('product_components' as any)
           .insert([{
             product_id: product.id,
             component_id: comp.id,
@@ -506,7 +506,7 @@ export default function ProductsPro() {
     try {
       // Fetch product components
       const { data: productComponents, error: compError } = await supabase
-        .from('product_components')
+        .from('product_components' as any)
         .select(`
           component_library!inner(
             id, component_sku, name, description, component_type,
@@ -517,7 +517,7 @@ export default function ProductsPro() {
 
       // Fetch product images
       const { data: productImages, error: imgError } = await supabase
-        .from('product_images_new')
+        .from('product_images_new' as any)
         .select('*')
         .eq('product_id', product.id)
         .order('sort_order');
@@ -525,13 +525,13 @@ export default function ProductsPro() {
       if (compError) console.error('Error loading components:', compError);
       if (imgError) console.error('Error loading images:', imgError);
 
-      const components = productComponents?.map(pc => ({
+      const components = (productComponents as any)?.map((pc: any) => ({
         ...pc.component_library,
         selected: true
       })) || [];
 
       // Format images for the form
-      const formattedImages = productImages?.map(img => ({
+      const formattedImages = (productImages as any)?.map((img: any) => ({
         url: img.url,
         is_primary: img.is_primary || false,
         alt_text: img.alt_text || ''
@@ -569,7 +569,7 @@ export default function ProductsPro() {
     try {
       // Fetch product components - same query as ProductDetails.tsx
       const { data: productComponentData, error: compError } = await supabase
-        .from('product_components')
+        .from('product_components' as any)
         .select(`
           component_library!inner(
             id, component_sku, name, description, component_type,
@@ -581,7 +581,7 @@ export default function ProductsPro() {
 
       // Fetch product images
       const { data: productImages, error: imgError } = await supabase
-        .from('product_images_new')
+        .from('product_images_new' as any)
         .select('*')
         .eq('product_id', product.id)
         .order('sort_order');
@@ -1150,14 +1150,14 @@ export default function ProductsPro() {
                         if (confirm(`Are you sure you want to PERMANENTLY DELETE product "${product.name}"? This action cannot be undone and will remove all related components and images.`)) {
                           try {
                             // Use the new delete_product function from SQL
-                            const { data: functionData, error: functionError } = await supabase
-                              .rpc('delete_product', { product_id: product.id });
+                            const { data: functionData, error: functionError } = await (supabase
+                              .rpc as any)('delete_product', { product_id: product.id });
 
                             if (functionError) {
                               console.error('Function delete error:', functionError);
                               // Fallback to direct deletion if function fails
                               const { error: directError } = await supabase
-                                .from('products_new')
+                                .from('products_new' as any)
                                 .delete()
                                 .eq('id', product.id);
                               

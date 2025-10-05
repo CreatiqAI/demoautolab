@@ -62,7 +62,7 @@ export default function Products() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setProducts(data || []);
+      setProducts((data as any) || []);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast({
@@ -78,13 +78,13 @@ export default function Products() {
   const fetchCategories = async () => {
     try {
       const { data, error } = await supabase
-        .from('categories')
+        .from('categories' as any)
         .select('*')
         .eq('active', true)
         .order('name');
 
       if (error) throw error;
-      setCategories(data || []);
+      setCategories((data as any) || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }

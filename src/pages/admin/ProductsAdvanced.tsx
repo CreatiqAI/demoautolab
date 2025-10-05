@@ -89,7 +89,7 @@ export default function ProductsAdvanced() {
     try {
       // Try new products table first, fallback to old one
       let { data, error } = await supabase
-        .from('products_new')
+        .from('products_new' as any)
         .select(`
           *,
           categories(name),
@@ -108,7 +108,7 @@ export default function ProductsAdvanced() {
       if (error) {
         // Fallback to old products table
         const { data: oldData, error: oldError } = await supabase
-          .from('products')
+          .from('products' as any)
           .select(`
             *,
             categories(name)
@@ -119,7 +119,7 @@ export default function ProductsAdvanced() {
         data = oldData;
       }
 
-      setProducts(data || []);
+      setProducts((data as any) || []);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast({
@@ -135,13 +135,13 @@ export default function ProductsAdvanced() {
   const fetchCategories = async () => {
     try {
       const { data, error } = await supabase
-        .from('categories')
+        .from('categories' as any)
         .select('*')
         .eq('active', true)
         .order('name');
 
       if (error) throw error;
-      setCategories(data || []);
+      setCategories((data as any) || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -171,7 +171,7 @@ export default function ProductsAdvanced() {
       // Step 1: Create or update the main product
       if (editingProduct) {
         const { error } = await supabase
-          .from('products_new')
+          .from('products_new' as any)
           .update({
             ...formData,
             slug,
@@ -183,7 +183,7 @@ export default function ProductsAdvanced() {
         if (error) throw error;
       } else {
         const { data, error } = await supabase
-          .from('products_new')
+          .from('products_new' as any)
           .insert([{
             ...formData,
             slug,
@@ -194,14 +194,14 @@ export default function ProductsAdvanced() {
           .single();
 
         if (error) throw error;
-        productId = data.id;
+        productId = (data as any).id;
       }
 
       // Step 2: Handle product images
       if (formData.images.some(img => img.url)) {
         // Delete existing images
         await supabase
-          .from('product_images_new')
+          .from('product_images_new' as any)
           .delete()
           .eq('product_id', productId);
 
@@ -218,7 +218,7 @@ export default function ProductsAdvanced() {
 
         if (imageInserts.length > 0) {
           const { error: imageError } = await supabase
-            .from('product_images_new')
+            .from('product_images_new' as any)
             .insert(imageInserts);
 
           if (imageError) throw imageError;
@@ -252,7 +252,7 @@ export default function ProductsAdvanced() {
         if (componentVariantId) {
           // Update existing
           const { error } = await supabase
-            .from('component_variants')
+            .from('component_variants' as any)
             .update(componentData)
             .eq('id', componentVariantId);
 
@@ -260,20 +260,20 @@ export default function ProductsAdvanced() {
         } else {
           // Create new
           const { data, error } = await supabase
-            .from('component_variants')
+            .from('component_variants' as any)
             .insert([componentData])
             .select('id')
             .single();
 
           if (error) throw error;
-          componentVariantId = data.id;
+          componentVariantId = (data as any).id;
         }
 
         // Handle component variant images
         if (variant.images.some(img => img.url)) {
           // Delete existing images
           await supabase
-            .from('component_variant_images')
+            .from('component_variant_images' as any)
             .delete()
             .eq('component_variant_id', componentVariantId);
 
@@ -290,7 +290,7 @@ export default function ProductsAdvanced() {
 
           if (variantImageInserts.length > 0) {
             const { error: variantImageError } = await supabase
-              .from('component_variant_images')
+              .from('component_variant_images' as any)
               .insert(variantImageInserts);
 
             if (variantImageError) throw variantImageError;
@@ -299,7 +299,7 @@ export default function ProductsAdvanced() {
 
         // Link component variant to product
         const { error: linkError } = await supabase
-          .from('product_component_variants')
+          .from('product_component_variants' as any)
           .upsert({
             product_id: productId,
             component_variant_id: componentVariantId,
@@ -315,7 +315,7 @@ export default function ProductsAdvanced() {
       if (formData.variant_combinations.length > 0) {
         // Delete existing combinations
         await supabase
-          .from('product_variant_combinations')
+          .from('product_variant_combinations' as any)
           .delete()
           .eq('product_id', productId);
 
@@ -325,17 +325,17 @@ export default function ProductsAdvanced() {
 
           // Get component variant IDs from SKUs
           const { data: componentVariants, error: componentError } = await supabase
-            .from('component_variants')
+            .from('component_variants' as any)
             .select('id')
             .in('sku', combination.component_variant_skus);
 
           if (componentError) throw componentError;
 
-          const componentVariantIds = componentVariants.map(cv => cv.id);
+          const componentVariantIds = (componentVariants as any[]).map((cv: any) => cv.id);
           const combinationSKU = generateCombinationSKU(combination.component_variant_skus);
 
           const { error: combinationError } = await supabase
-            .from('product_variant_combinations')
+            .from('product_variant_combinations' as any)
             .insert({
               product_id: productId,
               combination_name: combination.combination_name || null,

@@ -80,7 +80,7 @@ const Catalog = () => {
     queryFn: async () => {
       // Direct query to get products with categories
       const { data: directData, error: directError } = await supabase
-        .from('products_new')
+        .from('products_new' as any)
         .select(`
           *,
           product_images_new (
@@ -105,7 +105,7 @@ const Catalog = () => {
       }
 
       // Map the data to match interface with fallback pricing
-      const productsData = directData.map(item => ({
+      const productsData = (directData as any).map((item: any) => ({
         ...item,
         product_images: item.product_images_new || [],
         category: item.categories,
@@ -114,13 +114,13 @@ const Catalog = () => {
         merchant_price: item.merchant_price || 249,
         customer_type: 'normal'
       }));
-      
+
       // Filter products based on search and brand
       let filteredData = productsData;
-      
+
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
-        filteredData = filteredData.filter(item =>
+        filteredData = filteredData.filter((item: any) =>
           item.name?.toLowerCase().includes(searchLower) ||
           item.description?.toLowerCase().includes(searchLower) ||
           item.brand?.toLowerCase().includes(searchLower) ||
@@ -129,18 +129,18 @@ const Catalog = () => {
       }
 
       if (selectedBrand !== 'all') {
-        filteredData = filteredData.filter(item => item.brand === selectedBrand);
+        filteredData = filteredData.filter((item: any) => item.brand === selectedBrand);
       }
 
       if (selectedCategory !== 'all') {
-        filteredData = filteredData.filter(item => item.category?.id === selectedCategory);
+        filteredData = filteredData.filter((item: any) => item.category?.id === selectedCategory);
       }
-      
+
       // Ensure product_images is always an array
-      return filteredData.map(item => ({
+      return filteredData.map((item: any) => ({
         ...item,
         product_images: Array.isArray(item.product_images) ? item.product_images : []
-      })) as Product[];
+      })) as unknown as Product[];
     },
   });
 
@@ -209,12 +209,12 @@ const Catalog = () => {
     queryFn: async () => {
       try {
         const { data, error } = await supabase
-          .from('products_new')
+          .from('products_new' as any)
           .select('brand')
           .eq('active', true);
 
         if (!error && data) {
-          const uniqueBrands = [...new Set(data.map(item => item.brand).filter(Boolean))] as string[];
+          const uniqueBrands = [...new Set((data as any).map((item: any) => item.brand).filter(Boolean))] as string[];
           return uniqueBrands.map(brand => ({ id: brand, name: brand }));
         } else {
           console.warn('Brands query failed:', error);

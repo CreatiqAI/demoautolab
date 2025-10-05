@@ -76,7 +76,7 @@ const ProductDetails = () => {
 
     try {
       const { data, error } = await supabase
-        .from('products_new')
+        .from('products_new' as any)
         .select(`
           *,
           product_images_new (
@@ -97,8 +97,8 @@ const ProductDetails = () => {
       }
 
       const productData: Product = {
-        ...data,
-        product_images: data.product_images_new || [],
+        ...(data as any),
+        product_images: (data as any).product_images_new || [],
       };
 
       setProduct(productData);
@@ -114,7 +114,7 @@ const ProductDetails = () => {
     setLoading(true);
     try {
       const { data: productComponentData, error: productComponentError } = await supabase
-        .from('product_components')
+        .from('product_components' as any)
         .select(`
           component_library!inner(
             id, component_sku, name, description, component_type,
@@ -136,7 +136,7 @@ const ProductDetails = () => {
         return;
       }
 
-      const transformedComponents = productComponentData.map(pc => {
+      const transformedComponents = (productComponentData as any).map((pc: any) => {
         const component = pc.component_library;
         return {
           id: component.id,
