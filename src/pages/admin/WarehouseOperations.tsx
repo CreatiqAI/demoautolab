@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
+import { Checkbox } from '@/components/ui/checkbox';
+import {
   Package,
   PackageCheck,
   Truck,
@@ -22,9 +23,18 @@ import {
   FileText,
   ArrowRight,
   Warehouse,
-  ShoppingCart
+  ShoppingCart,
+  Download,
+  X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+// HTML2PDF CDN integration
+declare global {
+  interface Window {
+    html2pdf: any;
+  }
+}
 
 interface WarehouseOrder {
   id: string;
@@ -55,7 +65,6 @@ interface WarehouseOrder {
 
 type OrderStatus =
   | 'PROCESSING'
-  | 'WAREHOUSE_ASSIGNED'
   | 'PICKING'
   | 'PACKING'
   | 'READY_FOR_DELIVERY'
@@ -65,7 +74,6 @@ type OrderStatus =
 
 const STATUS_WORKFLOW: { status: OrderStatus; label: string; description: string; icon: any; color: string }[] = [
   { status: 'PROCESSING', label: 'Processing', description: 'Order approved, ready for warehouse', icon: Clock, color: 'bg-blue-100 text-blue-800 border-blue-200' },
-  { status: 'WAREHOUSE_ASSIGNED', label: 'Assigned', description: 'Assigned to warehouse team', icon: User, color: 'bg-purple-100 text-purple-800 border-purple-200' },
   { status: 'PICKING', label: 'Picking', description: 'Items being picked from inventory', icon: Package, color: 'bg-orange-100 text-orange-800 border-orange-200' },
   { status: 'PACKING', label: 'Packing', description: 'Items being packed for delivery', icon: PackageCheck, color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
   { status: 'READY_FOR_DELIVERY', label: 'Ready', description: 'Ready for pickup/delivery', icon: CheckCircle, color: 'bg-green-100 text-green-800 border-green-200' },
@@ -82,10 +90,27 @@ export default function WarehouseOperations() {
   const [newStatus, setNewStatus] = useState<OrderStatus>('PICKING');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<OrderStatus>('PROCESSING');
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [isPickingListModalOpen, setIsPickingListModalOpen] = useState(false);
+  const [isPackingListModalOpen, setIsPackingListModalOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchWarehouseOrders();
+  }, []);
+
+  // Load HTML2PDF library
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    script.async = true;
+    document.head.appendChild(script);
+
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
   }, []);
 
   const fetchWarehouseOrders = async () => {
@@ -93,6 +118,7 @@ export default function WarehouseOperations() {
       setLoading(true);
       console.log('🏭 Fetching warehouse orders...');
 
+      // Include WAREHOUSE_ASSIGNED for backwards compatibility (will be shown in PROCESSING tab)
       const warehouseStatuses = ['PROCESSING', 'WAREHOUSE_ASSIGNED', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED'];
 
       // Get orders with warehouse statuses and their items
@@ -147,6 +173,7 @@ export default function WarehouseOperations() {
       }
 
       // Transform data to match expected interface
+      // Convert WAREHOUSE_ASSIGNED to PROCESSING for backwards compatibility
       const transformedOrders = ordersData.map((order: any) => ({
         id: order.id,
         order_no: order.order_no || `ORD-${order.id?.slice(0, 8)}`,
@@ -159,7 +186,7 @@ export default function WarehouseOperations() {
         processing_notes: order.processing_notes || null,
         internal_notes: order.internal_notes || null,
         total: order.total || 0,
-        status: order.status || 'PROCESSING',
+        status: order.status === 'WAREHOUSE_ASSIGNED' ? 'PROCESSING' : (order.status || 'PROCESSING'),
         created_at: order.created_at,
         warehouse_assigned_at: order.warehouse_assigned_at || null,
         warehouse_assigned_to: order.warehouse_assigned_to || null,
@@ -200,34 +227,230 @@ export default function WarehouseOperations() {
     return orders.filter(order => order.status === status);
   };
 
-  const assignToWarehouse = async (orderId: string) => {
+  // Multi-select handlers
+  const handleSelectOrder = (orderId: string, checked: boolean) => {
+    setSelectedOrderIds(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(orderId);
+      } else {
+        newSet.delete(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = (checked: boolean, statusOrders: WarehouseOrder[]) => {
+    if (checked) {
+      setSelectedOrderIds(new Set(statusOrders.map(order => order.id)));
+    } else {
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  // Picking List data aggregation (by SKU)
+  interface PickingListItem {
+    componentName: string;
+    sku: string;
+    orderQuantities: Array<{
+      orderId: string;
+      quantity: number;
+    }>;
+  }
+
+  const generatePickingListData = (): PickingListItem[] => {
+    const selectedOrders = orders.filter(order => selectedOrderIds.has(order.id));
+    const skuMap = new Map<string, PickingListItem>();
+
+    selectedOrders.forEach(order => {
+      order.order_items.forEach(item => {
+        if (!skuMap.has(item.component_sku)) {
+          skuMap.set(item.component_sku, {
+            componentName: item.component_name,
+            sku: item.component_sku,
+            orderQuantities: []
+          });
+        }
+        const pickingItem = skuMap.get(item.component_sku)!;
+        pickingItem.orderQuantities.push({
+          orderId: order.order_no,
+          quantity: item.quantity
+        });
+      });
+    });
+
+    return Array.from(skuMap.values());
+  };
+
+  // Packing List data (by Order)
+  interface PackingListItem {
+    orderNo: string;
+    items: Array<{
+      componentName: string;
+      sku: string;
+      quantity: number;
+    }>;
+  }
+
+  const generatePackingListData = (): PackingListItem[] => {
+    const selectedOrders = orders.filter(order => selectedOrderIds.has(order.id));
+
+    return selectedOrders.map(order => ({
+      orderNo: order.order_no,
+      items: order.order_items.map(item => ({
+        componentName: item.component_name,
+        sku: item.component_sku,
+        quantity: item.quantity
+      }))
+    }));
+  };
+
+  const openPickingListModal = () => {
+    if (selectedOrderIds.size === 0) {
+      toast({
+        title: "No Orders Selected",
+        description: "Please select at least one order to generate a picking list.",
+        variant: "destructive"
+      });
+      return;
+    }
+    setIsPickingListModalOpen(true);
+  };
+
+  const openPackingListModal = () => {
+    if (selectedOrderIds.size === 0) {
+      toast({
+        title: "No Orders Selected",
+        description: "Please select at least one order to generate a packing list.",
+        variant: "destructive"
+      });
+      return;
+    }
+    setIsPackingListModalOpen(true);
+  };
+
+  const closePickingListModal = () => {
+    setIsPickingListModalOpen(false);
+  };
+
+  const closePackingListModal = () => {
+    setIsPackingListModalOpen(false);
+  };
+
+  const printPickingList = () => {
+    window.print();
+  };
+
+  const printPackingList = () => {
+    window.print();
+  };
+
+  const downloadPickingListPDF = () => {
+    const pickingListBody = document.getElementById('pickingListBody');
+
+    const opt = {
+      margin: [0.4, 0.4, 0.4, 0.4],
+      filename: `picking-list-${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: {
+        scale: 1.5,
+        useCORS: true,
+        letterRendering: true,
+        logging: false
+      },
+      jsPDF: {
+        unit: 'in',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    if (window.html2pdf) {
+      window.html2pdf().from(pickingListBody).set(opt).save();
+    } else {
+      toast({
+        title: "Error",
+        description: "PDF library not loaded. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const downloadPackingListPDF = () => {
+    const packingListBody = document.getElementById('packingListBody');
+
+    const opt = {
+      margin: [0.4, 0.4, 0.4, 0.4],
+      filename: `packing-list-${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: {
+        scale: 1.5,
+        useCORS: true,
+        letterRendering: true,
+        logging: false
+      },
+      jsPDF: {
+        unit: 'in',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    if (window.html2pdf) {
+      window.html2pdf().from(packingListBody).set(opt).save();
+    } else {
+      toast({
+        title: "Error",
+        description: "PDF library not loaded. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Bulk update selected orders to next status
+  const bulkUpdateOrders = async (targetStatus: OrderStatus) => {
+    if (selectedOrderIds.size === 0) {
+      toast({
+        title: "No Orders Selected",
+        description: "Please select at least one order to update.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       setIsUpdating(true);
+      const selectedOrdersArray = Array.from(selectedOrderIds);
 
-      // Update order to WAREHOUSE_ASSIGNED status
+      // Update all selected orders
       const { error } = await supabase
         .from('orders' as any)
         .update({
-          status: 'WAREHOUSE_ASSIGNED' as any,
+          status: targetStatus as any,
           updated_at: new Date().toISOString()
         })
-        .eq('id', orderId);
+        .in('id', selectedOrdersArray);
 
       if (error) throw error;
 
       toast({
-        title: "Order Assigned",
-        description: "Order has been assigned to warehouse operations",
+        title: "Orders Updated",
+        description: `${selectedOrdersArray.length} order(s) updated to ${getStatusInfo(targetStatus).label}`,
       });
 
-      setUpdateNotes('');
+      // Clear selection and refresh
+      setSelectedOrderIds(new Set());
       fetchWarehouseOrders();
 
     } catch (error: any) {
-      console.error('Error assigning to warehouse:', error);
+      console.error('Error bulk updating orders:', error);
       toast({
-        title: "Assignment Failed",
-        description: error.message || "Failed to assign order to warehouse",
+        title: "Update Failed",
+        description: error.message || "Failed to update orders",
         variant: "destructive"
       });
     } finally {
@@ -337,7 +560,7 @@ export default function WarehouseOperations() {
       </div>
 
       {/* Status Overview */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
         {STATUS_WORKFLOW.map(({ status }) => (
           <StatusCard key={status} status={status} count={getOrdersByStatus(status).length} />
         ))}
@@ -346,7 +569,7 @@ export default function WarehouseOperations() {
       {/* Orders by Status Tabs */}
       <Tabs value={currentTab} onValueChange={(value) => setCurrentTab(value as OrderStatus)} className="w-full">
         {/* Desktop Tabs - Hidden on mobile/tablet */}
-        <TabsList className="hidden lg:grid w-full grid-cols-7">
+        <TabsList className="hidden lg:grid w-full grid-cols-6">
           {STATUS_WORKFLOW.map(({ status, label }) => (
             <TabsTrigger key={status} value={status} className="text-xs">
               {label} ({getOrdersByStatus(status).length})
@@ -387,7 +610,11 @@ export default function WarehouseOperations() {
           </Select>
         </div>
 
-        {STATUS_WORKFLOW.map(({ status, label, description }) => (
+        {STATUS_WORKFLOW.map(({ status, label, description }) => {
+          const statusOrders = getOrdersByStatus(status);
+          const selectedInTab = statusOrders.filter(order => selectedOrderIds.has(order.id)).length;
+
+          return (
           <TabsContent key={status} value={status}>
             <Card>
               <CardHeader>
@@ -396,9 +623,63 @@ export default function WarehouseOperations() {
                   {label} Orders
                 </CardTitle>
                 <CardDescription>{description}</CardDescription>
+
+                {/* Action Buttons for Selected Orders */}
+                {selectedInTab > 0 && (
+                  <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg mt-4">
+                    <span className="text-sm font-medium text-blue-900">
+                      {selectedInTab} order{selectedInTab > 1 ? 's' : ''} selected
+                    </span>
+
+                    {/* Show Generate Picking List for PROCESSING tab */}
+                    {status === 'PROCESSING' && (
+                      <Button
+                        onClick={openPickingListModal}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        size="sm"
+                      >
+                        <Package className="h-4 w-4 mr-2" />
+                        Generate Picking List
+                      </Button>
+                    )}
+
+                    {/* Show Generate Packing List for PACKING tab */}
+                    {status === 'PACKING' && (
+                      <Button
+                        onClick={openPackingListModal}
+                        className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                        size="sm"
+                      >
+                        <PackageCheck className="h-4 w-4 mr-2" />
+                        Generate Packing List
+                      </Button>
+                    )}
+
+                    {/* Bulk Update Button */}
+                    {getNextStatus(status) && (
+                      <Button
+                        onClick={() => bulkUpdateOrders(getNextStatus(status)!.status)}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        size="sm"
+                        disabled={isUpdating}
+                      >
+                        <ArrowRight className="h-4 w-4 mr-2" />
+                        Move to {getNextStatus(status)!.label}
+                      </Button>
+                    )}
+
+                    <Button
+                      onClick={() => setSelectedOrderIds(new Set())}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Clear Selection
+                    </Button>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
-                {getOrdersByStatus(status).length === 0 ? (
+                {statusOrders.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No orders in {label.toLowerCase()} status</p>
@@ -410,6 +691,13 @@ export default function WarehouseOperations() {
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-12">
+                              <Checkbox
+                                checked={selectedInTab === statusOrders.length && statusOrders.length > 0}
+                                onCheckedChange={(checked) => handleSelectAll(checked as boolean, statusOrders)}
+                                aria-label="Select all orders"
+                              />
+                            </TableHead>
                             <TableHead>Order</TableHead>
                             <TableHead>Customer</TableHead>
                             <TableHead>Items</TableHead>
@@ -419,12 +707,19 @@ export default function WarehouseOperations() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {getOrdersByStatus(status).map((order) => (
+                          {statusOrders.map((order) => (
                             <React.Fragment key={order.id}>
                               <TableRow
                                 className="cursor-pointer hover:bg-muted/50"
                                 onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
                               >
+                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox
+                                    checked={selectedOrderIds.has(order.id)}
+                                    onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
+                                    aria-label={`Select order ${order.order_no}`}
+                                  />
+                                </TableCell>
                                 <TableCell>
                                   <div>
                                     <p className="font-medium">{order.order_no}</p>
@@ -474,7 +769,7 @@ export default function WarehouseOperations() {
                             </TableRow>
                               {expandedOrderId === order.id && (
                                 <TableRow>
-                                  <TableCell colSpan={6} className="bg-muted/30">
+                                  <TableCell colSpan={7} className="bg-muted/30">
                                     <div className="p-4 space-y-4">
                                       <div className="grid md:grid-cols-2 gap-4">
                                         {/* Delivery Address */}
@@ -695,7 +990,8 @@ export default function WarehouseOperations() {
               </CardContent>
           </Card>
         </TabsContent>
-      ))}
+          );
+        })}
     </Tabs>
 
       {/* Process Order Dialog */}
@@ -779,15 +1075,307 @@ export default function WarehouseOperations() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Picking List Modal */}
+      {isPickingListModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closePickingListModal();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-auto shadow-xl">
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
+              <h2 className="text-xl font-semibold">Picking List</h2>
+              <button
+                onClick={closePickingListModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div id="picking-list-content">
+              <div id="pickingListBody" className="p-8 bg-white">
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold mb-2">Picking List</h1>
+                  <p className="text-sm text-gray-600">
+                    Generated: {new Date().toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Total Orders: {selectedOrderIds.size}
+                  </p>
+                </div>
+
+                <table className="w-full border-collapse border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border border-gray-300 px-4 py-2 text-left w-16">No.</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left">Component Name</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left w-32">SKU</th>
+                      <th className="border border-gray-300 px-4 py-2 text-center w-24">Quantity</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left w-40">Order ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {generatePickingListData().map((item, index) => {
+                      const rowCount = item.orderQuantities.length;
+                      return item.orderQuantities.map((orderQty, qtyIndex) => (
+                        <tr key={`${item.sku}-${qtyIndex}`} className="hover:bg-gray-50">
+                          {qtyIndex === 0 && (
+                            <>
+                              <td
+                                className="border border-gray-300 px-4 py-2 text-center font-semibold align-middle"
+                                rowSpan={rowCount}
+                              >
+                                {index + 1}
+                              </td>
+                              <td
+                                className="border border-gray-300 px-4 py-2 align-middle"
+                                rowSpan={rowCount}
+                              >
+                                {item.componentName}
+                              </td>
+                              <td
+                                className="border border-gray-300 px-4 py-2 align-middle"
+                                rowSpan={rowCount}
+                              >
+                                <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                  {item.sku}
+                                </code>
+                              </td>
+                            </>
+                          )}
+                          <td className="border border-gray-300 px-4 py-2 text-center">
+                            {orderQty.quantity}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {orderQty.orderId}
+                          </td>
+                        </tr>
+                      ));
+                    })}
+                  </tbody>
+                </table>
+
+                <div className="mt-6 pt-4 border-t border-gray-300">
+                  <p className="text-sm text-gray-600">
+                    <strong>Total Items:</strong> {generatePickingListData().length} unique component(s)
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Total Quantity:</strong> {generatePickingListData().reduce((sum, item) =>
+                      sum + item.orderQuantities.reduce((qtySum, oq) => qtySum + oq.quantity, 0), 0
+                    )} unit(s)
+                  </p>
+                </div>
+
+                <div className="mt-8 text-center text-xs text-gray-500">
+                  <p>This is a computer generated picking list.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t p-4 flex justify-center gap-3">
+              <Button onClick={printPickingList} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Download className="h-4 w-4 mr-2" />
+                Print Picking List
+              </Button>
+              <Button onClick={downloadPickingListPDF} variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50">
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+              <Button onClick={closePickingListModal} variant="outline">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Packing List Modal */}
+      {isPackingListModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closePackingListModal();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-auto shadow-xl">
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
+              <h2 className="text-xl font-semibold">Packing List</h2>
+              <button
+                onClick={closePackingListModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div id="packing-list-content">
+              <div id="packingListBody" className="p-8 bg-white">
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold mb-2">Packing List</h1>
+                  <p className="text-sm text-gray-600">
+                    Generated: {new Date().toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Total Orders: {selectedOrderIds.size}
+                  </p>
+                </div>
+
+                <table className="w-full border-collapse border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border border-gray-300 px-4 py-2 text-left w-16">No.</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left w-32">Order ID</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left">Items</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left w-32">SKU</th>
+                      <th className="border border-gray-300 px-4 py-2 text-center w-24">Quantity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {generatePackingListData().map((order, orderIndex) => {
+                      const rowCount = order.items.length;
+                      return order.items.map((item, itemIndex) => (
+                        <tr key={`${order.orderNo}-${itemIndex}`} className="hover:bg-gray-50">
+                          {itemIndex === 0 && (
+                            <>
+                              <td
+                                className="border border-gray-300 px-4 py-2 text-center font-semibold align-middle"
+                                rowSpan={rowCount}
+                              >
+                                {orderIndex + 1}
+                              </td>
+                              <td
+                                className="border border-gray-300 px-4 py-2 align-middle font-medium"
+                                rowSpan={rowCount}
+                              >
+                                {order.orderNo}
+                              </td>
+                            </>
+                          )}
+                          <td className="border border-gray-300 px-4 py-2">
+                            {item.componentName}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                              {item.sku}
+                            </code>
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2 text-center">
+                            {item.quantity}
+                          </td>
+                        </tr>
+                      ));
+                    })}
+                  </tbody>
+                </table>
+
+                <div className="mt-6 pt-4 border-t border-gray-300">
+                  <p className="text-sm text-gray-600">
+                    <strong>Total Orders:</strong> {generatePackingListData().length}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Total Items:</strong> {generatePackingListData().reduce((sum, order) =>
+                      sum + order.items.length, 0
+                    )}
+                  </p>
+                </div>
+
+                <div className="mt-8 text-center text-xs text-gray-500">
+                  <p>This is a computer generated packing list.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t p-4 flex justify-center gap-3">
+              <Button onClick={printPackingList} className="bg-yellow-600 hover:bg-yellow-700 text-white">
+                <Download className="h-4 w-4 mr-2" />
+                Print Packing List
+              </Button>
+              <Button onClick={downloadPackingListPDF} variant="outline" className="border-yellow-600 text-yellow-600 hover:bg-yellow-50">
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+              <Button onClick={closePackingListModal} variant="outline">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print Styles */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            #picking-list-content,
+            #picking-list-content *,
+            #packing-list-content,
+            #packing-list-content * {
+              visibility: visible;
+            }
+            #picking-list-content,
+            #packing-list-content {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              height: 100%;
+              margin: 0;
+              padding: 0;
+              background: white;
+            }
+            .sticky {
+              display: none;
+            }
+          }
+        `
+      }} />
     </div>
   );
 }
 
-// Get valid next statuses for warehouse workflow progression
+// Helper to get next status in workflow
+const getNextStatus = (currentStatus: OrderStatus) => {
+  const WAREHOUSE_WORKFLOW = [
+    { status: 'PROCESSING' as OrderStatus, label: 'Processing', icon: Clock },
+    { status: 'PICKING' as OrderStatus, label: 'Picking', icon: Package },
+    { status: 'PACKING' as OrderStatus, label: 'Packing', icon: PackageCheck },
+    { status: 'READY_FOR_DELIVERY' as OrderStatus, label: 'Ready', icon: CheckCircle },
+    { status: 'OUT_FOR_DELIVERY' as OrderStatus, label: 'Dispatched', icon: Truck },
+    { status: 'DELIVERED' as OrderStatus, label: 'Delivered', icon: CheckCircle }
+  ];
+
+  const statusIndex = WAREHOUSE_WORKFLOW.findIndex(s => s.status === currentStatus);
+  return statusIndex >= 0 && statusIndex < WAREHOUSE_WORKFLOW.length - 1
+    ? WAREHOUSE_WORKFLOW[statusIndex + 1]
+    : null;
+};
+
+// Get valid next statuses for warehouse workflow progression (for single order dialog)
 const getValidNextStatuses = (currentStatus: string) => {
   const WAREHOUSE_WORKFLOW = [
     { status: 'PROCESSING', label: 'Processing', icon: Clock },
-    { status: 'WAREHOUSE_ASSIGNED', label: 'Assigned', icon: User },
     { status: 'PICKING', label: 'Picking', icon: Package },
     { status: 'PACKING', label: 'Packing', icon: PackageCheck },
     { status: 'READY_FOR_DELIVERY', label: 'Ready', icon: CheckCircle },
