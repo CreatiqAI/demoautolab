@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Trash2, Download, FileText, X } from 'lucide-react';
+import { Search, Trash2, Download, FileText, X, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // HTML2PDF CDN integration
 declare global {
@@ -100,6 +101,8 @@ export default function Orders() {
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [isPickingListModalOpen, setIsPickingListModalOpen] = useState(false);
   const { toast } = useToast();
 
   const [editForm, setEditForm] = useState({
@@ -538,6 +541,113 @@ export default function Orders() {
     });
   };
 
+  // Multi-select handlers
+  const handleSelectOrder = (orderId: string, checked: boolean) => {
+    setSelectedOrderIds(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(orderId);
+      } else {
+        newSet.delete(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedOrderIds(new Set(filteredOrders.map(order => order.id)));
+    } else {
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  // Picking List data aggregation
+  interface PickingListItem {
+    componentName: string;
+    sku: string;
+    orderQuantities: Array<{
+      orderId: string;
+      quantity: number;
+    }>;
+  }
+
+  const generatePickingListData = (): PickingListItem[] => {
+    const selectedOrders = orders.filter(order => selectedOrderIds.has(order.id));
+    const skuMap = new Map<string, PickingListItem>();
+
+    selectedOrders.forEach(order => {
+      order.order_items.forEach(item => {
+        if (!skuMap.has(item.component_sku)) {
+          skuMap.set(item.component_sku, {
+            componentName: item.component_name,
+            sku: item.component_sku,
+            orderQuantities: []
+          });
+        }
+        const pickingItem = skuMap.get(item.component_sku)!;
+        pickingItem.orderQuantities.push({
+          orderId: order.order_no,
+          quantity: item.quantity
+        });
+      });
+    });
+
+    return Array.from(skuMap.values());
+  };
+
+  const openPickingListModal = () => {
+    if (selectedOrderIds.size === 0) {
+      toast({
+        title: "No Orders Selected",
+        description: "Please select at least one order to generate a picking list.",
+        variant: "destructive"
+      });
+      return;
+    }
+    setIsPickingListModalOpen(true);
+  };
+
+  const closePickingListModal = () => {
+    setIsPickingListModalOpen(false);
+  };
+
+  const printPickingList = () => {
+    window.print();
+  };
+
+  const downloadPickingListPDF = () => {
+    const pickingListBody = document.getElementById('pickingListBody');
+
+    const opt = {
+      margin: [0.4, 0.4, 0.4, 0.4],
+      filename: `picking-list-${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: {
+        scale: 1.5,
+        useCORS: true,
+        letterRendering: true,
+        logging: false
+      },
+      jsPDF: {
+        unit: 'in',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    if (window.html2pdf) {
+      window.html2pdf().from(pickingListBody).set(opt).save();
+    } else {
+      toast({
+        title: "Error",
+        description: "PDF library not loaded. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   const getStatusLabel = (status: string): string => {
     const statusOption = ORDER_STATUS_OPTIONS.find(option => option.value === status);
@@ -674,30 +784,55 @@ export default function Orders() {
             View and manage all customer orders
           </CardDescription>
 
-          <div className="flex items-center space-x-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search orders..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search orders..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  {ORDER_STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                {ORDER_STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {selectedOrderIds.size > 0 && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <span className="text-sm font-medium text-blue-900">
+                  {selectedOrderIds.size} order{selectedOrderIds.size > 1 ? 's' : ''} selected
+                </span>
+                <Button
+                  onClick={openPickingListModal}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  size="sm"
+                >
+                  <Package className="h-4 w-4 mr-2" />
+                  Generate Picking List
+                </Button>
+                <Button
+                  onClick={() => setSelectedOrderIds(new Set())}
+                  variant="outline"
+                  size="sm"
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            )}
           </div>
         </CardHeader>
 
@@ -845,6 +980,33 @@ export default function Orders() {
                 </div>
               )}
               columns={[
+                {
+                  key: 'select',
+                  header: (
+                    <Checkbox
+                      checked={selectedOrderIds.size === filteredOrders.length && filteredOrders.length > 0}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all orders"
+                    />
+                  ),
+                  render: (order) => (
+                    <Checkbox
+                      checked={selectedOrderIds.has(order.id)}
+                      onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select order ${order.order_no}`}
+                    />
+                  ),
+                  mobileRender: (order) => (
+                    <Checkbox
+                      checked={selectedOrderIds.has(order.id)}
+                      onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select order ${order.order_no}`}
+                    />
+                  ),
+                  className: "w-12"
+                },
                 {
                   key: 'order_no',
                   header: 'Order',
@@ -1577,6 +1739,130 @@ export default function Orders() {
         </div>
       )}
 
+      {/* Picking List Modal */}
+      {isPickingListModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closePickingListModal();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-auto shadow-xl">
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
+              <h2 className="text-xl font-semibold">Picking List</h2>
+              <button
+                onClick={closePickingListModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div id="picking-list-content">
+              <div id="pickingListBody" className="p-8 bg-white">
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold mb-2">Picking List</h1>
+                  <p className="text-sm text-gray-600">
+                    Generated: {new Date().toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Total Orders: {selectedOrderIds.size}
+                  </p>
+                </div>
+
+                <table className="w-full border-collapse border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border border-gray-300 px-4 py-2 text-left w-16">No.</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left">Component Name</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left w-32">SKU</th>
+                      <th className="border border-gray-300 px-4 py-2 text-center w-24">Quantity</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left w-40">Order ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {generatePickingListData().map((item, index) => {
+                      const rowCount = item.orderQuantities.length;
+                      return item.orderQuantities.map((orderQty, qtyIndex) => (
+                        <tr key={`${item.sku}-${qtyIndex}`} className="hover:bg-gray-50">
+                          {qtyIndex === 0 && (
+                            <>
+                              <td
+                                className="border border-gray-300 px-4 py-2 text-center font-semibold align-middle"
+                                rowSpan={rowCount}
+                              >
+                                {index + 1}
+                              </td>
+                              <td
+                                className="border border-gray-300 px-4 py-2 align-middle"
+                                rowSpan={rowCount}
+                              >
+                                {item.componentName}
+                              </td>
+                              <td
+                                className="border border-gray-300 px-4 py-2 align-middle"
+                                rowSpan={rowCount}
+                              >
+                                <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                  {item.sku}
+                                </code>
+                              </td>
+                            </>
+                          )}
+                          <td className="border border-gray-300 px-4 py-2 text-center">
+                            {orderQty.quantity}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {orderQty.orderId}
+                          </td>
+                        </tr>
+                      ));
+                    })}
+                  </tbody>
+                </table>
+
+                <div className="mt-6 pt-4 border-t border-gray-300">
+                  <p className="text-sm text-gray-600">
+                    <strong>Total Items:</strong> {generatePickingListData().length} unique component(s)
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Total Quantity:</strong> {generatePickingListData().reduce((sum, item) =>
+                      sum + item.orderQuantities.reduce((qtySum, oq) => qtySum + oq.quantity, 0), 0
+                    )} unit(s)
+                  </p>
+                </div>
+
+                <div className="mt-8 text-center text-xs text-gray-500">
+                  <p>This is a computer generated picking list.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t p-4 flex justify-center gap-3">
+              <Button onClick={printPickingList} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Download className="h-4 w-4 mr-2" />
+                Print Picking List
+              </Button>
+              <Button onClick={downloadPickingListPDF} variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50">
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+              <Button onClick={closePickingListModal} variant="outline">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Print Styles */}
       <style dangerouslySetInnerHTML={{
         __html: `
@@ -1585,10 +1871,13 @@ export default function Orders() {
               visibility: hidden;
             }
             #invoice-content,
-            #invoice-content * {
+            #invoice-content *,
+            #picking-list-content,
+            #picking-list-content * {
               visibility: visible;
             }
-            #invoice-content {
+            #invoice-content,
+            #picking-list-content {
               position: absolute;
               left: 0;
               top: 0;

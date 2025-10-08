@@ -25,9 +25,22 @@ import {
   Warehouse,
   ShoppingCart,
   Download,
-  X
+  X,
+  Send,
+  Search,
+  ExternalLink
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  CourierProvider,
+  COURIER_SERVICES,
+  getCourierService,
+  getCourierRates,
+  type ShipmentRequest,
+  type ShipmentResponse,
+  type TrackingInfo,
+  type CourierRate
+} from '@/lib/courier-service';
 
 // HTML2PDF CDN integration
 declare global {
@@ -52,6 +65,13 @@ interface WarehouseOrder {
   created_at: string;
   warehouse_assigned_at: string | null;
   warehouse_assigned_to: string | null;
+  // Courier-related fields
+  courier_provider: CourierProvider | null;
+  courier_tracking_number: string | null;
+  courier_shipment_id: string | null;
+  courier_cost: number | null;
+  courier_label_url: string | null;
+  courier_created_at: string | null;
   order_items: Array<{
     id: string;
     component_sku: string;
@@ -93,6 +113,14 @@ export default function WarehouseOperations() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [isPickingListModalOpen, setIsPickingListModalOpen] = useState(false);
   const [isPackingListModalOpen, setIsPackingListModalOpen] = useState(false);
+  const [isCourierDialogOpen, setIsCourierDialogOpen] = useState(false);
+  const [courierOrder, setCourierOrder] = useState<WarehouseOrder | null>(null);
+  const [selectedCourier, setSelectedCourier] = useState<CourierProvider | null>(null);
+  const [courierRates, setCourierRates] = useState<CourierRate[]>([]);
+  const [isCreatingShipment, setIsCreatingShipment] = useState(false);
+  const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
+  const [trackingInfo, setTrackingInfo] = useState<TrackingInfo | null>(null);
+  const [loadingTracking, setLoadingTracking] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -190,6 +218,13 @@ export default function WarehouseOperations() {
         created_at: order.created_at,
         warehouse_assigned_at: order.warehouse_assigned_at || null,
         warehouse_assigned_to: order.warehouse_assigned_to || null,
+        // Courier-related fields
+        courier_provider: order.courier_provider || null,
+        courier_tracking_number: order.courier_tracking_number || null,
+        courier_shipment_id: order.courier_shipment_id || null,
+        courier_cost: order.courier_cost || null,
+        courier_label_url: order.courier_label_url || null,
+        courier_created_at: order.courier_created_at || null,
         order_items: order.order_items || []
       }));
 
@@ -507,6 +542,223 @@ export default function WarehouseOperations() {
     }
   };
 
+  // Courier Service Functions
+  const openCourierDialog = async (order: WarehouseOrder) => {
+    setCourierOrder(order);
+    setSelectedCourier(order.courier_provider || null);
+    setIsCourierDialogOpen(true);
+
+    // Fetch courier rates
+    try {
+      const shipmentRequest: ShipmentRequest = {
+        orderId: order.id,
+        orderNo: order.order_no,
+        customerName: order.customer_name,
+        customerPhone: order.customer_phone,
+        customerEmail: order.customer_email || undefined,
+        deliveryAddress: {
+          address: order.delivery_address?.address || '',
+          city: order.delivery_address?.city,
+          state: order.delivery_address?.state,
+          postcode: order.delivery_address?.postcode,
+          country: order.delivery_address?.country || 'Malaysia'
+        },
+        items: order.order_items.map(item => ({
+          name: item.component_name,
+          sku: item.component_sku,
+          quantity: item.quantity
+        })),
+        pickupAddress: {
+          address: '17, Jalan 7/95B, Cheras Utama',
+          city: 'Cheras',
+          state: 'Kuala Lumpur',
+          postcode: '56100',
+          country: 'Malaysia',
+          contactName: 'AUTO LABS SDN BHD',
+          contactPhone: '03-4297 7668'
+        }
+      };
+
+      const rates = await getCourierRates(shipmentRequest);
+      setCourierRates(rates);
+    } catch (error) {
+      console.error('Error fetching courier rates:', error);
+    }
+  };
+
+  const createShipment = async () => {
+    if (!courierOrder || !selectedCourier) {
+      toast({
+        title: "Error",
+        description: "Please select a courier service",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setIsCreatingShipment(true);
+
+      const shipmentRequest: ShipmentRequest = {
+        orderId: courierOrder.id,
+        orderNo: courierOrder.order_no,
+        customerName: courierOrder.customer_name,
+        customerPhone: courierOrder.customer_phone,
+        customerEmail: courierOrder.customer_email || undefined,
+        deliveryAddress: {
+          address: courierOrder.delivery_address?.address || '',
+          city: courierOrder.delivery_address?.city,
+          state: courierOrder.delivery_address?.state,
+          postcode: courierOrder.delivery_address?.postcode,
+          country: courierOrder.delivery_address?.country || 'Malaysia',
+          notes: courierOrder.delivery_address?.notes
+        },
+        items: courierOrder.order_items.map(item => ({
+          name: item.component_name,
+          sku: item.component_sku,
+          quantity: item.quantity,
+          value: item.unit_price
+        })),
+        totalValue: courierOrder.total,
+        pickupAddress: {
+          address: '17, Jalan 7/95B, Cheras Utama',
+          city: 'Cheras',
+          state: 'Kuala Lumpur',
+          postcode: '56100',
+          country: 'Malaysia',
+          contactName: 'AUTO LABS SDN BHD',
+          contactPhone: '03-4297 7668'
+        }
+      };
+
+      let shipmentResponse: ShipmentResponse | null = null;
+
+      if (selectedCourier === 'OWN_DELIVERY') {
+        // For own delivery, just mark it without external API call
+        shipmentResponse = {
+          success: true,
+          courierProvider: 'OWN_DELIVERY',
+          trackingNumber: `OWN-${courierOrder.order_no}`,
+          shipmentId: `OWN-${courierOrder.id}`,
+          cost: 5.00
+        };
+      } else {
+        // Call courier service API
+        const courierService = getCourierService(selectedCourier);
+        if (courierService) {
+          shipmentResponse = await courierService.createShipment(shipmentRequest);
+        }
+      }
+
+      if (!shipmentResponse || !shipmentResponse.success) {
+        throw new Error(shipmentResponse?.errorMessage || 'Failed to create shipment');
+      }
+
+      // Update order with courier information
+      const { error } = await supabase
+        .from('orders' as any)
+        .update({
+          courier_provider: selectedCourier,
+          courier_tracking_number: shipmentResponse.trackingNumber,
+          courier_shipment_id: shipmentResponse.shipmentId,
+          courier_cost: shipmentResponse.cost,
+          courier_label_url: shipmentResponse.shippingLabel,
+          courier_created_at: new Date().toISOString(),
+          status: 'OUT_FOR_DELIVERY',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', courierOrder.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Shipment Created",
+        description: `Tracking Number: ${shipmentResponse.trackingNumber}`,
+      });
+
+      setIsCourierDialogOpen(false);
+      setCourierOrder(null);
+      setSelectedCourier(null);
+      fetchWarehouseOrders();
+
+    } catch (error: any) {
+      console.error('Error creating shipment:', error);
+      toast({
+        title: "Shipment Failed",
+        description: error.message || "Failed to create shipment",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCreatingShipment(false);
+    }
+  };
+
+  const trackShipment = async (order: WarehouseOrder) => {
+    if (!order.courier_tracking_number || !order.courier_provider) {
+      toast({
+        title: "No Tracking Information",
+        description: "This order doesn't have tracking information",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setLoadingTracking(true);
+      setTrackingDialogOpen(true);
+
+      const courierService = getCourierService(order.courier_provider);
+      if (courierService) {
+        const tracking = await courierService.trackShipment(order.courier_tracking_number);
+        setTrackingInfo(tracking);
+      } else if (order.courier_provider === 'OWN_DELIVERY') {
+        // Mock tracking for own delivery
+        setTrackingInfo({
+          trackingNumber: order.courier_tracking_number,
+          courierProvider: 'OWN_DELIVERY',
+          status: 'out_for_delivery',
+          statusDescription: 'Package is out for delivery',
+          history: [
+            {
+              timestamp: order.courier_created_at || new Date().toISOString(),
+              status: 'picked_up',
+              description: 'Package picked up',
+              location: 'Warehouse'
+            }
+          ]
+        });
+      }
+    } catch (error: any) {
+      console.error('Error tracking shipment:', error);
+      toast({
+        title: "Tracking Failed",
+        description: error.message || "Failed to track shipment",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingTracking(false);
+    }
+  };
+
+  const downloadShippingLabel = (order: WarehouseOrder) => {
+    if (!order.courier_label_url) {
+      toast({
+        title: "No Label Available",
+        description: "Shipping label is not available for this order",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // In production, this would download the actual label
+    window.open(order.courier_label_url, '_blank');
+
+    toast({
+      title: "Label Downloaded",
+      description: "Shipping label opened in new tab",
+    });
+  };
+
   const StatusCard = ({ status, count }: { status: OrderStatus; count: number }) => {
     const statusInfo = getStatusInfo(status);
     const Icon = statusInfo.icon;
@@ -752,19 +1004,70 @@ export default function WarehouseOperations() {
                                   {formatCurrency(order.total)}
                                 </TableCell>
                                 <TableCell className="text-center">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedOrder(order);
-                                    const validNextStatuses = getValidNextStatuses(order.status as OrderStatus);
-                                    setNewStatus((validNextStatuses[0]?.status as OrderStatus) || 'PICKING');
-                                  }}
-                                >
-                                  <ArrowRight className="h-4 w-4 mr-1" />
-                                  Process
-                                </Button>
+                                  <div className="flex items-center justify-center gap-2">
+                                    {/* Show courier buttons for READY_FOR_DELIVERY status */}
+                                    {status === 'READY_FOR_DELIVERY' && !order.courier_tracking_number && (
+                                      <Button
+                                        variant="default"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openCourierDialog(order);
+                                        }}
+                                        className="bg-blue-600 hover:bg-blue-700"
+                                      >
+                                        <Send className="h-4 w-4 mr-1" />
+                                        Create Shipment
+                                      </Button>
+                                    )}
+
+                                    {/* Show tracking/label buttons for orders with courier assigned */}
+                                    {order.courier_tracking_number && (
+                                      <>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            trackShipment(order);
+                                          }}
+                                        >
+                                          <Search className="h-4 w-4 mr-1" />
+                                          Track
+                                        </Button>
+                                        {order.courier_label_url && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              downloadShippingLabel(order);
+                                            }}
+                                          >
+                                            <Download className="h-4 w-4 mr-1" />
+                                            Label
+                                          </Button>
+                                        )}
+                                      </>
+                                    )}
+
+                                    {/* Default process button for other statuses */}
+                                    {status !== 'READY_FOR_DELIVERY' && !order.courier_tracking_number && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedOrder(order);
+                                          const validNextStatuses = getValidNextStatuses(order.status as OrderStatus);
+                                          setNewStatus((validNextStatuses[0]?.status as OrderStatus) || 'PICKING');
+                                        }}
+                                      >
+                                        <ArrowRight className="h-4 w-4 mr-1" />
+                                        Process
+                                      </Button>
+                                    )}
+                                  </div>
                               </TableCell>
                             </TableRow>
                               {expandedOrderId === order.id && (
@@ -1320,6 +1623,257 @@ export default function WarehouseOperations() {
           </div>
         </div>
       )}
+
+      {/* Courier Selection Dialog */}
+      <Dialog open={isCourierDialogOpen} onOpenChange={setIsCourierDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create Shipment - {courierOrder?.order_no}</DialogTitle>
+            <DialogDescription>
+              Select a courier service and create shipment for this order
+            </DialogDescription>
+          </DialogHeader>
+
+          {courierOrder && (
+            <div className="space-y-6">
+              {/* Order Summary */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium mb-2">Order Details</h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Customer:</span>
+                    <p className="font-medium">{courierOrder.customer_name}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Phone:</span>
+                    <p className="font-medium">{courierOrder.customer_phone}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Address:</span>
+                    <p className="font-medium">{courierOrder.delivery_address?.address || 'No address'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Items:</span>
+                    <p className="font-medium">{courierOrder.order_items.length} items</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Total:</span>
+                    <p className="font-medium">{formatCurrency(courierOrder.total)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Courier Selection */}
+              <div className="space-y-4">
+                <Label>Select Courier Service</Label>
+                <div className="grid grid-cols-1 gap-3">
+                  {COURIER_SERVICES.filter(s => s.enabled).map((service) => {
+                    const rate = courierRates.find(r => r.courierProvider === service.id);
+                    return (
+                      <div
+                        key={service.id}
+                        className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                          selectedCourier === service.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        onClick={() => setSelectedCourier(service.id)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 rounded-full border-2 ${
+                              selectedCourier === service.id
+                                ? 'border-blue-500 bg-blue-500'
+                                : 'border-gray-300'
+                            }`}>
+                              {selectedCourier === service.id && (
+                                <div className="w-2 h-2 bg-white rounded-full m-auto mt-0.5" />
+                              )}
+                            </div>
+                            <div>
+                              <h5 className="font-medium">{service.name}</h5>
+                              <p className="text-sm text-muted-foreground">{service.description}</p>
+                            </div>
+                          </div>
+                          {rate && (
+                            <div className="text-right">
+                              <p className="font-bold text-lg">{formatCurrency(rate.cost)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {rate.estimatedDays === 0 ? 'Same day' : `${rate.estimatedDays} days`}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsCourierDialogOpen(false);
+                    setCourierOrder(null);
+                    setSelectedCourier(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={createShipment}
+                  disabled={!selectedCourier || isCreatingShipment}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {isCreatingShipment ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Create Shipment
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tracking Information Dialog */}
+      <Dialog open={trackingDialogOpen} onOpenChange={setTrackingDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Shipment Tracking</DialogTitle>
+            <DialogDescription>
+              Track your shipment status and history
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingTracking ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-muted-foreground">Loading tracking information...</p>
+              </div>
+            </div>
+          ) : trackingInfo ? (
+            <div className="space-y-6">
+              {/* Tracking Header */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Tracking Number</p>
+                    <p className="font-mono font-bold text-lg">{trackingInfo.trackingNumber}</p>
+                  </div>
+                  <Badge className={`${
+                    trackingInfo.status === 'delivered' ? 'bg-green-500' :
+                    trackingInfo.status === 'out_for_delivery' ? 'bg-blue-500' :
+                    trackingInfo.status === 'in_transit' ? 'bg-yellow-500' :
+                    'bg-gray-500'
+                  } text-white`}>
+                    {trackingInfo.statusDescription}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Courier:</span>
+                    <span className="font-medium ml-2">
+                      {COURIER_SERVICES.find(s => s.id === trackingInfo.courierProvider)?.name}
+                    </span>
+                  </div>
+                  {trackingInfo.currentLocation && (
+                    <div>
+                      <span className="text-muted-foreground">Location:</span>
+                      <span className="font-medium ml-2">{trackingInfo.currentLocation}</span>
+                    </div>
+                  )}
+                </div>
+                {trackingInfo.estimatedDeliveryDate && (
+                  <div className="mt-2 text-sm">
+                    <span className="text-muted-foreground">Estimated Delivery:</span>
+                    <span className="font-medium ml-2">
+                      {new Date(trackingInfo.estimatedDeliveryDate).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Tracking History */}
+              <div>
+                <h4 className="font-medium mb-3">Tracking History</h4>
+                <div className="space-y-3">
+                  {trackingInfo.history.map((event, index) => (
+                    <div key={index} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className={`w-3 h-3 rounded-full ${
+                          index === trackingInfo.history.length - 1 ? 'bg-blue-500' : 'bg-gray-300'
+                        }`} />
+                        {index < trackingInfo.history.length - 1 && (
+                          <div className="w-0.5 h-full bg-gray-200 my-1" />
+                        )}
+                      </div>
+                      <div className="flex-1 pb-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium">{event.description}</p>
+                            {event.location && (
+                              <p className="text-sm text-muted-foreground">{event.location}</p>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(event.timestamp).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Delivery Confirmation */}
+              {trackingInfo.status === 'delivered' && trackingInfo.recipient && (
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-green-900 mb-2">Delivered</h4>
+                  <p className="text-sm text-green-800">
+                    Received by: <span className="font-medium">{trackingInfo.recipient.name}</span>
+                  </p>
+                  {trackingInfo.actualDeliveryDate && (
+                    <p className="text-sm text-green-800">
+                      On: {new Date(trackingInfo.actualDeliveryDate).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end pt-4 border-t">
+                <Button onClick={() => setTrackingDialogOpen(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No tracking information available</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Print Styles */}
       <style dangerouslySetInnerHTML={{
