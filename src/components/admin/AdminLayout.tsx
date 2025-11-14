@@ -20,7 +20,8 @@ import {
   Bell,
   Archive,
   Tag,
-  Crown
+  Crown,
+  Star
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
   { name: 'Archived Orders', href: '/admin/archived-orders', icon: Archive },
   { name: 'Customers', href: '/admin/customers', icon: Users },
+  { name: 'Review Moderation', href: '/admin/review-moderation', icon: Star },
   { name: 'Vouchers', href: '/admin/vouchers', icon: Tag },
   { name: 'Premium Partners', href: '/admin/premium-partners', icon: Crown },
   { name: 'Staff Management', href: '/admin/users', icon: UserCog },

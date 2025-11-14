@@ -144,39 +144,45 @@ const Auth = () => {
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!adminForm.username || !adminForm.password) {
       toast.error('Please enter both username and password');
       return;
     }
 
     setLoading(true);
-    
+
     try {
-      // Try the admin login function first
+      // Call admin_login function
       const { data, error } = await (supabase.rpc as any)('admin_login', {
         p_username: adminForm.username,
         p_password: adminForm.password
       });
 
-      if (!error && data && (data as any).success) {
-        toast.success(`Welcome back, ${(data as any).admin.username}!`);
-        // Store admin session data
-        localStorage.setItem('admin_user', JSON.stringify((data as any).admin));
-        // Redirect to admin panel
-        navigate('/admin');
-      } else if (!error && data) {
-        toast.error((data as any).message || 'Invalid username or password');
-      } else {
-        // Fallback: Show message about database setup
-        console.warn('Admin login function failed:', error);
-        toast.error('Admin login is not yet configured. Please set up the admin authentication system.');
+      if (error) {
+        console.error('Admin login RPC error:', error);
+        toast.error('Login failed. Please check your credentials.');
+        setLoading(false);
+        return;
       }
+
+      if (!data || !(data as any).success) {
+        toast.error((data as any)?.message || 'Invalid username or password');
+        setLoading(false);
+        return;
+      }
+
+      // Success! Store admin session
+      const adminData = (data as any).admin;
+      localStorage.setItem('admin_user', JSON.stringify(adminData));
+
+      toast.success(`Welcome back, ${adminData.full_name}!`);
+      navigate('/admin');
     } catch (error: any) {
       console.error('Admin login error:', error);
-      toast.error('Admin login is not yet configured. Please set up the admin authentication system.');
+      toast.error('An unexpected error occurred. Please try again.');
     }
-    
+
     setLoading(false);
   };
 
@@ -274,7 +280,7 @@ const Auth = () => {
                     <Input
                       id="admin-username"
                       type="text"
-                      placeholder="admin_username"
+                      placeholder="admin"
                       value={adminForm.username}
                       onChange={(e) => setAdminForm({...adminForm, username: e.target.value})}
                       required

@@ -12,7 +12,10 @@ import {
   MapPin,
   LogOut,
   Tag,
-  Crown
+  Crown,
+  XCircle,
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,6 +29,8 @@ const Header = () => {
   const navigate = useNavigate();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isMerchant, setIsMerchant] = useState<boolean | null>(null); // null = loading, true/false = loaded
+  const [partnership, setPartnership] = useState<any>(null);
+  const [showExpiryBanner, setShowExpiryBanner] = useState(true);
 
   const handleLogoClick = () => {
     navigate('/');
@@ -41,6 +46,7 @@ const Header = () => {
     const checkMerchantStatus = async () => {
       if (!user) {
         setIsMerchant(false);
+        setPartnership(null);
         return;
       }
 
@@ -53,7 +59,7 @@ const Header = () => {
       try {
         const { data: profile } = await supabase
           .from('customer_profiles')
-          .select('customer_type')
+          .select('customer_type, id')
           .eq('user_id', user.id)
           .single();
 
@@ -62,6 +68,17 @@ const Header = () => {
 
         // Cache the result
         localStorage.setItem(`merchant_status_${user.id}`, String(isMerchantUser));
+
+        // If merchant, fetch partnership data to check subscription status
+        if (isMerchantUser && profile?.id) {
+          const { data: partnershipData } = await supabase
+            .from('premium_partnerships' as any)
+            .select('subscription_end_date, subscription_status, admin_approved')
+            .eq('merchant_id', profile.id)
+            .single();
+
+          setPartnership(partnershipData);
+        }
       } catch (error) {
         console.error('Error checking merchant status:', error);
         setIsMerchant(false);
@@ -71,7 +88,29 @@ const Header = () => {
     checkMerchantStatus();
   }, [user]);
 
+  // Calculate subscription expiry status
+  const getSubscriptionStatus = () => {
+    if (!partnership || !partnership.subscription_end_date) return null;
+
+    const endDate = new Date(partnership.subscription_end_date);
+    const now = new Date();
+    const daysUntilExpiry = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (partnership.subscription_status === 'ACTIVE' && partnership.admin_approved) {
+      if (daysUntilExpiry < 0) {
+        return { type: 'expired', daysUntilExpiry, endDate };
+      } else if (daysUntilExpiry <= 7) {
+        return { type: 'expiring', daysUntilExpiry, endDate };
+      }
+    }
+
+    return null;
+  };
+
+  const subscriptionStatus = getSubscriptionStatus();
+
   return (
+    <>
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
       {/* Top bar */}
       <div className="bg-primary text-primary-foreground">
@@ -256,11 +295,54 @@ const Header = () => {
       </div>
 
       {/* Profile Modal */}
-      <ProfileModal 
-        isOpen={isProfileModalOpen} 
-        onClose={() => setIsProfileModalOpen(false)} 
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
       />
     </header>
+
+    {/* Subscription Expiry Banner - Shows below header for merchants */}
+    {isMerchant && subscriptionStatus && showExpiryBanner && (
+      <div className={`${
+        subscriptionStatus.type === 'expired'
+          ? 'bg-red-500'
+          : 'bg-orange-500'
+      } text-white`}>
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {subscriptionStatus.type === 'expired' ? (
+                <XCircle className="h-5 w-5 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="h-5 w-5 flex-shrink-0" />
+              )}
+              <div className="text-sm">
+                {subscriptionStatus.type === 'expired' ? (
+                  <span>
+                    <strong>Subscription Expired:</strong> Your shop is no longer visible on Find Shops.
+                    <Link to="/premium-partner" className="underline ml-1 font-semibold">Renew now</Link>
+                  </span>
+                ) : (
+                  <span>
+                    <strong>Expiring Soon:</strong> Your subscription expires in {subscriptionStatus.daysUntilExpiry} day{subscriptionStatus.daysUntilExpiry !== 1 ? 's' : ''}.
+                    <Link to="/premium-partner" className="underline ml-1 font-semibold">Renew now</Link>
+                  </span>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-white hover:bg-white/20 flex-shrink-0"
+              onClick={() => setShowExpiryBanner(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

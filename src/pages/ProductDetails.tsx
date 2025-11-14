@@ -11,7 +11,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePricing } from '@/hooks/usePricing';
 import Header from '@/components/Header';
 import LoginPromptButton from '@/components/LoginPromptButton';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { ReviewsSection } from '@/components/reviews/ReviewsSection';
+import { ReviewForm } from '@/components/reviews/ReviewForm';
 
 interface ComponentData {
   id: string;
@@ -57,8 +59,11 @@ const ProductDetails = () => {
   const [localCart, setLocalCart] = useState<CartItem[]>([]);
   const [selectedImage, setSelectedImage] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [viewingComponentImage, setViewingComponentImage] = useState<string | null>(null);
   const [expandedComponent, setExpandedComponent] = useState<string | null>(null);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [currentLightboxIndex, setCurrentLightboxIndex] = useState(0);
   const { toast } = useToast();
   const { addToCart, loading: cartLoading } = useCart();
   const { user } = useAuth();
@@ -212,6 +217,25 @@ const ProductDetails = () => {
     return localCart.reduce((total, item) => total + item.quantity, 0);
   };
 
+  const openLightbox = (images: string[], startIndex: number) => {
+    setLightboxImages(images);
+    setCurrentLightboxIndex(startIndex);
+    setLightboxOpen(true);
+  };
+
+  const closeLightbox = () => {
+    setLightboxOpen(false);
+    setLightboxImages([]);
+    setCurrentLightboxIndex(0);
+  };
+
+  const navigateLightbox = (direction: "prev" | "next") => {
+    const newIndex = direction === "prev"
+      ? (currentLightboxIndex - 1 + lightboxImages.length) % lightboxImages.length
+      : (currentLightboxIndex + 1) % lightboxImages.length;
+    setCurrentLightboxIndex(newIndex);
+  };
+
   const handleAddToCart = () => {
     if (!user) {
       toast({
@@ -291,7 +315,7 @@ const ProductDetails = () => {
           <div className="lg:col-span-2 space-y-3 sm:space-y-4">
             {/* Main Product Image */}
             <div className="relative rounded-xl overflow-hidden shadow-sm cursor-pointer group"
-                 onClick={() => setViewingComponentImage(product.product_images[selectedImage]?.url || primaryImage?.url)}>
+                 onClick={() => openLightbox(product.product_images.map(img => img.url), selectedImage)}>
               <img
                 src={product.product_images[selectedImage]?.url || primaryImage?.url || '/placeholder.svg'}
                 alt={product.product_images[selectedImage]?.alt_text || product.name}
@@ -446,15 +470,15 @@ const ProductDetails = () => {
                                       src={component.default_image_url}
                                       alt={component.name}
                                       className={`w-full h-full object-cover rounded border transition-all duration-300 ease-in-out ${
-                                        isExpanded 
-                                          ? 'rounded-lg shadow-sm cursor-pointer hover:opacity-80' 
+                                        isExpanded
+                                          ? 'rounded-lg shadow-sm cursor-pointer hover:opacity-80'
                                           : 'rounded border'
                                       }`}
                                       loading="lazy"
                                       onClick={(e) => {
                                         if (isExpanded) {
                                           e.stopPropagation();
-                                          setViewingComponentImage(component.default_image_url);
+                                          openLightbox([component.default_image_url!], 0);
                                         }
                                       }}
                                     />
@@ -641,30 +665,90 @@ const ProductDetails = () => {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Component Image Viewer */}
-      {viewingComponentImage && (
-        <Dialog open={!!viewingComponentImage} onOpenChange={() => setViewingComponentImage(null)}>
-          <DialogContent className="max-w-3xl w-[95vw] max-h-[85vh] overflow-hidden p-3 sm:p-6">
-            <DialogHeader>
-              <DialogTitle className="text-base sm:text-lg">Component Image</DialogTitle>
-              <DialogDescription className="text-sm">
-                View component image in full size
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex justify-center overflow-hidden">
-              <img
-                src={viewingComponentImage}
-                alt="Component"
-                className="max-w-full max-h-[60vh] sm:max-h-[70vh] object-contain rounded-lg"
-                loading="lazy"
-                decoding="async"
+        {/* Reviews Section */}
+        <div className="mt-12 border-t pt-8">
+          {showReviewForm ? (
+            <div className="max-w-3xl mx-auto">
+              <ReviewForm
+                productId={product?.id || ''}
+                onSuccess={() => {
+                  setShowReviewForm(false);
+                  // Reviews will be refreshed automatically by the ReviewsSection component
+                }}
+                onCancel={() => setShowReviewForm(false)}
               />
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
+          ) : (
+            <div className="max-w-5xl mx-auto">
+              <ReviewsSection
+                productId={product?.id || ''}
+                onWriteReview={() => setShowReviewForm(true)}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Image Lightbox */}
+      <Dialog open={lightboxOpen} onOpenChange={closeLightbox}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-0 border-0">
+          <div className="relative w-full h-full bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-[400px]">
+            {lightboxImages[currentLightboxIndex] && (
+              <>
+                <img
+                  src={lightboxImages[currentLightboxIndex]}
+                  alt="Product image"
+                  className="max-w-full max-h-[95vh] w-auto h-auto object-contain"
+                />
+
+                {/* Navigation Buttons */}
+                {lightboxImages.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => navigateLightbox("prev")}
+                      className="absolute -left-16 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
+                      aria-label="Previous image"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={2.5}
+                        stroke="currentColor"
+                        className="w-6 h-6"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => navigateLightbox("next")}
+                      className="absolute -right-16 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
+                      aria-label="Next image"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={2.5}
+                        stroke="currentColor"
+                        className="w-6 h-6"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
+
+                    {/* Image Counter */}
+                    <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 bg-white/90 text-gray-800 px-4 py-2 rounded-full text-sm font-medium shadow-lg">
+                      {currentLightboxIndex + 1} / {lightboxImages.length}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

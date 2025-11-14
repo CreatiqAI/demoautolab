@@ -22,7 +22,10 @@ import {
   TrendingUp,
   Store,
   MapPin,
-  Phone
+  Phone,
+  Calendar,
+  History,
+  Plus
 } from 'lucide-react';
 
 interface Partnership {
@@ -65,6 +68,14 @@ export default function PremiumPartners() {
   const [reviewAction, setReviewAction] = useState<'approve' | 'reject'>('approve');
   const [rejectionReason, setRejectionReason] = useState('');
   const [subscriptionDuration, setSubscriptionDuration] = useState('1'); // months
+  const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
+  const [extensionMonths, setExtensionMonths] = useState('1');
+  const [extensionNotes, setExtensionNotes] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [renewalHistory, setRenewalHistory] = useState<any[]>([]);
+  const [showHistoryFor, setShowHistoryFor] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPartnerships();
@@ -230,6 +241,106 @@ export default function PremiumPartners() {
     }
   };
 
+  const handleExtendSubscription = (partnership: Partnership) => {
+    setSelectedPartnership(partnership);
+    setExtensionMonths('1');
+    setExtensionNotes('');
+    setPaymentAmount(partnership.monthly_fee.toString());
+    setPaymentMethod('');
+    setPaymentReference('');
+    setIsExtendModalOpen(true);
+  };
+
+  const submitExtension = async () => {
+    if (!selectedPartnership) return;
+
+    try {
+      const months = parseInt(extensionMonths);
+      const currentEndDate = selectedPartnership.subscription_end_date
+        ? new Date(selectedPartnership.subscription_end_date)
+        : new Date();
+
+      // If current date is past expiration, extend from today
+      const now = new Date();
+      const baseDate = currentEndDate > now ? currentEndDate : now;
+
+      const newEndDate = new Date(baseDate);
+      newEndDate.setMonth(newEndDate.getMonth() + months);
+
+      // Update partnership
+      const { error: updateError } = await supabase
+        .from('premium_partnerships' as any)
+        .update({
+          subscription_end_date: newEndDate.toISOString(),
+          next_billing_date: newEndDate.toISOString(),
+          subscription_status: 'ACTIVE',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedPartnership.id);
+
+      if (updateError) throw updateError;
+
+      // Log renewal history
+      const { error: historyError } = await supabase
+        .from('partnership_renewal_history' as any)
+        .insert([{
+          partnership_id: selectedPartnership.id,
+          renewal_type: selectedPartnership.subscription_end_date && new Date(selectedPartnership.subscription_end_date) > now ? 'EXTENSION' : 'RENEWAL',
+          previous_end_date: selectedPartnership.subscription_end_date,
+          new_end_date: newEndDate.toISOString(),
+          months_extended: months,
+          amount_paid: paymentAmount ? parseFloat(paymentAmount) : null,
+          payment_method: paymentMethod || null,
+          payment_reference: paymentReference || null,
+          previous_status: selectedPartnership.subscription_status,
+          new_status: 'ACTIVE',
+          admin_notes: extensionNotes || null
+        } as any]);
+
+      if (historyError) {
+        console.error('Error logging renewal history:', historyError);
+        // Don't fail the whole operation if history logging fails
+      }
+
+      toast({
+        title: 'Subscription Extended',
+        description: `${selectedPartnership.business_name} subscription extended by ${months} month(s) until ${newEndDate.toLocaleDateString('en-MY')}`
+      });
+
+      setIsExtendModalOpen(false);
+      fetchPartnerships();
+    } catch (error: any) {
+      console.error('Error extending subscription:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to extend subscription',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const fetchRenewalHistory = async (partnershipId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('partnership_renewal_history' as any)
+        .select('*')
+        .eq('partnership_id', partnershipId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setRenewalHistory(data || []);
+      setShowHistoryFor(partnershipId);
+    } catch (error: any) {
+      console.error('Error fetching renewal history:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load renewal history',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'ACTIVE':
@@ -354,6 +465,7 @@ export default function PremiumPartners() {
                   <TableHead>Location</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Subscription</TableHead>
                   <TableHead>Stats</TableHead>
                   <TableHead>Monthly Fee</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -384,6 +496,35 @@ export default function PremiumPartners() {
                     </TableCell>
                     <TableCell>{getPlanBadge(partnership.subscription_plan)}</TableCell>
                     <TableCell>{getStatusBadge(partnership.subscription_status)}</TableCell>
+                    <TableCell>
+                      {partnership.subscription_end_date && (
+                        <div className="text-sm space-y-1">
+                          <div className="font-medium">
+                            {new Date(partnership.subscription_end_date).toLocaleDateString('en-MY', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </div>
+                          <div className={`text-xs ${
+                            (() => {
+                              const daysLeft = Math.ceil((new Date(partnership.subscription_end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                              if (daysLeft < 0) return 'text-red-600 font-semibold';
+                              if (daysLeft <= 7) return 'text-orange-600 font-semibold';
+                              if (daysLeft <= 30) return 'text-yellow-600';
+                              return 'text-muted-foreground';
+                            })()
+                          }`}>
+                            {(() => {
+                              const daysLeft = Math.ceil((new Date(partnership.subscription_end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                              if (daysLeft < 0) return `Expired ${Math.abs(daysLeft)} days ago`;
+                              if (daysLeft === 0) return 'Expires today';
+                              return `${daysLeft} days left`;
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="text-sm space-y-1">
                         <div className="flex items-center gap-1">
@@ -428,6 +569,16 @@ export default function PremiumPartners() {
                             <Button
                               size="sm"
                               variant="outline"
+                              className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                              onClick={() => handleExtendSubscription(partnership)}
+                              title="Extend/Renew Subscription"
+                            >
+                              <Calendar className="h-4 w-4 mr-1" />
+                              Extend
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               onClick={() => handleToggleFeatured(partnership)}
                               title={partnership.is_featured ? 'Remove from Featured' : 'Mark as Featured'}
                             >
@@ -443,6 +594,16 @@ export default function PremiumPartners() {
                             </Button>
                           </>
                         )}
+
+                        {/* View History Button - always visible */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => fetchRenewalHistory(partnership.id)}
+                          title="View Renewal History"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
 
                         {partnership.subscription_status === 'SUSPENDED' && (
                           <Button
@@ -532,6 +693,248 @@ export default function PremiumPartners() {
                 {reviewAction === 'approve' ? 'Approve Partnership' : 'Reject Application'}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Extend Subscription Modal */}
+      <Dialog open={isExtendModalOpen} onOpenChange={setIsExtendModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Extend/Renew Subscription</DialogTitle>
+            <DialogDescription>
+              {selectedPartnership?.business_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Current Subscription Info */}
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+              <h4 className="font-semibold text-sm">Current Subscription</h4>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Status:</span>
+                  <span className="ml-2 font-medium">{selectedPartnership?.subscription_status}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Current End Date:</span>
+                  <span className="ml-2 font-medium">
+                    {selectedPartnership?.subscription_end_date
+                      ? new Date(selectedPartnership.subscription_end_date).toLocaleDateString('en-MY')
+                      : 'N/A'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Days Left:</span>
+                  <span className="ml-2 font-medium">
+                    {selectedPartnership?.subscription_end_date
+                      ? (() => {
+                          const daysLeft = Math.ceil((new Date(selectedPartnership.subscription_end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                          if (daysLeft < 0) return `Expired ${Math.abs(daysLeft)} days ago`;
+                          return `${daysLeft} days`;
+                        })()
+                      : 'N/A'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Extension Form */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Extension Duration *</label>
+                  <Select value={extensionMonths} onValueChange={setExtensionMonths}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 Month</SelectItem>
+                      <SelectItem value="2">2 Months</SelectItem>
+                      <SelectItem value="3">3 Months</SelectItem>
+                      <SelectItem value="6">6 Months</SelectItem>
+                      <SelectItem value="12">12 Months</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Amount Paid</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    placeholder="149.00"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Payment Method</label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash">Cash</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="Online Payment">Online Payment</SelectItem>
+                      <SelectItem value="Cheque">Cheque</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Payment Reference</label>
+                  <Input
+                    value={paymentReference}
+                    onChange={(e) => setPaymentReference(e.target.value)}
+                    placeholder="Transaction ID / Receipt No."
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1 block">Admin Notes</label>
+                <Textarea
+                  value={extensionNotes}
+                  onChange={(e) => setExtensionNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Add any notes about this renewal (optional)"
+                />
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-900">
+                <strong>New Expiration Date:</strong>{' '}
+                {selectedPartnership?.subscription_end_date && (() => {
+                  const currentEndDate = new Date(selectedPartnership.subscription_end_date);
+                  const now = new Date();
+                  const baseDate = currentEndDate > now ? currentEndDate : now;
+                  const newDate = new Date(baseDate);
+                  newDate.setMonth(newDate.getMonth() + parseInt(extensionMonths));
+                  return newDate.toLocaleDateString('en-MY', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  });
+                })()}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsExtendModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={submitExtension}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                Extend Subscription
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Renewal History Modal */}
+      <Dialog open={showHistoryFor !== null} onOpenChange={(open) => !open && setShowHistoryFor(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Renewal History</DialogTitle>
+            <DialogDescription>
+              {partnerships.find(p => p.id === showHistoryFor)?.business_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {renewalHistory.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No renewal history found</p>
+              </div>
+            ) : (
+              renewalHistory.map((record: any, index: number) => (
+                <Card key={record.id}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant={
+                            record.renewal_type === 'NEW' ? 'default' :
+                            record.renewal_type === 'RENEWAL' ? 'secondary' :
+                            record.renewal_type === 'EXTENSION' ? 'outline' : 'destructive'
+                          }>
+                            {record.renewal_type}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {new Date(record.created_at).toLocaleDateString('en-MY', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Previous End:</span>
+                            <p className="font-medium">
+                              {record.previous_end_date
+                                ? new Date(record.previous_end_date).toLocaleDateString('en-MY')
+                                : 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">New End:</span>
+                            <p className="font-medium text-green-600">
+                              {new Date(record.new_end_date).toLocaleDateString('en-MY')}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Extended By:</span>
+                            <p className="font-medium">{record.months_extended} month(s)</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Amount:</span>
+                            <p className="font-medium">
+                              {record.amount_paid ? `RM ${record.amount_paid}` : 'N/A'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {(record.payment_method || record.payment_reference) && (
+                          <div className="mt-2 text-sm">
+                            {record.payment_method && (
+                              <span className="text-muted-foreground">Payment: <strong>{record.payment_method}</strong></span>
+                            )}
+                            {record.payment_reference && (
+                              <span className="ml-4 text-muted-foreground">
+                                Ref: <strong>{record.payment_reference}</strong>
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {record.admin_notes && (
+                          <div className="mt-2 text-sm text-muted-foreground">
+                            <em>Note: {record.admin_notes}</em>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>

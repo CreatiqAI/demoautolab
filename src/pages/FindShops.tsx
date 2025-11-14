@@ -90,6 +90,7 @@ export default function FindShops() {
     customer_email: '',
     message: ''
   });
+  const [currentPhotoIndexes, setCurrentPhotoIndexes] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {
     fetchShops();
@@ -98,6 +99,24 @@ export default function FindShops() {
   useEffect(() => {
     filterShops();
   }, [shops, selectedState, selectedService, searchQuery]);
+
+  // Auto-rotate shop photos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentPhotoIndexes((prev) => {
+        const newIndexes = { ...prev };
+        filteredShops.forEach((shop) => {
+          if (shop.shop_photos && shop.shop_photos.length > 1) {
+            const currentIndex = newIndexes[shop.id] || 0;
+            newIndexes[shop.id] = (currentIndex + 1) % shop.shop_photos.length;
+          }
+        });
+        return newIndexes;
+      });
+    }, 3000); // Change photo every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [filteredShops]);
 
   const fetchShops = async () => {
     try {
@@ -231,20 +250,20 @@ export default function FindShops() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white">
       <Header />
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-6 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Find Authorized Shops</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-semibold mb-2">Find Authorized Shops</h1>
+          <p className="text-gray-600">
             Discover trusted Auto Lab authorized resellers near you for installation and services
           </p>
         </div>
 
         {/* Filters */}
-        <Card className="mb-8">
+        <Card className="mb-8 border border-gray-200">
           <CardContent className="pt-6">
             <div className="grid md:grid-cols-4 gap-4">
               <div className="md:col-span-2">
@@ -322,116 +341,100 @@ export default function FindShops() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredShops.map((shop) => (
-              <Card
-                key={shop.id}
-                className={`group hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden bg-white border-0 ${
-                  shop.is_featured ? 'ring-2 ring-yellow-400 ring-offset-2' : 'hover:ring-1 hover:ring-gray-200'
-                }`}
-                onClick={() => handleViewShop(shop)}
-              >
-                {/* Shop Photo Background - Full Image */}
-                <div className="relative h-64 overflow-hidden">
-                  {shop.shop_photos && shop.shop_photos.length > 0 ? (
-                    <>
-                      <img
-                        src={shop.shop_photos[0]}
-                        alt={shop.business_name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-full h-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500"></div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <MapPin className="h-20 w-20 text-white/30" />
-                      </div>
-                    </>
-                  )}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredShops.map((shop) => {
+              const currentPhotoIndex = currentPhotoIndexes[shop.id] || 0;
+              const hasPhotos = shop.shop_photos && shop.shop_photos.length > 0;
 
-                  {/* Badges */}
-                  <div className="absolute top-4 right-4 flex flex-col gap-2">
-                    <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
-                      <Crown className="h-3 w-3 mr-1" />
-                      Premium
-                    </Badge>
+              return (
+                <Card
+                  key={shop.id}
+                  className={`group hover:shadow-lg transition-all duration-300 cursor-pointer overflow-hidden bg-white border border-gray-200 ${
+                    shop.is_featured ? 'ring-2 ring-yellow-400' : ''
+                  }`}
+                  onClick={() => handleViewShop(shop)}
+                >
+                  {/* Shop Photo with Auto Carousel */}
+                  <div className="relative h-52 overflow-hidden bg-gray-50">
+                    {hasPhotos ? (
+                      <>
+                        <img
+                          src={shop.shop_photos[currentPhotoIndex]}
+                          alt={`${shop.business_name} - Photo ${currentPhotoIndex + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+
+                        {/* Photo Indicators */}
+                        {shop.shop_photos.length > 1 && (
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                            {shop.shop_photos.map((_, index) => (
+                              <div
+                                key={index}
+                                className={`h-1 rounded-full transition-all ${
+                                  index === currentPhotoIndex
+                                    ? 'w-4 bg-white'
+                                    : 'w-1 bg-white/60'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                        <MapPin className="h-16 w-16 text-gray-300" />
+                      </div>
+                    )}
+
+                    {/* Featured Badge */}
                     {shop.is_featured && (
-                      <Badge className="bg-gradient-to-r from-yellow-400 to-orange-400 text-black shadow-lg">
+                      <Badge className="absolute top-2 right-2 bg-yellow-400 text-black border-0 text-xs">
                         <Award className="h-3 w-3 mr-1" />
                         Featured
                       </Badge>
                     )}
                   </div>
-                </div>
 
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xl font-bold text-gray-900 line-clamp-1">
-                    {shop.business_name}
-                  </CardTitle>
-                  <CardDescription className="text-sm font-medium text-gray-600">
-                    {shop.business_type}
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
-                    {shop.description}
-                  </p>
-
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    <MapPin className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                    <span className="font-medium">{shop.city}, {shop.state}</span>
-                  </div>
-
-                  {shop.services_offered && shop.services_offered.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {shop.services_offered.slice(0, 3).map((service, index) => (
-                        <Badge
-                          key={index}
-                          variant="secondary"
-                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border-0"
-                        >
-                          {service}
-                        </Badge>
-                      ))}
-                      {shop.services_offered.length > 3 && (
-                        <Badge variant="outline" className="text-xs text-gray-600 border-gray-300">
-                          +{shop.services_offered.length - 3} more
-                        </Badge>
-                      )}
+                  <div className="p-4">
+                    <div className="mb-3">
+                      <h3 className="font-semibold text-base text-gray-900 line-clamp-1 mb-1">
+                        {shop.business_name}
+                      </h3>
+                      <p className="text-sm text-gray-600 line-clamp-1">{shop.business_type}</p>
                     </div>
-                  )}
 
-                  <div className="flex gap-2 pt-3 border-t border-gray-100">
+                    <div className="flex items-center gap-1 text-sm text-gray-600 mb-3">
+                      <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span className="line-clamp-1">{shop.city}, {shop.state}</span>
+                    </div>
+
+                    {shop.services_offered && shop.services_offered.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-700 border-0">
+                          {shop.services_offered[0]}
+                        </Badge>
+                        {shop.services_offered.length > 1 && (
+                          <Badge variant="outline" className="text-xs text-gray-600 border-gray-300">
+                            +{shop.services_offered.length - 1}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="flex-1 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 hover:border-blue-300"
+                      className="w-full bg-gray-900 hover:bg-gray-800 text-white h-9"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleContactClick(shop, 'phone');
+                        handleViewShop(shop);
                       }}
                     >
-                      <Phone className="h-4 w-4 mr-1.5" />
-                      Call
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleNavigate(shop);
-                      }}
-                    >
-                      <Navigation className="h-4 w-4 mr-1.5" />
-                      Directions
+                      View Details
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
 

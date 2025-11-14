@@ -37,6 +37,9 @@ import WarehouseOperations from './pages/admin/WarehouseOperations';
 import KnowledgeBase from './pages/admin/KnowledgeBase';
 import InventoryAlerts from './pages/admin/InventoryAlerts';
 import VoucherManagement from './pages/admin/VoucherManagement';
+import ReviewModeration from './pages/admin/ReviewModeration';
+import ReviewsDebug from './pages/admin/ReviewsDebug';
+import DebugShops from './pages/admin/DebugShops';
 import AdminRegister from './pages/AdminRegister';
 import MerchantRegister from './pages/MerchantRegister';
 // Merchant pages - Only accessible by merchant users
@@ -100,6 +103,9 @@ const App = () => (
               <Route path="warehouse-operations" element={<WarehouseOperations />} />
               <Route path="inventory-alerts" element={<InventoryAlerts />} />
               <Route path="customers" element={<Customers />} />
+              <Route path="review-moderation" element={<ReviewModeration />} />
+              <Route path="reviews-debug" element={<ReviewsDebug />} />
+              <Route path="debug-shops" element={<DebugShops />} />
               <Route path="vouchers" element={<VoucherManagement />} />
               <Route path="premium-partners" element={<PremiumPartners />} />
               <Route path="knowledge-base" element={<KnowledgeBase />} />

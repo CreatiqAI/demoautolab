@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/lib/supabase';
 import type { Enums } from '@/integrations/supabase/types';
 
 interface ProtectedAdminRouteProps {
@@ -9,64 +7,35 @@ interface ProtectedAdminRouteProps {
   allowedRoles?: Enums<'user_role'>[];
 }
 
-export default function ProtectedAdminRoute({ 
-  children, 
-  allowedRoles = ['admin', 'staff'] 
+export default function ProtectedAdminRoute({
+  children,
+  allowedRoles = ['admin', 'staff', 'manager']
 }: ProtectedAdminRouteProps) {
-  const { user, loading: authLoading } = useAuth();
-  const [userRole, setUserRole] = useState<Enums<'user_role'> | null>(null);
-  const [roleLoading, setRoleLoading] = useState(true);
   const [adminUser, setAdminUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserRole = async () => {
-      // Check for admin user in localStorage first
-      const storedAdminUser = localStorage.getItem('admin_user');
-      if (storedAdminUser) {
-        try {
+    const checkAdminAuth = () => {
+      try {
+        // Check for admin user in localStorage
+        const storedAdminUser = localStorage.getItem('admin_user');
+        if (storedAdminUser) {
           const adminData = JSON.parse(storedAdminUser);
           setAdminUser(adminData);
-          setUserRole(adminData.role as Enums<'user_role'>);
-          setRoleLoading(false);
-          return;
-        } catch (error) {
-          console.error('Error parsing stored admin user:', error);
-          localStorage.removeItem('admin_user');
-        }
-      }
-
-      // Fallback to regular Supabase auth
-      if (!user) {
-        setRoleLoading(false);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching user role:', error);
-          setUserRole(null);
-        } else {
-          setUserRole(data?.role || null);
         }
       } catch (error) {
-        console.error('Error fetching user role:', error);
-        setUserRole(null);
+        console.error('Error parsing admin user:', error);
+        localStorage.removeItem('admin_user');
       } finally {
-        setRoleLoading(false);
+        setLoading(false);
       }
     };
 
-    fetchUserRole();
-  }, [user]);
+    checkAdminAuth();
+  }, []);
 
-  // Show loading spinner while auth or role is loading
-  if (authLoading || roleLoading) {
+  // Show loading spinner while checking auth
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -77,13 +46,13 @@ export default function ProtectedAdminRoute({
     );
   }
 
-  // Redirect to auth if not authenticated (check both regular user and admin user)
-  if (!user && !adminUser) {
+  // Redirect to auth if not authenticated
+  if (!adminUser) {
     return <Navigate to="/auth" replace />;
   }
 
   // Redirect to home if user doesn't have required role
-  if (!userRole || !allowedRoles.includes(userRole)) {
+  if (!allowedRoles.includes(adminUser.role)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center p-8">

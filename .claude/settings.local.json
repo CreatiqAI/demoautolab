@@ -48,7 +48,9 @@
       "Bash(npx eslint:*)",
       "Bash(grep:*)",
       "Bash(for file in src/pages/admin/*.tsx)",
-      "Bash(done)"
+      "Bash(done)",
+      "WebFetch(domain:www.airbnb.com)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   Store,
@@ -31,7 +32,8 @@ import {
   MessageSquare,
   Image as ImageIcon,
   X,
-  Upload
+  Upload,
+  AlertCircle
 } from 'lucide-react';
 import AddressAutocompleteSimple from '@/components/AddressAutocompleteSimple';
 
@@ -123,6 +125,7 @@ export default function PremiumPartner() {
   const [submitting, setSubmitting] = useState(false);
   const [customerProfile, setCustomerProfile] = useState<any>(null);
   const [partnership, setPartnership] = useState<Partnership | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     business_name: '',
@@ -261,9 +264,13 @@ export default function PremiumPartner() {
         const fileName = `${customerProfile.id}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
         const filePath = `shop-photos/${fileName}`;
 
+        // Upload with high quality settings
         const { error: uploadError } = await supabase.storage
           .from('premium-partners')
-          .upload(filePath, file);
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
 
         if (uploadError) throw uploadError;
 
@@ -424,12 +431,130 @@ export default function PremiumPartner() {
               )}
 
               {partnership.subscription_status === 'ACTIVE' && partnership.admin_approved && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-sm text-green-800">
-                    <CheckCircle2 className="h-4 w-4 inline mr-2" />
-                    Your partnership is active! Customers can now find your shop on our platform.
-                  </p>
-                </div>
+                <>
+                  {/* Check if subscription is expired or about to expire */}
+                  {partnership.subscription_end_date && (() => {
+                    const endDate = new Date(partnership.subscription_end_date);
+                    const now = new Date();
+                    const daysUntilExpiry = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+                    // Subscription has expired
+                    if (daysUntilExpiry < 0) {
+                      return (
+                        <div className="bg-red-50 border-2 border-red-300 rounded-lg p-5">
+                          <div className="flex items-start gap-4">
+                            <div className="p-3 bg-red-100 rounded-full">
+                              <XCircle className="h-6 w-6 text-red-600 flex-shrink-0" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-base font-bold text-red-900 mb-2">⚠️ Subscription Expired - Action Required</p>
+                              <p className="text-sm text-red-800 mb-3">
+                                Your subscription expired on <strong>{endDate.toLocaleDateString('en-MY')}</strong>.
+                                Your shop is <strong>NO LONGER VISIBLE</strong> on the Find Shops page and you are losing potential customers.
+                              </p>
+                              <div className="bg-white rounded-lg p-4 mb-3 border border-red-200">
+                                <p className="text-sm font-semibold text-red-900 mb-2">📞 How to Renew:</p>
+                                <div className="space-y-2 text-sm text-gray-800">
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="h-4 w-4 text-red-600" />
+                                    <span>Call us: <strong className="text-red-700">03-4297 7668</strong></span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-red-600" />
+                                    <span>Email: <strong className="text-red-700">support@autolab.my</strong></span>
+                                  </div>
+                                  <p className="text-xs text-gray-600 mt-2">
+                                    💳 Monthly Fee: RM {partnership.monthly_fee}/month
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                                onClick={() => window.location.href = 'tel:03-4297 7668'}
+                              >
+                                <Phone className="h-4 w-4 mr-2" />
+                                Call to Renew Now
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Subscription expiring within 7 days
+                    if (daysUntilExpiry <= 7) {
+                      return (
+                        <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-5">
+                          <div className="flex items-start gap-4">
+                            <div className="p-3 bg-orange-100 rounded-full">
+                              <AlertCircle className="h-6 w-6 text-orange-600 flex-shrink-0" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-base font-bold text-orange-900 mb-2">⏰ Subscription Expiring Soon</p>
+                              <p className="text-sm text-orange-800 mb-3">
+                                Your subscription will expire in <strong className="text-lg">{daysUntilExpiry}</strong> day{daysUntilExpiry !== 1 ? 's' : ''} on <strong>{endDate.toLocaleDateString('en-MY')}</strong>.
+                                Renew now to avoid service interruption.
+                              </p>
+                              <div className="bg-white rounded-lg p-4 mb-3 border border-orange-200">
+                                <p className="text-sm font-semibold text-orange-900 mb-2">📞 Renew Your Subscription:</p>
+                                <div className="space-y-2 text-sm text-gray-800">
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="h-4 w-4 text-orange-600" />
+                                    <span>Call us: <strong className="text-orange-700">03-4297 7668</strong></span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-orange-600" />
+                                    <span>Email: <strong className="text-orange-700">support@autolab.my</strong></span>
+                                  </div>
+                                  <p className="text-xs text-gray-600 mt-2">
+                                    💳 Monthly Fee: RM {partnership.monthly_fee}/month
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                className="bg-orange-600 hover:bg-orange-700 text-white"
+                                onClick={() => window.location.href = 'tel:03-4297 7668'}
+                              >
+                                <Phone className="h-4 w-4 mr-2" />
+                                Renew Subscription
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Subscription expiring within 30 days (warning)
+                    if (daysUntilExpiry <= 30) {
+                      return (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                          <div className="flex items-start gap-3">
+                            <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-yellow-800 mb-1">Subscription Renewal Reminder</p>
+                              <p className="text-sm text-yellow-700 mb-2">
+                                Your subscription will expire in {daysUntilExpiry} days on {endDate.toLocaleDateString('en-MY')}.
+                              </p>
+                              <p className="text-xs text-yellow-700">
+                                Contact us at <strong>03-4297 7668</strong> to renew and continue enjoying premium benefits.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Subscription is active and not expiring soon
+                    return (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <p className="text-sm text-green-800">
+                          <CheckCircle2 className="h-4 w-4 inline mr-2" />
+                          Your partnership is active! Customers can now find your shop on our platform.
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </>
               )}
 
               {/* Subscription Details */}
@@ -487,6 +612,136 @@ export default function PremiumPartner() {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Renewal Information - Always visible for existing partnerships */}
+        {partnership && (
+          <Card className="mb-8 border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-blue-600" />
+                Subscription Renewal Information
+              </CardTitle>
+              <CardDescription>
+                How to renew or extend your premium partnership subscription
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-white rounded-lg p-5 border border-blue-200">
+                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-blue-600" />
+                  Subscription Details
+                </h4>
+                <div className="grid md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Current Status</p>
+                    <p className="font-semibold text-gray-900">
+                      {partnership.subscription_status}
+                      {partnership.admin_approved && ' (Approved)'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Monthly Fee</p>
+                    <p className="font-semibold text-gray-900">RM {partnership.monthly_fee}/month</p>
+                  </div>
+                  {partnership.subscription_end_date && (
+                    <>
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Valid Until</p>
+                        <p className="font-semibold text-gray-900">
+                          {new Date(partnership.subscription_end_date).toLocaleDateString('en-MY', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Days Remaining</p>
+                        <p className="font-semibold text-gray-900">
+                          {(() => {
+                            const endDate = new Date(partnership.subscription_end_date);
+                            const now = new Date();
+                            const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                            return daysLeft > 0 ? `${daysLeft} days` : 'Expired';
+                          })()}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg p-5 border border-blue-200">
+                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Phone className="h-5 w-5 text-blue-600" />
+                  Contact Us to Renew
+                </h4>
+                <p className="text-sm text-gray-700 mb-4">
+                  To renew or extend your subscription, please contact our team using any of the methods below:
+                </p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="p-2 bg-blue-100 rounded">
+                      <Phone className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Phone</p>
+                      <a href="tel:03-4297 7668" className="font-semibold text-blue-700 hover:text-blue-800">
+                        03-4297 7668
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="p-2 bg-blue-100 rounded">
+                      <Mail className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Email</p>
+                      <a href="mailto:support@autolab.my" className="font-semibold text-blue-700 hover:text-blue-800">
+                        support@autolab.my
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="p-2 bg-blue-100 rounded">
+                      <MapPin className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Visit Us</p>
+                      <p className="font-semibold text-gray-900">Cheras, Kuala Lumpur</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg p-4 border border-blue-300">
+                <p className="text-sm text-blue-900">
+                  <strong>💡 Pro Tip:</strong> Renew early to ensure uninterrupted service and maintain your visibility on the Find Shops page!
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  onClick={() => window.location.href = 'tel:03-4297 7668'}
+                >
+                  <Phone className="h-4 w-4 mr-2" />
+                  Call to Renew
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => window.location.href = 'mailto:support@autolab.my?subject=Premium Partnership Renewal'}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email Us
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -757,7 +1012,10 @@ export default function PremiumPartner() {
                           Shop Photos (Max 4)
                         </Label>
                         <p className="text-sm text-gray-500 mt-1">
-                          Upload photos of your shop to attract more customers
+                          Upload high-quality photos of your shop to attract more customers
+                        </p>
+                        <p className="text-xs text-blue-600 mt-1">
+                          💡 Tip: Use clear, well-lit photos for best results
                         </p>
                       </div>
                       <Badge variant="outline">{formData.shop_photos.length + photoFiles.length}/4</Badge>
@@ -768,15 +1026,23 @@ export default function PremiumPartner() {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {formData.shop_photos.map((photoUrl, index) => (
                           <div key={index} className="relative group">
-                            <img
-                              src={photoUrl}
-                              alt={`Shop photo ${index + 1}`}
-                              className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
-                            />
+                            <div
+                              className="w-full h-48 bg-gray-50 rounded-lg border-2 border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition-all"
+                              onClick={() => setPreviewImage(photoUrl)}
+                            >
+                              <img
+                                src={photoUrl}
+                                alt={`Shop photo ${index + 1}`}
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
                             <button
                               type="button"
-                              onClick={() => removeExistingPhoto(photoUrl)}
-                              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeExistingPhoto(photoUrl);
+                              }}
+                              className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -788,23 +1054,34 @@ export default function PremiumPartner() {
                     {/* New Photos to Upload */}
                     {photoFiles.length > 0 && (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {photoFiles.map((file, index) => (
-                          <div key={index} className="relative group">
-                            <img
-                              src={URL.createObjectURL(file)}
-                              alt={`New photo ${index + 1}`}
-                              className="w-full h-32 object-cover rounded-lg border-2 border-blue-200"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removePhotoFile(index)}
-                              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                            <Badge className="absolute bottom-2 left-2 bg-blue-500">New</Badge>
-                          </div>
-                        ))}
+                        {photoFiles.map((file, index) => {
+                          const previewUrl = URL.createObjectURL(file);
+                          return (
+                            <div key={index} className="relative group">
+                              <div
+                                className="w-full h-48 bg-gray-50 rounded-lg border-2 border-blue-300 overflow-hidden cursor-pointer hover:border-blue-500 transition-all"
+                                onClick={() => setPreviewImage(previewUrl)}
+                              >
+                                <img
+                                  src={previewUrl}
+                                  alt={`New photo ${index + 1}`}
+                                  className="w-full h-full object-contain"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removePhotoFile(index);
+                                }}
+                                className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                              <Badge className="absolute bottom-2 left-2 bg-blue-500 shadow-lg">New</Badge>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -841,6 +1118,25 @@ export default function PremiumPartner() {
             </Card>
         </div>
       </div>
+
+      {/* Image Preview Modal */}
+      <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+          <div className="relative w-full h-[80vh] bg-black flex items-center justify-center">
+            <img
+              src={previewImage || ''}
+              alt="Preview"
+              className="max-w-full max-h-full object-contain"
+            />
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2 shadow-xl transition-all"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

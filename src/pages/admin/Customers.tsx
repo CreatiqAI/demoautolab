@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase } from 'lucide-react';
+import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CustomerTypeManager } from '@/components/admin/CustomerTypeManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -59,7 +59,11 @@ export default function Customers() {
   const [selectedApplication, setSelectedApplication] = useState<MerchantApplication | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isApplicationDialogOpen, setIsApplicationDialogOpen] = useState(false);
+  const [isOrdersDialogOpen, setIsOrdersDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [orderStats, setOrderStats] = useState({ totalOrders: 0, totalSpent: 0 });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -280,9 +284,73 @@ export default function Customers() {
     });
   };
 
-  const openViewDialog = (customer: CustomerProfile) => {
+  const openViewDialog = async (customer: CustomerProfile) => {
     setSelectedCustomer(customer);
     setIsViewDialogOpen(true);
+    // Fetch order stats for this customer
+    await fetchCustomerOrderStats(customer.id);
+  };
+
+  const fetchCustomerOrderStats = async (customerId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('orders' as any)
+        .select('total, status')
+        .eq('customer_profile_id', customerId);
+
+      if (error) throw error;
+
+      const totalOrders = data?.length || 0;
+      const totalSpent = data?.reduce((sum: number, order: any) => sum + (parseFloat(order.total) || 0), 0) || 0;
+
+      setOrderStats({ totalOrders, totalSpent });
+    } catch (error: any) {
+      console.error('Error fetching order stats:', error);
+    }
+  };
+
+  const openOrdersDialog = async (customer: CustomerProfile) => {
+    setSelectedCustomer(customer);
+    setIsOrdersDialogOpen(true);
+    await fetchCustomerOrders(customer.id);
+  };
+
+  const fetchCustomerOrders = async (customerId: string) => {
+    try {
+      setLoadingOrders(true);
+
+      // Fetch orders with order_items (component_library might not have all columns we need)
+      const { data, error } = await supabase
+        .from('orders' as any)
+        .select(`
+          *,
+          order_items (
+            id,
+            component_id,
+            component_sku,
+            component_name,
+            product_context,
+            quantity,
+            unit_price,
+            total_price
+          )
+        `)
+        .eq('customer_profile_id', customerId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setCustomerOrders(data || []);
+    } catch (error: any) {
+      console.error('Error fetching customer orders:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load customer orders',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoadingOrders(false);
+    }
   };
 
   return (
@@ -408,13 +476,24 @@ export default function Customers() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openViewDialog(customer)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openViewDialog(customer)}
+                                title="View Details"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openOrdersDialog(customer)}
+                                title="View Orders"
+                              >
+                                <ShoppingCart className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -603,14 +682,26 @@ export default function Customers() {
                 <div>
                   <h4 className="font-semibold mb-3">Customer Metrics</h4>
                   <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Total Orders:</span> 0</div>
-                    <div><span className="font-medium">Total Spent:</span> RM 0.00</div>
+                    <div><span className="font-medium">Total Orders:</span> {orderStats.totalOrders}</div>
+                    <div><span className="font-medium">Total Spent:</span> RM {orderStats.totalSpent.toFixed(2)}</div>
                     <div><span className="font-medium">Profile Created:</span> {
                       selectedCustomer.updated_at
                         ? Math.ceil((Date.now() - new Date(selectedCustomer.updated_at).getTime()) / (1000 * 60 * 60 * 24))
                         : 0
                     } days ago</div>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 w-full"
+                    onClick={() => {
+                      setIsViewDialogOpen(false);
+                      openOrdersDialog(selectedCustomer);
+                    }}
+                  >
+                    <ShoppingCart className="h-4 w-4 mr-2" />
+                    View Order History
+                  </Button>
                 </div>
               </div>
             </div>
@@ -775,6 +866,166 @@ export default function Customers() {
                 Approve Application
               </Button>
             </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Customer Order History Dialog */}
+      <Dialog open={isOrdersDialogOpen} onOpenChange={setIsOrdersDialogOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              Order History
+            </DialogTitle>
+            <DialogDescription>
+              {selectedCustomer?.full_name}'s purchase history
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingOrders ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </div>
+          ) : customerOrders.length === 0 ? (
+            <div className="text-center py-12">
+              <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Orders Yet</h3>
+              <p className="text-gray-600">This customer hasn't placed any orders.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Summary Stats */}
+              <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">{customerOrders.length}</div>
+                  <div className="text-sm text-gray-600">Total Orders</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    RM {customerOrders.reduce((sum, order) => sum + parseFloat(order.total || 0), 0).toFixed(2)}
+                  </div>
+                  <div className="text-sm text-gray-600">Total Spent</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    RM {(customerOrders.reduce((sum, order) => sum + parseFloat(order.total || 0), 0) / customerOrders.length).toFixed(2)}
+                  </div>
+                  <div className="text-sm text-gray-600">Average Order Value</div>
+                </div>
+              </div>
+
+              {/* Orders List */}
+              <div className="space-y-3">
+                {customerOrders.map((order) => (
+                  <Card key={order.id}>
+                    <CardContent className="pt-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-lg">Order #{order.order_no}</span>
+                            <Badge variant={
+                              order.status === 'COMPLETED' ? 'default' :
+                              order.status === 'PENDING_PAYMENT' || order.status === 'PENDING' ? 'secondary' :
+                              order.status === 'PROCESSING' ? 'outline' :
+                              order.status === 'CANCELLED' ? 'destructive' : 'outline'
+                            }>
+                              {order.status?.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {formatDate(order.created_at)}
+                            </span>
+                            <span>
+                              {order.order_items?.length || 0} item(s)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-gray-900">
+                            RM {parseFloat(order.total || 0).toFixed(2)}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {order.payment_state === 'PAID' ? (
+                              <span className="text-green-600 flex items-center gap-1">
+                                <CheckCircle className="h-3 w-3" />
+                                Paid
+                              </span>
+                            ) : (
+                              <span className="text-orange-600 flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {order.payment_state || 'Unpaid'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Order Items */}
+                      {order.order_items && order.order_items.length > 0 && (
+                        <div className="border-t pt-3 mt-3">
+                          <h5 className="text-sm font-semibold mb-2">Items:</h5>
+                          <div className="space-y-2">
+                            {order.order_items.map((item: any) => (
+                              <div key={item.id} className="flex items-center gap-3 text-sm">
+                                <div className="w-12 h-12 bg-gray-100 rounded border flex items-center justify-center flex-shrink-0">
+                                  <Package className="h-6 w-6 text-gray-400" />
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-medium">
+                                    {item.component_name}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    SKU: {item.component_sku}
+                                  </div>
+                                  {item.product_context && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Context: {item.product_context}
+                                    </div>
+                                  )}
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    Qty: {item.quantity} × RM {parseFloat(item.unit_price || 0).toFixed(2)}
+                                  </div>
+                                </div>
+                                <div className="font-semibold">
+                                  RM {parseFloat(item.total_price || 0).toFixed(2)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Delivery Address */}
+                      {order.delivery_address && (
+                        <div className="border-t pt-3 mt-3">
+                          <h5 className="text-sm font-semibold mb-2 flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            Delivery Address:
+                          </h5>
+                          <div className="text-sm text-muted-foreground bg-gray-50 p-2 rounded">
+                            {typeof order.delivery_address === 'object' ? (
+                              <>
+                                {order.delivery_address.address && <div>{order.delivery_address.address}</div>}
+                                {order.delivery_address.city && (
+                                  <div>
+                                    {order.delivery_address.city}, {order.delivery_address.state} {order.delivery_address.postcode}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div>{order.delivery_address}</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>
