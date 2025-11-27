@@ -21,7 +21,9 @@ import {
   Archive,
   Tag,
   Crown,
-  Star
+  Star,
+  Award,
+  Video
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -35,9 +37,11 @@ const navigation = [
   { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
   { name: 'Archived Orders', href: '/admin/archived-orders', icon: Archive },
   { name: 'Customers', href: '/admin/customers', icon: Users },
+  { name: 'Customer Tiers', href: '/admin/customer-tiers', icon: Award },
   { name: 'Review Moderation', href: '/admin/review-moderation', icon: Star },
   { name: 'Vouchers', href: '/admin/vouchers', icon: Tag },
   { name: 'Premium Partners', href: '/admin/premium-partners', icon: Crown },
+  { name: 'Installation Guides', href: '/admin/installation-guides', icon: Video },
   { name: 'Staff Management', href: '/admin/users', icon: UserCog },
   { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
   { name: 'Settings', href: '/admin/settings', icon: Settings },

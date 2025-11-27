@@ -2,66 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
-/* AutoMot Hub - Automotive E-commerce Design System */
+/* Auto Lab - Premium Automotive Design System */
+/* Lime/Green Theme with Glassmorphism */
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 80px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Prevent Radix UI from causing layout shift when dropdowns open */
+  html, body {
+    overflow-x: hidden;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  body {
+    overflow-y: auto !important;
+  }
+
+  /* Override Radix scroll lock completely */
+  body[data-scroll-locked] {
+    overflow: auto !important;
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+    position: static !important;
+  }
+
+  [data-radix-scroll-area-viewport] {
+    scrollbar-gutter: stable;
+  }
+
   :root {
-    /* Core automotive brand colors */
-    --background: 0 0% 100%;
-    --foreground: 210 11% 15%;
+    /* Core brand colors - Lime/Green Theme */
+    --background: 210 20% 98%;
+    --foreground: 220 13% 10%;
 
-    /* Automotive deep blue theme */
-    --primary: 211 65% 25%;
-    --primary-foreground: 0 0% 98%;
-    --primary-hover: 211 65% 20%;
-    --primary-glow: 211 65% 35%;
+    /* Primary - Lime Green */
+    --primary: 84 81% 44%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 84 81% 38%;
+    --primary-glow: 84 81% 54%;
 
-    /* Performance accent - racing orange */
-    --accent: 18 95% 55%;
-    --accent-foreground: 0 0% 98%;
-    --accent-glow: 18 95% 65%;
+    /* Accent - Lime 500 */
+    --accent: 84 85% 50%;
+    --accent-foreground: 0 0% 100%;
+    --accent-glow: 84 85% 60%;
 
-    /* Premium metallic secondary */
-    --secondary: 210 6% 93%;
-    --secondary-foreground: 210 11% 15%;
-    --secondary-dark: 210 10% 23%;
+    /* Secondary - Light Gray */
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 220 13% 10%;
+    --secondary-dark: 220 10% 23%;
 
     /* Cards and surfaces */
     --card: 0 0% 100%;
-    --card-foreground: 210 11% 15%;
-    --card-border: 210 12% 88%;
+    --card-foreground: 220 13% 10%;
+    --card-border: 220 13% 91%;
 
     /* Interactive elements */
-    --muted: 210 12% 96%;
-    --muted-foreground: 210 8% 46%;
-    --border: 210 12% 88%;
-    --input: 210 12% 88%;
-    --ring: 211 65% 25%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 220 9% 46%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 84 81% 44%;
 
     /* Status colors */
     --success: 142 76% 36%;
-    --success-foreground: 0 0% 98%;
+    --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 98%;
+    --warning-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
     /* Popover and overlays */
     --popover: 0 0% 100%;
-    --popover-foreground: 210 11% 15%;
+    --popover-foreground: 220 13% 10%;
 
-    /* Advanced gradients */
-    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-hover)));
-    --gradient-accent: linear-gradient(135deg, hsl(var(--accent)), hsl(var(--accent-glow)));
+    /* Advanced gradients - Lime theme */
+    --gradient-hero: linear-gradient(135deg, hsl(84, 81%, 44%), hsl(84, 81%, 38%));
+    --gradient-accent: linear-gradient(135deg, hsl(84, 85%, 50%), hsl(142, 76%, 36%));
     --gradient-subtle: linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted)));
     --gradient-card: linear-gradient(145deg, hsl(var(--card)), hsl(var(--secondary)));
+    --gradient-lime: linear-gradient(135deg, #a3e635, #65a30d, #16a34a);
 
-    /* Premium shadows */
-    --shadow-sm: 0 2px 4px hsl(var(--primary) / 0.08);
-    --shadow-md: 0 4px 12px hsl(var(--primary) / 0.12);
-    --shadow-lg: 0 10px 24px hsl(var(--primary) / 0.16);
-    --shadow-glow: 0 0 32px hsl(var(--accent) / 0.3);
-    --shadow-premium: 0 20px 40px hsl(var(--primary) / 0.2);
+    /* Premium shadows - Clean subtle shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --shadow-glow: none;
+    --shadow-premium: 0 20px 25px rgba(0, 0, 0, 0.1);
 
     /* Smooth animations */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -69,57 +101,402 @@
     --transition-spring: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 
     --radius: 0.75rem;
+
+    /* Merchant Portal - Lime Accent on Clean Base */
+    --merchant-bg: 210 20% 98%;
+    --merchant-surface: 0 0% 100%;
+    --merchant-border: 220 13% 91%;
+    --merchant-text-primary: 220 13% 10%;
+    --merchant-text-secondary: 220 9% 38%;
+    --merchant-text-muted: 220 9% 55%;
+
+    /* Merchant Accent - Lime Green */
+    --merchant-accent: 84 81% 44%;
+    --merchant-accent-hover: 84 81% 38%;
+    --merchant-accent-text: 0 0% 100%;
+
+    /* Merchant Status Colors */
+    --merchant-success: 142 76% 92%;
+    --merchant-success-text: 142 76% 25%;
+    --merchant-warning: 38 92% 92%;
+    --merchant-warning-text: 38 92% 30%;
+    --merchant-info: 210 20% 92%;
+    --merchant-info-text: 220 13% 30%;
+
+    /* Merchant Premium */
+    --merchant-premium: 84 81% 44%;
+    --merchant-premium-text: 0 0% 100%;
+
+    /* Merchant Shadows - Subtle */
+    --merchant-shadow-sm: 0 1px 3px hsl(220 13% 10% / 0.05);
+    --merchant-shadow-md: 0 4px 6px hsl(220 13% 10% / 0.07);
+    --merchant-shadow-lg: 0 10px 15px hsl(220 13% 10% / 0.1);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 220 13% 8%;
+    --foreground: 210 20% 98%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --card-border: 217.2 32.6% 17.5%;
+    --card: 220 13% 10%;
+    --card-foreground: 210 20% 98%;
+    --card-border: 220 13% 18%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 13% 10%;
+    --popover-foreground: 210 20% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --primary-hover: 210 40% 90%;
-    --primary-glow: 210 40% 95%;
+    --primary: 84 81% 50%;
+    --primary-foreground: 220 13% 10%;
+    --primary-hover: 84 81% 44%;
+    --primary-glow: 84 81% 60%;
 
-    /* Performance accent - racing orange (dark mode) */
-    --accent: 18 95% 50%;
-    --accent-foreground: 0 0% 98%;
-    --accent-glow: 18 95% 60%;
+    --accent: 84 85% 55%;
+    --accent-foreground: 220 13% 10%;
+    --accent-glow: 84 85% 65%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --secondary-dark: 210 10% 15%;
+    --secondary: 220 13% 15%;
+    --secondary-foreground: 210 20% 98%;
+    --secondary-dark: 220 10% 12%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 220 13% 15%;
+    --muted-foreground: 220 9% 65%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
 
     --success: 142 70% 45%;
-    --success-foreground: 0 0% 98%;
+    --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 98%;
+    --warning-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 220 13% 18%;
+    --input: 220 13% 18%;
+    --ring: 84 81% 50%;
+
+    /* Merchant Portal Dark Mode */
+    --merchant-bg: 220 13% 6%;
+    --merchant-surface: 220 13% 10%;
+    --merchant-border: 220 13% 18%;
+    --merchant-text-primary: 210 20% 95%;
+    --merchant-text-secondary: 210 15% 70%;
+    --merchant-text-muted: 210 10% 50%;
+
+    --merchant-accent: 84 81% 50%;
+    --merchant-accent-hover: 84 81% 55%;
+    --merchant-accent-text: 220 13% 10%;
+
+    --merchant-success: 142 63% 18%;
+    --merchant-success-text: 142 63% 85%;
+    --merchant-warning: 38 90% 20%;
+    --merchant-warning-text: 38 90% 85%;
+    --merchant-info: 220 13% 18%;
+    --merchant-info-text: 210 15% 85%;
+
+    --merchant-premium: 84 81% 50%;
+    --merchant-premium-text: 220 13% 10%;
+
+    --merchant-shadow-sm: 0 1px 3px hsl(0 0% 0% / 0.2);
+    --merchant-shadow-md: 0 4px 6px hsl(0 0% 0% / 0.25);
+    --merchant-shadow-lg: 0 10px 15px hsl(0 0% 0% / 0.3);
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
   }
+
+  h1, h2, h3, h4, .font-heading {
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Glassmorphism Effects */
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+  }
+
+  .glass-dark {
+    background: rgba(10, 10, 10, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  }
+
+  /* Liquid / Glossy Button Effects */
+  .btn-liquid {
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+    transition: all 0.3s ease;
+  }
+
+  .btn-liquid::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transform: translateX(-100%);
+    transition: 0.6s;
+    z-index: -1;
+  }
+
+  .btn-liquid:hover::before {
+    transform: translateX(100%);
+  }
+
+  /* Shine Hover Effect */
+  .shine-hover {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shine-hover::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(45deg) translate(-100%, -100%);
+    transition: transform 0.6s;
+  }
+
+  .shine-hover:hover::after {
+    transform: rotate(45deg) translate(100%, 100%);
+  }
+
+  /* Premium Lime Glow Shadow - Removed for cleaner design */
+  .shadow-lime-glow {
+    box-shadow: none;
+  }
+
+  /* Liquid Underline for Nav Links */
+  .liquid-underline {
+    position: relative;
+  }
+
+  .liquid-underline::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: hsl(84, 81%, 44%);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+
+  .liquid-underline:hover::after {
+    transform: scaleX(1);
+  }
+
+  /* Gradient Text */
+  .text-gradient-lime {
+    background: linear-gradient(135deg, #a3e635, #65a30d, #16a34a);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Card Hover Lift */
+  .card-lift {
+    transition: transform 0.5s ease, box-shadow 0.5s ease;
+  }
+
+  .card-lift:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* Animations */
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* No scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Text Selection */
+::selection {
+  background-color: #65a30d;
+  color: white;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Range Slider Styles - Lime Theme */
+.range-slider-input {
+  pointer-events: none;
+  appearance: none;
+  background: transparent;
+}
+
+.range-slider-input::-webkit-slider-thumb {
+  pointer-events: auto;
+  appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #65a30d;
+  border: 2px solid white;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  margin-top: -7px;
+}
+
+.range-slider-input::-moz-range-thumb {
+  pointer-events: auto;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #65a30d;
+  border: 2px solid white;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.range-slider-input::-webkit-slider-runnable-track {
+  appearance: none;
+  height: 4px;
+  background: transparent;
+}
+
+.range-slider-input::-moz-range-track {
+  appearance: none;
+  height: 4px;
+  background: transparent;
+}
+
+/* Remove focus ring from filter inputs and selects */
+.filter-input:focus,
+.filter-input:focus-visible,
+input[type="text"]:focus,
+input[type="search"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  ring: none !important;
+}
+
+/* Remove focus ring from Select trigger buttons */
+button[data-state]:focus,
+button[data-state]:focus-visible,
+[data-radix-collection-item]:focus,
+[data-radix-collection-item]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }

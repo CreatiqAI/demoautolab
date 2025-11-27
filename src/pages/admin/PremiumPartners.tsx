@@ -25,7 +25,8 @@ import {
   Phone,
   Calendar,
   History,
-  Plus
+  Plus,
+  Edit
 } from 'lucide-react';
 
 interface Partnership {
@@ -41,7 +42,7 @@ interface Partnership {
   state: string;
   subscription_status: string;
   subscription_plan: string;
-  monthly_fee: number;
+  yearly_fee: number;
   subscription_start_date: string | null;
   subscription_end_date: string | null;
   admin_approved: boolean;
@@ -55,6 +56,10 @@ interface Partnership {
 }
 
 const STATUS_OPTIONS = ['ALL', 'PENDING', 'ACTIVE', 'SUSPENDED', 'CANCELLED', 'EXPIRED'];
+const PLAN_OPTIONS = [
+  { value: 'professional', label: 'Professional', price: 99, duration: 12 },
+  { value: 'enterprise', label: 'Enterprise', price: 388, duration: 12 }
+];
 
 export default function PremiumPartners() {
   const { toast } = useToast();
@@ -67,7 +72,8 @@ export default function PremiumPartners() {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewAction, setReviewAction] = useState<'approve' | 'reject'>('approve');
   const [rejectionReason, setRejectionReason] = useState('');
-  const [subscriptionDuration, setSubscriptionDuration] = useState('1'); // months
+  const [subscriptionDuration, setSubscriptionDuration] = useState('12'); // months (1 year)
+  const [selectedPlan, setSelectedPlan] = useState('professional');
   const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
   const [extensionMonths, setExtensionMonths] = useState('1');
   const [extensionNotes, setExtensionNotes] = useState('');
@@ -76,6 +82,8 @@ export default function PremiumPartners() {
   const [paymentReference, setPaymentReference] = useState('');
   const [renewalHistory, setRenewalHistory] = useState<any[]>([]);
   const [showHistoryFor, setShowHistoryFor] = useState<string | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState<Partial<Partnership>>({});
 
   useEffect(() => {
     fetchPartnerships();
@@ -148,7 +156,11 @@ export default function PremiumPartners() {
         const endDate = new Date();
         endDate.setMonth(endDate.getMonth() + months);
 
+        const selectedPlanData = PLAN_OPTIONS.find(p => p.value === selectedPlan);
+
         updates.subscription_status = 'ACTIVE';
+        updates.subscription_plan = selectedPlan;
+        updates.yearly_fee = selectedPlanData?.price || 99;
         updates.subscription_start_date = startDate.toISOString();
         updates.subscription_end_date = endDate.toISOString();
         updates.next_billing_date = endDate.toISOString();
@@ -241,11 +253,67 @@ export default function PremiumPartners() {
     }
   };
 
+  const handleEdit = (partnership: Partnership) => {
+    setEditFormData({
+      id: partnership.id,
+      business_name: partnership.business_name,
+      subscription_plan: partnership.subscription_plan,
+      subscription_status: partnership.subscription_status,
+      subscription_start_date: partnership.subscription_start_date,
+      subscription_end_date: partnership.subscription_end_date,
+      yearly_fee: partnership.yearly_fee,
+      admin_approved: partnership.admin_approved,
+      is_featured: partnership.is_featured,
+      display_priority: partnership.display_priority
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editFormData.id) return;
+
+    try {
+      const { error } = await supabase
+        .from('premium_partnerships' as any)
+        .update({
+          subscription_plan: editFormData.subscription_plan,
+          subscription_status: editFormData.subscription_status,
+          subscription_start_date: editFormData.subscription_start_date,
+          subscription_end_date: editFormData.subscription_end_date,
+          yearly_fee: editFormData.yearly_fee,
+          admin_approved: editFormData.admin_approved,
+          is_featured: editFormData.is_featured,
+          display_priority: editFormData.display_priority,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editFormData.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Partnership Updated',
+        description: 'Subscription details updated successfully'
+      });
+
+      setIsEditModalOpen(false);
+      fetchPartnerships();
+    } catch (error: any) {
+      console.error('Error updating partnership:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update partnership',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const handleExtendSubscription = (partnership: Partnership) => {
     setSelectedPartnership(partnership);
-    setExtensionMonths('1');
+    setExtensionMonths('12'); // Default to 1 year
     setExtensionNotes('');
-    setPaymentAmount(partnership.monthly_fee.toString());
+    setSelectedPlan(partnership.subscription_plan || 'professional');
+    const planPrice = partnership.subscription_plan?.toLowerCase() === 'enterprise' ? 388 : 99;
+    setPaymentAmount(planPrice.toString());
     setPaymentMethod('');
     setPaymentReference('');
     setIsExtendModalOpen(true);
@@ -267,6 +335,9 @@ export default function PremiumPartners() {
       const newEndDate = new Date(baseDate);
       newEndDate.setMonth(newEndDate.getMonth() + months);
 
+      // Get plan price
+      const planPrice = selectedPlan?.toLowerCase() === 'enterprise' ? 388 : 99;
+
       // Update partnership
       const { error: updateError } = await supabase
         .from('premium_partnerships' as any)
@@ -274,6 +345,8 @@ export default function PremiumPartners() {
           subscription_end_date: newEndDate.toISOString(),
           next_billing_date: newEndDate.toISOString(),
           subscription_status: 'ACTIVE',
+          subscription_plan: selectedPlan,
+          yearly_fee: planPrice,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedPartnership.id);
@@ -359,17 +432,29 @@ export default function PremiumPartners() {
   };
 
   const getPlanBadge = (plan: string) => {
-    return <Badge className="bg-blue-100 text-blue-800">
-      <Crown className="h-3 w-3 mr-1" />
-      Premium Partner
-    </Badge>;
+    switch (plan?.toLowerCase()) {
+      case 'enterprise':
+        return <Badge className="bg-purple-100 text-purple-800">
+          <Crown className="h-3 w-3 mr-1" />
+          Enterprise
+        </Badge>;
+      case 'professional':
+      default:
+        return <Badge className="bg-blue-100 text-blue-800">
+          <Store className="h-3 w-3 mr-1" />
+          Professional
+        </Badge>;
+    }
   };
 
   const stats = {
     total: partnerships.length,
     pending: partnerships.filter(p => p.subscription_status === 'PENDING' || !p.admin_approved).length,
     active: partnerships.filter(p => p.subscription_status === 'ACTIVE' && p.admin_approved).length,
-    revenue: partnerships.filter(p => p.subscription_status === 'ACTIVE').reduce((sum, p) => sum + p.monthly_fee, 0)
+    revenue: partnerships.filter(p => p.subscription_status === 'ACTIVE').reduce((sum, p) => {
+      const planPrice = p.subscription_plan?.toLowerCase() === 'enterprise' ? 388 : 99;
+      return sum + planPrice;
+    }, 0)
   };
 
   return (
@@ -409,7 +494,7 @@ export default function PremiumPartners() {
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Monthly Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Yearly Revenue</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">RM {stats.revenue}</div>
@@ -467,7 +552,7 @@ export default function PremiumPartners() {
                   <TableHead>Status</TableHead>
                   <TableHead>Subscription</TableHead>
                   <TableHead>Stats</TableHead>
-                  <TableHead>Monthly Fee</TableHead>
+                  <TableHead>Yearly Fee</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -537,7 +622,9 @@ export default function PremiumPartners() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium">RM {partnership.monthly_fee}</div>
+                      <div className="font-medium">
+                        RM {partnership.subscription_plan?.toLowerCase() === 'enterprise' ? '388' : '99'}/yr
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -563,6 +650,17 @@ export default function PremiumPartners() {
                             </Button>
                           </>
                         )}
+
+                        {/* Edit Button - always visible */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                          onClick={() => handleEdit(partnership)}
+                          title="Edit Subscription Details"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
 
                         {partnership.subscription_status === 'ACTIVE' && (
                           <>
@@ -642,19 +740,38 @@ export default function PremiumPartners() {
             {reviewAction === 'approve' ? (
               <>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">Subscription Duration (months)</label>
-                  <Select value={subscriptionDuration} onValueChange={setSubscriptionDuration}>
+                  <label className="text-sm font-medium mb-1 block">Subscription Plan</label>
+                  <Select value={selectedPlan} onValueChange={setSelectedPlan}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">1 Month</SelectItem>
-                      <SelectItem value="3">3 Months</SelectItem>
-                      <SelectItem value="6">6 Months</SelectItem>
-                      <SelectItem value="12">12 Months</SelectItem>
+                      {PLAN_OPTIONS.map((plan) => (
+                        <SelectItem key={plan.value} value={plan.value}>
+                          {plan.label} - RM {plan.price}/year
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Plan Features Preview */}
+                <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
+                  <h4 className="font-semibold">{selectedPlan === 'enterprise' ? 'Enterprise' : 'Professional'} Plan Features:</h4>
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                    <li>Shop listing on Find Shops page</li>
+                    <li>Basic analytics dashboard</li>
+                    <li>B2B wholesale pricing access</li>
+                    <li>RM50 Welcome Voucher (min spend RM100)</li>
+                    {selectedPlan === 'enterprise' && (
+                      <li className="text-purple-600 font-medium">Installation Guides Library Access</li>
+                    )}
+                  </ul>
+                  <div className="pt-2 border-t mt-2">
+                    <span className="font-semibold">Total: RM {selectedPlan === 'enterprise' ? '388' : '99'}/year</span>
+                  </div>
+                </div>
+
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm">
                   <p className="text-green-800">
                     Approving this application will activate the partnership and make it visible on the Find Shops page.
@@ -743,21 +860,39 @@ export default function PremiumPartners() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="text-sm font-medium mb-1 block">Subscription Plan</label>
+                  <Select value={selectedPlan} onValueChange={(val) => {
+                    setSelectedPlan(val);
+                    setPaymentAmount(val === 'enterprise' ? '388' : '99');
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PLAN_OPTIONS.map((plan) => (
+                        <SelectItem key={plan.value} value={plan.value}>
+                          {plan.label} - RM {plan.price}/year
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
                   <label className="text-sm font-medium mb-1 block">Extension Duration *</label>
                   <Select value={extensionMonths} onValueChange={setExtensionMonths}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">1 Month</SelectItem>
-                      <SelectItem value="2">2 Months</SelectItem>
-                      <SelectItem value="3">3 Months</SelectItem>
-                      <SelectItem value="6">6 Months</SelectItem>
-                      <SelectItem value="12">12 Months</SelectItem>
+                      <SelectItem value="12">12 Months (1 Year)</SelectItem>
+                      <SelectItem value="24">24 Months (2 Years)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium mb-1 block">Amount Paid</label>
                   <Input
@@ -765,12 +900,10 @@ export default function PremiumPartners() {
                     step="0.01"
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(e.target.value)}
-                    placeholder="149.00"
+                    placeholder={selectedPlan === 'enterprise' ? '388' : '99'}
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium mb-1 block">Payment Method</label>
                   <Select value={paymentMethod} onValueChange={setPaymentMethod}>
@@ -786,15 +919,15 @@ export default function PremiumPartners() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Payment Reference</label>
-                  <Input
-                    value={paymentReference}
-                    onChange={(e) => setPaymentReference(e.target.value)}
-                    placeholder="Transaction ID / Receipt No."
-                  />
-                </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Payment Reference</label>
+                <Input
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  placeholder="Transaction ID / Receipt No."
+                />
               </div>
 
               <div>
@@ -809,11 +942,16 @@ export default function PremiumPartners() {
             </div>
 
             {/* Preview */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+              <p className="text-sm text-blue-900">
+                <strong>Plan:</strong> {selectedPlan === 'enterprise' ? 'Enterprise' : 'Professional'} - RM {selectedPlan === 'enterprise' ? '388' : '99'}/year
+              </p>
               <p className="text-sm text-blue-900">
                 <strong>New Expiration Date:</strong>{' '}
-                {selectedPartnership?.subscription_end_date && (() => {
-                  const currentEndDate = new Date(selectedPartnership.subscription_end_date);
+                {(() => {
+                  const currentEndDate = selectedPartnership?.subscription_end_date
+                    ? new Date(selectedPartnership.subscription_end_date)
+                    : new Date();
                   const now = new Date();
                   const baseDate = currentEndDate > now ? currentEndDate : now;
                   const newDate = new Date(baseDate);
@@ -935,6 +1073,148 @@ export default function PremiumPartners() {
                 </Card>
               ))
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Subscription Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Subscription Details</DialogTitle>
+            <DialogDescription>
+              Manually edit all subscription details for {editFormData.business_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Subscription Plan */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Subscription Plan</label>
+                <Select
+                  value={editFormData.subscription_plan}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, subscription_plan: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PLAN_OPTIONS.map(plan => (
+                      <SelectItem key={plan.value} value={plan.value}>
+                        {plan.label} - RM{plan.price}/year
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">Subscription Status</label>
+                <Select
+                  value={editFormData.subscription_status}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, subscription_status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.filter(s => s !== 'ALL').map(status => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Subscription Dates */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Start Date</label>
+                <Input
+                  type="date"
+                  value={editFormData.subscription_start_date ? new Date(editFormData.subscription_start_date).toISOString().split('T')[0] : ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, subscription_start_date: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">End Date</label>
+                <Input
+                  type="date"
+                  value={editFormData.subscription_end_date ? new Date(editFormData.subscription_end_date).toISOString().split('T')[0] : ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, subscription_end_date: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editFormData.subscription_end_date && (
+                    <>
+                      {(() => {
+                        const daysLeft = Math.ceil((new Date(editFormData.subscription_end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                        return daysLeft > 0 ? `${daysLeft} days remaining` : `Expired ${Math.abs(daysLeft)} days ago`;
+                      })()}
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Yearly Fee */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Yearly Fee (RM)</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={editFormData.yearly_fee || ''}
+                onChange={(e) => setEditFormData({ ...editFormData, yearly_fee: parseFloat(e.target.value) || 0 })}
+                placeholder="e.g., 99 or 388"
+              />
+            </div>
+
+            {/* Admin Controls */}
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Admin Approved</label>
+                <input
+                  type="checkbox"
+                  checked={editFormData.admin_approved || false}
+                  onChange={(e) => setEditFormData({ ...editFormData, admin_approved: e.target.checked })}
+                  className="w-4 h-4"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Featured Partnership</label>
+                <input
+                  type="checkbox"
+                  checked={editFormData.is_featured || false}
+                  onChange={(e) => setEditFormData({ ...editFormData, is_featured: e.target.checked })}
+                  className="w-4 h-4"
+                />
+              </div>
+
+              {editFormData.is_featured && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Display Priority</label>
+                  <Input
+                    type="number"
+                    value={editFormData.display_priority || 0}
+                    onChange={(e) => setEditFormData({ ...editFormData, display_priority: parseInt(e.target.value) || 0 })}
+                    placeholder="Higher number = higher priority"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} className="bg-purple-600 hover:bg-purple-700">
+              Save Changes
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

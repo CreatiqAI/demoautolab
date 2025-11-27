@@ -5,10 +5,9 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Car, ArrowLeft, Shield } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Shield } from 'lucide-react';
 
 const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -34,15 +33,11 @@ const Auth = () => {
   });
 
   const normalizePhone = (phone: string) => {
-    // Remove all non-digits
     const digits = phone.replace(/\D/g, '');
-    
-    // Always prepend +60 to the entered digits
     return `+60${digits}`;
   };
 
   const validatePhone = (phone: string) => {
-    // Check if it's 9-10 digits (Malaysian mobile numbers without +60)
     const digits = phone.replace(/\D/g, '');
     return digits.length >= 8 && digits.length <= 10;
   };
@@ -65,24 +60,12 @@ const Auth = () => {
       return;
     }
 
-    // Check if user is a merchant
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        const { data: profile } = await supabase
-          .from('customer_profiles' as any)
-          .select('customer_type')
-          .eq('user_id', user.id)
-          .single();
-
-        if ((profile as any)?.customer_type === 'merchant') {
-          toast.success('Welcome back!');
-          navigate('/');
-        } else {
-          toast.success('Welcome back!');
-          navigate('/');
-        }
+        toast.success('Welcome back!');
+        navigate('/');
       } else {
         navigate('/');
       }
@@ -96,7 +79,7 @@ const Auth = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!signupForm.username.trim()) {
       toast.error('Please enter a username');
       return;
@@ -124,9 +107,9 @@ const Auth = () => {
 
     setLoading(true);
     const normalizedPhone = normalizePhone(signupForm.phone);
-    
+
     const { error } = await signUp(normalizedPhone, signupForm.password, signupForm.username);
-    
+
     if (error) {
       if (error.message?.includes('already registered')) {
         toast.error('This phone number is already registered. Try signing in instead.');
@@ -153,7 +136,6 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      // Call admin_login function
       const { data, error } = await (supabase.rpc as any)('admin_login', {
         p_username: adminForm.username,
         p_password: adminForm.password
@@ -172,7 +154,6 @@ const Auth = () => {
         return;
       }
 
-      // Success! Store admin session
       const adminData = (data as any).admin;
       localStorage.setItem('admin_user', JSON.stringify(adminData));
 
@@ -187,46 +168,88 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Back to Homepage Button */}
-        <div className="mb-6">
-          <Button 
-            variant="ghost" 
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Homepage
-          </Button>
-        </div>
-
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <Car className="h-12 w-12 text-primary" />
+    <div className="min-h-screen flex relative overflow-hidden">
+      {/* Left Side - Background Image */}
+      <div className="hidden lg:block lg:w-1/2 relative">
+        <img
+          src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&q=80&w=2000"
+          alt="Sports Car"
+          className="w-full h-full object-cover"
+        />
+        {/* Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-gray-900"></div>
+        {/* Content on image */}
+        <div className="absolute inset-0 flex flex-col justify-center px-12">
+          <div className="max-w-md">
+            <h1 className="font-heading text-4xl xl:text-5xl font-bold text-white italic leading-tight mb-6">
+              UPGRADE<br />
+              <span className="text-lime-400">YOUR RIDE</span>
+            </h1>
+            <p className="text-gray-300 text-lg leading-relaxed">
+              Join Malaysia's premier automotive accessories wholesaler. Quality parts, fast delivery, exceptional service since 2007.
+            </p>
+            <div className="flex items-center gap-6 mt-8">
+              <div className="text-center">
+                <div className="font-heading text-3xl font-bold text-lime-400">17+</div>
+                <div className="text-xs text-gray-400 uppercase tracking-wider">Years</div>
+              </div>
+              <div className="w-px h-12 bg-gray-600"></div>
+              <div className="text-center">
+                <div className="font-heading text-3xl font-bold text-lime-400">500+</div>
+                <div className="text-xs text-gray-400 uppercase tracking-wider">Partners</div>
+              </div>
+              <div className="w-px h-12 bg-gray-600"></div>
+              <div className="text-center">
+                <div className="font-heading text-3xl font-bold text-lime-400">100+</div>
+                <div className="text-xs text-gray-400 uppercase tracking-wider">Products</div>
+              </div>
+            </div>
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Autolab</h1>
-          <p className="text-muted-foreground mt-2">Your trusted automotive parts partner</p>
         </div>
+      </div>
 
-        <Card className="bg-card/80 backdrop-blur-sm border-card-border shadow-premium">
-          <CardHeader>
-            <CardTitle className="text-center text-card-foreground">Welcome</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-6">
-                <TabsTrigger value="login">Customer</TabsTrigger>
-                <TabsTrigger value="admin">Admin</TabsTrigger>
-                <TabsTrigger value="signup">Sign Up</TabsTrigger>
-              </TabsList>
+      {/* Right Side - Form */}
+      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-6 lg:p-12">
+        <div className="w-full max-w-[400px]">
+          {/* Mobile Logo */}
+          <div className="lg:hidden flex justify-center mb-8">
+            <img
+              src="/autolab_logo.png"
+              alt="Auto Lab"
+              className="h-12 w-auto object-contain"
+            />
+          </div>
+
+          {/* Back Button */}
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="mb-6 -ml-3 text-gray-500 hover:text-gray-900"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to home
+          </Button>
+
+          {/* Header */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome back</h2>
+            <p className="text-gray-500">Sign in to your account to continue</p>
+          </div>
+
+          {/* Tabs */}
+          <Tabs defaultValue="login" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-6 bg-gray-100 p-1 rounded-lg h-11">
+              <TabsTrigger value="login" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-sm text-gray-600">Customer</TabsTrigger>
+              <TabsTrigger value="admin" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-sm text-gray-600">Admin</TabsTrigger>
+              <TabsTrigger value="signup" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-sm text-gray-600">Sign Up</TabsTrigger>
+            </TabsList>
 
               <TabsContent value="login">
-                <form onSubmit={handleLogin} className="space-y-4">
+                <form onSubmit={handleLogin} className="space-y-5">
                   <div className="space-y-2">
-                    <Label htmlFor="login-phone">Phone Number</Label>
+                    <Label htmlFor="login-phone" className="text-gray-700 text-sm font-medium">Phone Number</Label>
                     <div className="flex">
-                      <div className="flex items-center bg-muted border border-r-0 rounded-l-md px-3 text-sm text-muted-foreground">
+                      <div className="flex items-center bg-gray-50 border border-r-0 border-gray-200 rounded-l-lg px-4 text-sm text-gray-500 font-medium">
                         +60
                       </div>
                       <Input
@@ -236,16 +259,13 @@ const Auth = () => {
                         value={loginForm.phone}
                         onChange={(e) => setLoginForm({...loginForm, phone: e.target.value})}
                         required
-                        className="rounded-l-none"
+                        className="rounded-l-none border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Enter your Malaysian phone number without the +60 prefix
-                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="login-password">Password</Label>
+                    <Label htmlFor="login-password" className="text-gray-700 text-sm font-medium">Password</Label>
                     <div className="relative">
                       <Input
                         id="login-password"
@@ -253,13 +273,13 @@ const Auth = () => {
                         value={loginForm.password}
                         onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
                         required
-                        className="pr-10"
+                        className="pr-10 border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-gray-400"
                         onClick={() => setShowPassword(!showPassword)}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -267,28 +287,29 @@ const Auth = () => {
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button type="submit" className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors" disabled={loading}>
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
                 </form>
               </TabsContent>
 
               <TabsContent value="admin">
-                <form onSubmit={handleAdminLogin} className="space-y-4">
+                <form onSubmit={handleAdminLogin} className="space-y-5">
                   <div className="space-y-2">
-                    <Label htmlFor="admin-username">Username</Label>
+                    <Label htmlFor="admin-username" className="text-gray-700 text-sm font-medium">Username</Label>
                     <Input
                       id="admin-username"
                       type="text"
-                      placeholder="admin"
+                      placeholder="Enter username"
                       value={adminForm.username}
                       onChange={(e) => setAdminForm({...adminForm, username: e.target.value})}
                       required
+                      className="border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="admin-password">Password</Label>
+                    <Label htmlFor="admin-password" className="text-gray-700 text-sm font-medium">Password</Label>
                     <div className="relative">
                       <Input
                         id="admin-password"
@@ -296,13 +317,13 @@ const Auth = () => {
                         value={adminForm.password}
                         onChange={(e) => setAdminForm({...adminForm, password: e.target.value})}
                         required
-                        className="pr-10"
+                        className="pr-10 border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-gray-400"
                         onClick={() => setShowPassword(!showPassword)}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -310,59 +331,58 @@ const Auth = () => {
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button type="submit" className="w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold h-11 rounded-lg transition-colors" disabled={loading}>
                     <Shield className="h-4 w-4 mr-2" />
                     {loading ? 'Signing in...' : 'Admin Sign In'}
                   </Button>
-                  
-                  <div className="text-center">
-                    <Button 
-                      variant="link" 
+
+                  <p className="text-center text-sm text-gray-500">
+                    Need an admin account?{' '}
+                    <button
+                      type="button"
                       onClick={() => navigate('/admin-register')}
-                      className="text-sm"
+                      className="text-lime-600 hover:text-lime-700 font-medium"
                     >
-                      Need admin account? Register here
-                    </Button>
-                  </div>
+                      Register here
+                    </button>
+                  </p>
                 </form>
               </TabsContent>
 
               <TabsContent value="signup">
                 {/* Merchant Registration Link */}
-                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <p className="text-sm text-blue-900 dark:text-blue-100">
-                    Are you a business?
-                    <Button
-                      variant="link"
+                <div className="mb-6 p-4 bg-lime-50 border border-lime-100 rounded-xl">
+                  <p className="text-sm text-gray-700">
+                    Are you a business?{' '}
+                    <button
+                      type="button"
                       onClick={() => navigate('/merchant-register')}
-                      className="text-blue-600 dark:text-blue-400 p-0 h-auto ml-1"
+                      className="text-lime-600 font-medium hover:text-lime-700"
                     >
                       Register as a Merchant
-                    </Button>
+                    </button>
                   </p>
                 </div>
 
                 <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signup-username">Username</Label>
+                    <Label htmlFor="signup-username" className="text-gray-700 text-sm font-medium">Username</Label>
                     <Input
                       id="signup-username"
                       type="text"
-                      placeholder="Enter your username"
+                      placeholder="Choose a username"
                       value={signupForm.username}
                       onChange={(e) => setSignupForm({...signupForm, username: e.target.value})}
                       required
                       minLength={3}
+                      className="border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Choose a unique username (minimum 3 characters)
-                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="signup-phone">Phone Number</Label>
+                    <Label htmlFor="signup-phone" className="text-gray-700 text-sm font-medium">Phone Number</Label>
                     <div className="flex">
-                      <div className="flex items-center bg-muted border border-r-0 rounded-l-md px-3 text-sm text-muted-foreground">
+                      <div className="flex items-center bg-gray-50 border border-r-0 border-gray-200 rounded-l-lg px-4 text-sm text-gray-500 font-medium">
                         +60
                       </div>
                       <Input
@@ -372,73 +392,59 @@ const Auth = () => {
                         value={signupForm.phone}
                         onChange={(e) => setSignupForm({...signupForm, phone: e.target.value})}
                         required
-                        className="rounded-l-none"
+                        className="rounded-l-none border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Enter your Malaysian phone number (8-10 digits)
-                    </p>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="signup-password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={signupForm.password}
-                        onChange={(e) => setSignupForm({...signupForm, password: e.target.value})}
-                        required
-                        minLength={8}
-                        className="pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-password" className="text-gray-700 text-sm font-medium">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="signup-password"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="Min 8 characters"
+                          value={signupForm.password}
+                          onChange={(e) => setSignupForm({...signupForm, password: e.target.value})}
+                          required
+                          minLength={8}
+                          className="pr-10 border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-gray-400"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Minimum 8 characters required
-                    </p>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm Password</Label>
-                    <div className="relative">
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password" className="text-gray-700 text-sm font-medium">Confirm</Label>
                       <Input
                         id="confirm-password"
                         type={showPassword ? 'text' : 'password'}
+                        placeholder="Confirm password"
                         value={signupForm.confirmPassword}
                         onChange={(e) => setSignupForm({...signupForm, confirmPassword: e.target.value})}
                         required
                         minLength={8}
-                        className="pr-10"
+                        className="border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                       />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button type="submit" className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors mt-2" disabled={loading}>
                     {loading ? 'Creating account...' : 'Create Account'}
                   </Button>
                 </form>
               </TabsContent>
             </Tabs>
-          </CardContent>
-        </Card>
+        </div>
       </div>
     </div>
   );

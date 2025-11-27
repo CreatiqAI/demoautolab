@@ -50,7 +50,9 @@
       "Bash(for file in src/pages/admin/*.tsx)",
       "Bash(done)",
       "WebFetch(domain:www.airbnb.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(timeout 30 npx tsc:*)",
+      "Bash(timeout 60 npx tsc:*)"
     ],
     "deny": [],
     "ask": []

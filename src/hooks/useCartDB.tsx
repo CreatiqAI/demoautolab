@@ -78,19 +78,45 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('✅ Database cart data received:', data);
 
       if (data && data.length > 0) {
-        // Transform database items to match CartItem interface
+        // Get unique component SKUs to fetch images
+        const componentSkus = [...new Set(data.map((item: any) => item.component_sku))];
+
+        // Fetch component images from component_library
+        console.log('🔍 Fetching component images for:', componentSkus);
+        const { data: componentsData, error: componentsError } = await supabase
+          .from('component_library')
+          .select('component_sku, default_image_url')
+          .in('component_sku', componentSkus);
+
+        if (componentsError) {
+          console.error('⚠️ Error fetching component images:', componentsError);
+        }
+
+        // Create a map of component_sku to image URL
+        const imageMap = new Map<string, string>();
+        if (componentsData) {
+          componentsData.forEach((comp: any) => {
+            if (comp.default_image_url) {
+              imageMap.set(comp.component_sku, comp.default_image_url);
+            }
+          });
+        }
+        console.log('🖼️ Image map created:', imageMap);
+
+        // Transform database items to match CartItem interface with images
         const transformedItems: CartItem[] = data.map((item: any) => ({
           id: `${item.component_sku}_${item.product_context}`,
           component_sku: item.component_sku,
           name: item.component_name,
           normal_price: item.unit_price,
           quantity: item.quantity,
-          product_name: item.product_context || 'Unknown Product'
-        }));
-        
-        console.log('🔄 Transformed items:', transformedItems);
+          product_name: item.product_context || 'Unknown Product',
+          component_image: imageMap.get(item.component_sku) || item.default_image_url || undefined
+        })).sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
+
+        console.log('🔄 Transformed items with images:', transformedItems);
         setCartItems(transformedItems);
-        
+
         // Also sync to localStorage for offline access
         localStorage.setItem('cart', JSON.stringify(transformedItems));
         console.log('💾 Synced to localStorage');
@@ -130,26 +156,26 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       console.log('🛒 Adding item to cart:', newItem);
-      
+
       // Immediately update local state for instant UI feedback
       const itemId = `${newItem.component_sku}_${newItem.product_name}`;
       let updatedItems: CartItem[] = [];
-      
+
       setCartItems(prevItems => {
         const existingItem = prevItems.find(item => item.id === itemId);
-        
+
         if (existingItem) {
           // Update quantity if item already exists
           updatedItems = prevItems.map(item =>
             item.id === itemId
               ? { ...item, quantity: item.quantity + newItem.quantity }
               : item
-          );
+          ).sort((a, b) => a.name.localeCompare(b.name)); // Keep sorted
         } else {
-          // Add new item
-          updatedItems = [...prevItems, { ...newItem, id: itemId }];
+          // Add new item and sort
+          updatedItems = [...prevItems, { ...newItem, id: itemId }].sort((a, b) => a.name.localeCompare(b.name));
         }
-        
+
         return updatedItems;
       });
       
@@ -213,10 +239,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addToCartLocalStorage = (newItem: Omit<CartItem, 'id'>) => {
     const itemId = `${newItem.component_sku}_${newItem.product_name}`;
-    
+
     setCartItems(prevItems => {
       const existingItem = prevItems.find(item => item.id === itemId);
-      
+
       let updatedItems;
       if (existingItem) {
         // Update quantity if item already exists
@@ -224,12 +250,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           item.id === itemId
             ? { ...item, quantity: item.quantity + newItem.quantity }
             : item
-        );
+        ).sort((a, b) => a.name.localeCompare(b.name)); // Keep sorted
       } else {
-        // Add new item
-        updatedItems = [...prevItems, { ...newItem, id: itemId }];
+        // Add new item and sort
+        updatedItems = [...prevItems, { ...newItem, id: itemId }].sort((a, b) => a.name.localeCompare(b.name));
       }
-      
+
       // Save to localStorage
       localStorage.setItem('cart', JSON.stringify(updatedItems));
       return updatedItems;
@@ -243,7 +269,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      // Immediately update local state for instant UI feedback
+      // Immediately update local state for instant UI feedback (already sorted, just filter)
       setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
       
       // Extract component_sku from itemId
@@ -304,18 +330,56 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // For now, implement as remove + add with new quantity
-    const existingItem = cartItems.find(item => item.id === itemId);
-    if (existingItem) {
-      await removeFromCart(itemId);
-      await addToCart({
-        component_sku: existingItem.component_sku,
-        name: existingItem.name,
-        normal_price: existingItem.normal_price,
-        quantity: quantity,
-        product_name: existingItem.product_name,
-        component_image: existingItem.component_image
+    try {
+      // Immediately update local state for instant UI feedback
+      setCartItems(prevItems =>
+        prevItems.map(item =>
+          item.id === itemId
+            ? { ...item, quantity: quantity }
+            : item
+        ).sort((a, b) => a.name.localeCompare(b.name)) // Keep sorted
+      );
+
+      // Extract component_sku from itemId
+      const component_sku = itemId.split('_')[0];
+
+      // Find component_id
+      const { data: componentData, error: componentError } = await supabase
+        .from('component_library')
+        .select('id')
+        .eq('component_sku', component_sku)
+        .single();
+
+      if (componentError || !componentData) {
+        console.error('Component not found for update:', componentError);
+        return;
+      }
+
+      // Get existing item details
+      const existingItem = cartItems.find(item => item.id === itemId);
+      if (!existingItem) return;
+
+      // Remove old entry and add new one with updated quantity
+      await supabase.rpc('remove_item_from_cart', {
+        p_component_id: componentData.id,
+        p_user_id: user.id,
+        p_guest_session: null
       });
+
+      await supabase.rpc('add_item_to_cart', {
+        p_component_id: componentData.id,
+        p_component_sku: existingItem.component_sku,
+        p_component_name: existingItem.name,
+        p_product_context: existingItem.product_name,
+        p_quantity: quantity,
+        p_unit_price: existingItem.normal_price,
+        p_user_id: user.id,
+        p_guest_session: null
+      });
+
+      console.log('✅ Quantity updated successfully');
+    } catch (error) {
+      console.error('Error updating quantity:', error);
     }
   };
 

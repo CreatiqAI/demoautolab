@@ -23,7 +23,7 @@ export default function SEOHead({
 }: SEOHeadProps) {
   const siteUrl = 'https://autolabs.my'; // Update with your actual domain
   const fullTitle = title.includes('AUTO LABS') ? title : `${title} | AUTO LABS`;
-  
+
   return (
     <Helmet>
       {/* Basic Meta Tags */}
@@ -31,24 +31,24 @@ export default function SEOHead({
       <meta name="description" content={description} />
       {keywords && <meta name="keywords" content={keywords} />}
       {canonical && <link rel="canonical" href={canonical} />}
-      
+
       {/* Robots */}
       {noindex && <meta name="robots" content="noindex,nofollow" />}
-      
+
       {/* Open Graph / Facebook */}
       <meta property="og:type" content="website" />
       <meta property="og:title" content={ogTitle || fullTitle} />
       <meta property="og:description" content={ogDescription || description} />
       <meta property="og:image" content={ogImage || `${siteUrl}/og-default.jpg`} />
-      <meta property="og:url" content={canonical || window.location.href} />
+      <meta property="og:url" content={canonical || siteUrl} />
       <meta property="og:site_name" content="AUTO LABS" />
-      
+
       {/* Twitter Card */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={ogTitle || fullTitle} />
       <meta name="twitter:description" content={ogDescription || description} />
       <meta name="twitter:image" content={ogImage || `${siteUrl}/og-default.jpg`} />
-      
+
       {/* Local Business Schema */}
       <script type="application/ld+json">
         {JSON.stringify({

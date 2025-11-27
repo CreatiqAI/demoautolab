@@ -52,7 +52,7 @@ interface Partnership {
   services_offered: string[];
   subscription_status: string;
   subscription_plan: string;
-  monthly_fee: number;
+  yearly_fee: number;
   subscription_start_date: string | null;
   subscription_end_date: string | null;
   admin_approved: boolean;
@@ -148,6 +148,8 @@ export default function PremiumPartner() {
 
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [originalFormData, setOriginalFormData] = useState(formData);
 
   useEffect(() => {
     checkMerchantAndFetchPartnership();
@@ -189,7 +191,7 @@ export default function PremiumPartner() {
       if (existingPartnership) {
         setPartnership(existingPartnership as any);
         // Pre-fill form with existing data
-        setFormData({
+        const partnershipFormData = {
           business_name: (existingPartnership as any).business_name || '',
           business_registration_no: (existingPartnership as any).business_registration_no || '',
           business_type: (existingPartnership as any).business_type || '',
@@ -206,7 +208,13 @@ export default function PremiumPartner() {
           facebook_url: (existingPartnership as any).facebook_url || '',
           instagram_url: (existingPartnership as any).instagram_url || '',
           shop_photos: (existingPartnership as any).shop_photos || []
-        });
+        };
+        setFormData(partnershipFormData);
+        setOriginalFormData(partnershipFormData);
+        setIsEditMode(false);
+      } else {
+        // If no partnership exists, default to edit mode so they can create one
+        setIsEditMode(true);
       }
     } catch (error) {
       console.error('Error checking merchant status:', error);
@@ -296,6 +304,16 @@ export default function PremiumPartner() {
     }
   };
 
+  const handleEditClick = () => {
+    setIsEditMode(true);
+  };
+
+  const handleCancelEdit = () => {
+    setFormData(originalFormData);
+    setPhotoFiles([]);
+    setIsEditMode(false);
+  };
+
   const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -309,7 +327,7 @@ export default function PremiumPartner() {
         ...formData,
         shop_photos: shopPhotos,
         subscription_plan: SUBSCRIPTION_PLAN.id,
-        monthly_fee: SUBSCRIPTION_PLAN.price,
+        yearly_fee: SUBSCRIPTION_PLAN.price,
         subscription_status: partnership ? partnership.subscription_status : 'PENDING',
         admin_approved: partnership ? partnership.admin_approved : false,
         updated_at: new Date().toISOString()
@@ -342,7 +360,8 @@ export default function PremiumPartner() {
         });
       }
 
-      // Refresh data
+      // Refresh data and exit edit mode
+      setIsEditMode(false);
       await checkMerchantAndFetchPartnership();
     } catch (error: any) {
       console.error('Error submitting application:', error);
@@ -385,29 +404,29 @@ export default function PremiumPartner() {
     <div className="min-h-screen bg-background">
       <Header />
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-6 md:py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6 md:mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <Crown className="h-8 w-8 text-yellow-500" />
-            <h1 className="text-3xl font-bold">Premium Partner Program</h1>
+            <Crown className="h-6 w-6 md:h-7 md:w-7 text-yellow-500" />
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold">Premium Partner Program</h1>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Become an authorized Auto Lab reseller and get featured on our platform
           </p>
         </div>
 
         {/* Existing Partnership Status */}
         {partnership && (
-          <Card className="mb-8 border-2 border-primary">
-            <CardHeader>
-              <div className="flex items-center justify-between">
+          <Card className="mb-6 md:mb-8 border-2 border-primary">
+            <CardHeader className="p-4 md:p-6">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Store className="h-5 w-5" />
+                  <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                    <Store className="h-4 w-4 md:h-5 md:w-5" />
                     {partnership.business_name}
                   </CardTitle>
-                  <CardDescription>{partnership.business_type}</CardDescription>
+                  <CardDescription className="text-xs md:text-sm">{partnership.business_type}</CardDescription>
                 </div>
                 {getStatusBadge(partnership.subscription_status)}
               </div>
@@ -464,7 +483,7 @@ export default function PremiumPartner() {
                                     <span>Email: <strong className="text-red-700">support@autolab.my</strong></span>
                                   </div>
                                   <p className="text-xs text-gray-600 mt-2">
-                                    💳 Monthly Fee: RM {partnership.monthly_fee}/month
+                                    💳 Yearly Fee: RM {partnership.yearly_fee}/year
                                   </p>
                                 </div>
                               </div>
@@ -507,7 +526,7 @@ export default function PremiumPartner() {
                                     <span>Email: <strong className="text-orange-700">support@autolab.my</strong></span>
                                   </div>
                                   <p className="text-xs text-gray-600 mt-2">
-                                    💳 Monthly Fee: RM {partnership.monthly_fee}/month
+                                    💳 Yearly Fee: RM {partnership.yearly_fee}/year
                                   </p>
                                 </div>
                               </div>
@@ -558,22 +577,22 @@ export default function PremiumPartner() {
               )}
 
               {/* Subscription Details */}
-              <div className="grid md:grid-cols-3 gap-4 pt-4 border-t">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 pt-3 border-t">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Current Plan</p>
-                  <p className="font-semibold flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-yellow-500" />
+                  <p className="text-xs text-muted-foreground mb-0.5">Current Plan</p>
+                  <p className="font-semibold text-sm flex items-center gap-1.5">
+                    <Crown className="h-3.5 w-3.5 text-yellow-500" />
                     {partnership.subscription_plan}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Monthly Fee</p>
-                  <p className="font-semibold">RM {partnership.monthly_fee}/month</p>
+                  <p className="text-xs text-muted-foreground mb-0.5">Monthly Fee</p>
+                  <p className="font-semibold text-sm">RM {partnership.monthly_fee}/month</p>
                 </div>
                 {partnership.subscription_end_date && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">Valid Until</p>
-                    <p className="font-semibold">
+                    <p className="text-xs text-muted-foreground mb-0.5">Valid Until</p>
+                    <p className="font-semibold text-sm">
                       {new Date(partnership.subscription_end_date).toLocaleDateString('en-MY')}
                     </p>
                   </div>
@@ -582,32 +601,32 @@ export default function PremiumPartner() {
 
               {/* Statistics */}
               {partnership.subscription_status === 'ACTIVE' && (
-                <div className="grid md:grid-cols-3 gap-4 pt-4 border-t">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <Eye className="h-5 w-5 text-blue-600" />
+                <div className="grid grid-cols-3 gap-3 md:gap-4 pt-3 border-t">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 md:p-2 bg-blue-100 rounded-lg">
+                      <Eye className="h-4 w-4 text-blue-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Profile Views</p>
-                      <p className="text-lg font-semibold">{partnership.total_views}</p>
+                      <p className="text-[10px] md:text-xs text-muted-foreground">Views</p>
+                      <p className="text-sm md:text-base font-semibold">{partnership.total_views}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-100 rounded-lg">
-                      <MousePointer className="h-5 w-5 text-green-600" />
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 md:p-2 bg-green-100 rounded-lg">
+                      <MousePointer className="h-4 w-4 text-green-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Contact Clicks</p>
-                      <p className="text-lg font-semibold">{partnership.total_clicks}</p>
+                      <p className="text-[10px] md:text-xs text-muted-foreground">Clicks</p>
+                      <p className="text-sm md:text-base font-semibold">{partnership.total_clicks}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <MessageSquare className="h-5 w-5 text-purple-600" />
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 md:p-2 bg-purple-100 rounded-lg">
+                      <MessageSquare className="h-4 w-4 text-purple-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Inquiries</p>
-                      <p className="text-lg font-semibold">{partnership.total_inquiries}</p>
+                      <p className="text-[10px] md:text-xs text-muted-foreground">Inquiries</p>
+                      <p className="text-sm md:text-base font-semibold">{partnership.total_inquiries}</p>
                     </div>
                   </div>
                 </div>
@@ -747,31 +766,31 @@ export default function PremiumPartner() {
         )}
 
         {/* Subscription Plan Info */}
-        <Card className="mb-8 border-2 border-primary bg-gradient-to-r from-blue-50 to-purple-50">
-          <CardHeader>
-            <div className="flex items-center justify-between">
+        <Card className="mb-6 md:mb-8 border-2 border-primary bg-gradient-to-r from-blue-50 to-purple-50">
+          <CardHeader className="p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-2xl flex items-center gap-2">
-                  <Crown className="h-6 w-6 text-yellow-600" />
+                <CardTitle className="text-lg md:text-xl flex items-center gap-2">
+                  <Crown className="h-5 w-5 text-yellow-600" />
                   {SUBSCRIPTION_PLAN.name}
                 </CardTitle>
-                <CardDescription className="mt-2 text-base">
+                <CardDescription className="mt-1 text-xs md:text-sm">
                   {SUBSCRIPTION_PLAN.description}
                 </CardDescription>
               </div>
-              <div className="text-right">
-                <div className="text-4xl font-bold text-primary">
+              <div className="text-left sm:text-right">
+                <div className="text-2xl md:text-3xl font-bold text-primary">
                   RM {SUBSCRIPTION_PLAN.price}
                 </div>
-                <div className="text-sm text-muted-foreground">/month</div>
+                <div className="text-xs text-muted-foreground">/month</div>
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+          <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
               {SUBSCRIPTION_PLAN.features.map((feature, index) => (
-                <div key={index} className="flex items-start gap-2 text-sm">
-                  <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                <div key={index} className="flex items-start gap-1.5 text-xs md:text-sm">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600 mt-0.5 flex-shrink-0" />
                   <span>{feature.replace('✓ ', '')}</span>
                 </div>
               ))}
@@ -783,12 +802,25 @@ export default function PremiumPartner() {
         <div>
             <Card>
               <CardHeader>
-                <CardTitle>
-                  {partnership ? 'Update' : 'Apply for'} Premium Partnership
-                </CardTitle>
-                <CardDescription>
-                  Fill in your business details to become an authorized Auto Lab reseller
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>
+                      {partnership ? 'Premium Partnership Information' : 'Apply for Premium Partnership'}
+                    </CardTitle>
+                    <CardDescription>
+                      {partnership
+                        ? 'Your business details displayed on the Find Shops page'
+                        : 'Fill in your business details to become an authorized Auto Lab reseller'
+                      }
+                    </CardDescription>
+                  </div>
+                  {partnership && !isEditMode && (
+                    <Button onClick={handleEditClick} variant="outline">
+                      <Store className="h-4 w-4 mr-2" />
+                      Edit Information
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmitApplication} className="space-y-6">
@@ -806,6 +838,7 @@ export default function PremiumPartner() {
                           value={formData.business_name}
                           onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
                           required
+                          disabled={!isEditMode}
                         />
                       </div>
                       <div>
@@ -814,6 +847,7 @@ export default function PremiumPartner() {
                           id="business_registration_no"
                           value={formData.business_registration_no}
                           onChange={(e) => setFormData({ ...formData, business_registration_no: e.target.value })}
+                          disabled={!isEditMode}
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -821,6 +855,7 @@ export default function PremiumPartner() {
                         <Select
                           value={formData.business_type}
                           onValueChange={(value) => setFormData({ ...formData, business_type: value })}
+                          disabled={!isEditMode}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select business type" />
@@ -841,6 +876,7 @@ export default function PremiumPartner() {
                           rows={3}
                           placeholder="Describe your business, expertise, and what makes you special..."
                           required
+                          disabled={!isEditMode}
                         />
                       </div>
                     </div>
@@ -860,6 +896,7 @@ export default function PremiumPartner() {
                           value={formData.contact_person}
                           onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
                           required
+                          disabled={!isEditMode}
                         />
                       </div>
                       <div>
@@ -870,6 +907,7 @@ export default function PremiumPartner() {
                           value={formData.contact_phone}
                           onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
                           required
+                          disabled={!isEditMode}
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -879,6 +917,7 @@ export default function PremiumPartner() {
                           type="email"
                           value={formData.contact_email}
                           onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                          disabled={!isEditMode}
                         />
                       </div>
                     </div>
@@ -896,6 +935,7 @@ export default function PremiumPartner() {
                         onChange={(address) => setFormData({ ...formData, address })}
                         placeholder="Enter shop address..."
                         required
+                        disabled={!isEditMode}
                       />
                       <div className="grid md:grid-cols-3 gap-4">
                         <div>
@@ -905,6 +945,7 @@ export default function PremiumPartner() {
                             value={formData.city}
                             onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                             required
+                            disabled={!isEditMode}
                           />
                         </div>
                         <div>
@@ -912,6 +953,7 @@ export default function PremiumPartner() {
                           <Select
                             value={formData.state}
                             onValueChange={(value) => setFormData({ ...formData, state: value })}
+                            disabled={!isEditMode}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select state" />
@@ -930,6 +972,7 @@ export default function PremiumPartner() {
                             value={formData.postcode}
                             onChange={(e) => setFormData({ ...formData, postcode: e.target.value })}
                             required
+                            disabled={!isEditMode}
                           />
                         </div>
                       </div>
@@ -947,6 +990,7 @@ export default function PremiumPartner() {
                           variant={formData.services_offered.includes(service) ? 'default' : 'outline'}
                           className="justify-start"
                           onClick={() => handleServiceToggle(service)}
+                          disabled={!isEditMode}
                         >
                           {formData.services_offered.includes(service) && (
                             <CheckCircle2 className="h-4 w-4 mr-2" />
@@ -972,6 +1016,7 @@ export default function PremiumPartner() {
                           value={formData.website_url}
                           onChange={(e) => setFormData({ ...formData, website_url: e.target.value })}
                           placeholder="https://yourwebsite.com"
+                          disabled={!isEditMode}
                         />
                       </div>
                       <div>
@@ -985,6 +1030,7 @@ export default function PremiumPartner() {
                           value={formData.facebook_url}
                           onChange={(e) => setFormData({ ...formData, facebook_url: e.target.value })}
                           placeholder="https://facebook.com/yourpage"
+                          disabled={!isEditMode}
                         />
                       </div>
                       <div>
@@ -998,12 +1044,14 @@ export default function PremiumPartner() {
                           value={formData.instagram_url}
                           onChange={(e) => setFormData({ ...formData, instagram_url: e.target.value })}
                           placeholder="https://instagram.com/yourprofile"
+                          disabled={!isEditMode}
                         />
                       </div>
                     </div>
                   </div>
 
                   {/* Shop Photos Upload */}
+                  {isEditMode && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1107,12 +1155,28 @@ export default function PremiumPartner() {
                       </div>
                     )}
                   </div>
+                  )}
 
-                  <div className="flex justify-end gap-4 pt-4 border-t">
-                    <Button type="submit" size="lg" disabled={submitting || uploadingPhotos}>
-                      {uploadingPhotos ? 'Uploading Photos...' : submitting ? 'Submitting...' : partnership ? 'Update Application' : 'Submit Application'}
-                    </Button>
-                  </div>
+                  {/* Form Actions */}
+                  {isEditMode && (
+                    <div className="flex justify-end gap-4 pt-4 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCancelEdit}
+                        disabled={submitting || uploadingPhotos}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        size="lg"
+                        disabled={submitting || uploadingPhotos}
+                      >
+                        {uploadingPhotos ? 'Uploading Photos...' : submitting ? 'Saving...' : partnership ? 'Save Changes' : 'Submit Application'}
+                      </Button>
+                    </div>
+                  )}
                 </form>
               </CardContent>
             </Card>

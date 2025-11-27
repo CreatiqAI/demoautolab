@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/Header';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import Footer from '@/components/Footer';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tag, Calendar, Percent, DollarSign, Copy, Check, ShoppingCart, AlertCircle } from 'lucide-react';
+import { Tag, Calendar, Percent, DollarSign, Copy, Check, ShoppingCart, AlertCircle, Ticket, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Link } from 'react-router-dom';
 
 interface Voucher {
   id: string;
@@ -39,7 +38,6 @@ export default function MyVouchers() {
 
   const fetchAvailableVouchers = async () => {
     try {
-      // Get customer profile ID
       const { data: profile } = await supabase
         .from('customer_profiles' as any)
         .select('id')
@@ -51,7 +49,6 @@ export default function MyVouchers() {
         return;
       }
 
-      // Get available vouchers using the function
       const { data, error } = await (supabase.rpc as any)('get_available_vouchers_for_customer', {
         p_customer_id: (profile as any).id
       });
@@ -82,10 +79,10 @@ export default function MyVouchers() {
 
   const getDiscountDisplay = (voucher: Voucher) => {
     if (voucher.discount_type === 'PERCENTAGE') {
-      const maxCap = voucher.max_discount_amount ? ` (max RM ${voucher.max_discount_amount})` : '';
+      const maxCap = voucher.max_discount_amount ? ` (max RM${voucher.max_discount_amount})` : '';
       return `${voucher.discount_value}% OFF${maxCap}`;
     }
-    return `RM ${voucher.discount_value} OFF`;
+    return `RM${voucher.discount_value} OFF`;
   };
 
   const handleCopyCode = (code: string) => {
@@ -101,180 +98,214 @@ export default function MyVouchers() {
     }, 2000);
   };
 
-  const getUsageColor = (voucher: Voucher) => {
-    const usagePercentage = (voucher.times_used / voucher.max_usage_per_user) * 100;
-    if (usagePercentage >= 100) return 'text-red-600';
-    if (usagePercentage >= 50) return 'text-yellow-600';
-    return 'text-green-600';
+  const getUsagePercentage = (voucher: Voucher) => {
+    return (voucher.times_used / voucher.max_usage_per_user) * 100;
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">My Vouchers</h1>
-          <p className="text-muted-foreground">
-            View and use your available discount vouchers
-          </p>
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
+        {/* Back Button */}
+        <Link
+          to="/catalog"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-lime-700 mb-6 text-sm font-medium transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Shop
+        </Link>
+
+        {/* Page Header */}
+        <div className="mb-6 border-b border-gray-200 pb-4">
+          <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic mb-2">My Vouchers</h1>
+          <p className="text-sm text-gray-500 uppercase tracking-wider font-medium">Redeem your available discount codes at checkout.</p>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <Ticket className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
+              <p className="text-gray-500 text-[15px]">Loading vouchers...</p>
+            </div>
           </div>
         ) : vouchers.length === 0 ? (
-          <Card>
-            <CardContent className="text-center py-12">
-              <Tag className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No vouchers available</h3>
-              <p className="text-muted-foreground mb-4">
-                There are currently no vouchers available for your account
-              </p>
-              <Button onClick={() => window.location.href = '/catalog'}>
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                Start Shopping
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-8 text-center shadow-md">
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <Ticket className="h-6 w-6 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-heading font-bold uppercase italic text-gray-900 mb-2">No Vouchers Available</h3>
+            <p className="text-[15px] text-gray-500 mb-6 max-w-md mx-auto">
+              There are currently no vouchers available for your account. Check back later for exclusive deals!
+            </p>
+            <Link
+              to="/catalog"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-lime-600 text-white font-bold uppercase tracking-wide text-[13px] hover:bg-lime-700 transition-all rounded-lg"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Start Shopping
+            </Link>
+          </div>
         ) : (
           <>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Vouchers Grid */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
               {vouchers.map((voucher) => (
-                <Card
+                <div
                   key={voucher.id}
-                  className={`hover:shadow-lg transition-shadow ${!voucher.can_still_use ? 'opacity-60' : ''}`}
+                  className={`bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 group ${
+                    !voucher.can_still_use ? 'opacity-60' : ''
+                  }`}
                 >
-                  <CardHeader className="pb-3">
+                  {/* Voucher Header - Ticket Style */}
+                  <div className="relative bg-gradient-to-br from-gray-900 to-gray-800 p-4 text-white">
+                    {/* Decorative circles for ticket effect */}
+                    <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 bg-gray-50 rounded-full"></div>
+                    <div className="absolute -right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 bg-gray-50 rounded-full"></div>
+
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        {voucher.discount_type === 'PERCENTAGE' ? (
-                          <div className="p-2 bg-green-100 rounded-lg">
-                            <Percent className="h-5 w-5 text-green-600" />
-                          </div>
-                        ) : (
-                          <div className="p-2 bg-blue-100 rounded-lg">
-                            <DollarSign className="h-5 w-5 text-blue-600" />
-                          </div>
-                        )}
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          voucher.discount_type === 'PERCENTAGE' ? 'bg-lime-600' : 'bg-blue-600'
+                        }`}>
+                          {voucher.discount_type === 'PERCENTAGE' ? (
+                            <Percent className="h-4 w-4 text-white" />
+                          ) : (
+                            <DollarSign className="h-4 w-4 text-white" />
+                          )}
+                        </div>
                         <div>
-                          <Badge variant="secondary" className="text-sm font-mono">
-                            {voucher.code}
-                          </Badge>
+                          <p className="text-[8px] font-medium uppercase tracking-wider text-gray-400">Voucher Code</p>
+                          <code className="text-xs font-bold tracking-wider">{voucher.code}</code>
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                      <button
                         onClick={() => handleCopyCode(voucher.code)}
-                        className="h-8 w-8 p-0"
+                        className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
                       >
                         {copiedCode === voucher.code ? (
-                          <Check className="h-4 w-4 text-green-600" />
+                          <Check className="h-4 w-4 text-lime-400" />
                         ) : (
-                          <Copy className="h-4 w-4" />
+                          <Copy className="h-4 w-4 text-gray-400 hover:text-white" />
                         )}
-                      </Button>
+                      </button>
                     </div>
 
-                    <CardTitle className="text-lg">{voucher.name}</CardTitle>
-                    <CardDescription>{voucher.description}</CardDescription>
-                  </CardHeader>
-
-                  <CardContent className="space-y-3">
                     {/* Discount Amount */}
-                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3 text-center">
-                      <p className="text-2xl font-bold text-purple-700">
+                    <div className="text-center py-2 border-t border-dashed border-white/20">
+                      <p className="text-2xl font-heading font-bold uppercase italic text-lime-400">
                         {getDiscountDisplay(voucher)}
                       </p>
                     </div>
+                  </div>
 
-                    {/* Minimum Purchase */}
-                    {voucher.min_purchase_amount > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Min. Purchase</span>
-                        <span className="font-medium">RM {voucher.min_purchase_amount}</span>
-                      </div>
-                    )}
-
-                    {/* Usage Status */}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Usage</span>
-                      <span className={`font-medium ${getUsageColor(voucher)}`}>
-                        {voucher.times_used} / {voucher.max_usage_per_user} used
-                      </span>
+                  {/* Voucher Details */}
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-[15px] mb-0.5">{voucher.name}</h3>
+                      <p className="text-[13px] text-gray-500">{voucher.description}</p>
                     </div>
 
-                    {/* Valid Until */}
-                    <div className="flex items-center justify-between text-sm pt-2 border-t">
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        <span>Valid until</span>
+                    {/* Usage Progress */}
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] mb-1.5">
+                        <span className="text-gray-500 font-medium uppercase tracking-wider">Usage</span>
+                        <span className={`font-bold ${
+                          getUsagePercentage(voucher) >= 100 ? 'text-red-600' :
+                          getUsagePercentage(voucher) >= 50 ? 'text-yellow-600' : 'text-green-600'
+                        }`}>
+                          {voucher.times_used} / {voucher.max_usage_per_user}
+                        </span>
                       </div>
-                      <span className="font-medium">{formatDate(voucher.valid_until)}</span>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            getUsagePercentage(voucher) >= 100 ? 'bg-red-500' :
+                            getUsagePercentage(voucher) >= 50 ? 'bg-yellow-500' : 'bg-lime-500'
+                          }`}
+                          style={{ width: `${Math.min(getUsagePercentage(voucher), 100)}%` }}
+                        />
+                      </div>
                     </div>
 
-                    {/* Status Badge */}
+                    {/* Min Purchase & Expiry */}
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
+                      {voucher.min_purchase_amount > 0 && (
+                        <div className="text-gray-500">
+                          Min. <span className="font-bold text-gray-900">RM{voucher.min_purchase_amount}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 text-gray-500 ml-auto">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>{formatDate(voucher.valid_until)}</span>
+                      </div>
+                    </div>
+
+                    {/* Status & Action */}
                     <div className="pt-2">
                       {voucher.can_still_use ? (
-                        <Badge className="w-full justify-center bg-green-100 text-green-800 hover:bg-green-100">
-                          <Check className="h-3 w-3 mr-1" />
-                          Available to Use
-                        </Badge>
+                        <button
+                          onClick={() => handleCopyCode(voucher.code)}
+                          className="w-full py-2.5 bg-lime-600 text-white font-bold uppercase tracking-wide text-[13px] hover:bg-lime-700 transition-all rounded-lg flex items-center justify-center gap-1.5"
+                        >
+                          {copiedCode === voucher.code ? (
+                            <>
+                              <Check className="h-4 w-4" />
+                              Copied!
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4" />
+                              Copy & Use
+                            </>
+                          )}
+                        </button>
                       ) : (
-                        <Badge variant="secondary" className="w-full justify-center">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Usage Limit Reached
-                        </Badge>
+                        <div className="w-full py-2.5 bg-gray-100 text-gray-500 font-bold uppercase tracking-wide text-[13px] rounded-lg flex items-center justify-center gap-1.5">
+                          <AlertCircle className="h-4 w-4" />
+                          Limit Reached
+                        </div>
                       )}
                     </div>
-
-                    {/* Copy Code Button */}
-                    {voucher.can_still_use && (
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => handleCopyCode(voucher.code)}
-                      >
-                        {copiedCode === voucher.code ? (
-                          <>
-                            <Check className="h-4 w-4 mr-2" />
-                            Copied!
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-4 w-4 mr-2" />
-                            Copy Code
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
 
-            {/* Info Card */}
-            <Card className="mt-8 bg-blue-50 border-blue-200">
-              <CardContent className="py-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-blue-900 mb-1">How to use vouchers</h4>
-                    <p className="text-sm text-blue-800">
-                      1. Copy your voucher code<br />
-                      2. Add items to cart and proceed to checkout<br />
-                      3. Enter the voucher code in the "Apply Voucher" section<br />
-                      4. Your discount will be automatically applied to the total
-                    </p>
-                  </div>
+            {/* How to Use Card */}
+            <div className="bg-white/80 backdrop-blur-xl border border-lime-200 rounded-xl p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-lime-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="h-5 w-5 text-lime-700" />
                 </div>
-              </CardContent>
-            </Card>
+                <div className="flex-1">
+                  <h4 className="font-heading font-bold uppercase italic text-gray-900 text-[15px] mb-3">How to Use Vouchers</h4>
+                  <ol className="text-[15px] text-gray-600 space-y-2.5">
+                    <li className="flex items-start gap-2.5">
+                      <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                      <span>Copy your voucher code by clicking the copy button</span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                      <span>Add items to your cart and proceed to checkout</span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
+                      <span>Enter the voucher code in the "Apply Voucher" section</span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">4</span>
+                      <span>Your discount will be automatically applied to the total</span>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </div>
           </>
         )}
-      </div>
+      </main>
+
+      <Footer />
     </div>
   );
 }

@@ -2,13 +2,10 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Eye, Package, Store, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Package, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import PageTransition from '@/components/PageTransition';
@@ -36,6 +33,11 @@ interface Product {
     alt_text: string;
     is_primary: boolean;
   }>;
+  product_variants?: Array<{
+    id: string;
+    components: string | null;
+    price_regular: number;
+  }>;
 }
 
 
@@ -52,7 +54,7 @@ const Catalog = () => {
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'all');
   const [selectedCategory, setSelectedCategory] = useState<string>(searchParams.get('category') || 'all');
   const navigate = useNavigate();
-  
+
   // Mobile pagination settings
   const [isMobile, setIsMobile] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,7 +70,7 @@ const Catalog = () => {
         setCurrentPage(1); // Reset to first page when switching between mobile/desktop
       }
     };
-    
+
     handleResize(); // Set initial value
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -152,18 +154,18 @@ const Catalog = () => {
   // Update search term, selected brand, and category when URL changes
   useEffect(() => {
     const searchFromUrl = searchParams.get('search');
-    const brandFromUrl = searchParams.get('brand');
-    const categoryFromUrl = searchParams.get('category');
+    const brandFromUrl = searchParams.get('brand') || 'all';
+    const categoryFromUrl = searchParams.get('category') || 'all';
 
     if (searchFromUrl !== searchTerm) {
       setSearchTerm(searchFromUrl || '');
     }
 
-    if (brandFromUrl && brandFromUrl !== selectedBrand) {
+    if (brandFromUrl !== selectedBrand) {
       setSelectedBrand(brandFromUrl);
     }
 
-    if (categoryFromUrl && categoryFromUrl !== selectedCategory) {
+    if (categoryFromUrl !== selectedCategory) {
       setSelectedCategory(categoryFromUrl);
     }
   }, [searchParams, searchTerm, selectedBrand, selectedCategory]);
@@ -193,7 +195,7 @@ const Catalog = () => {
   // Handle search term changes with debounced URL updates
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    
+
     // Update URL parameters
     if (value.trim()) {
       searchParams.set('search', value.trim());
@@ -252,14 +254,53 @@ const Catalog = () => {
   });
 
 
-  const getProductStatus = (product: Product) => {
-    if (!product.active) return { label: 'Unavailable', variant: 'destructive' as const, available: false };
-    return { label: 'Available', variant: 'default' as const, available: true };
-  };
-
   const getPrimaryImage = (images: Product['product_images']) => {
     const primaryImage = images.find(img => img.is_primary) || images[0];
     return primaryImage?.url || '/placeholder.svg';
+  };
+
+  const getComponentCount = (product: Product) => {
+    if (!product.product_variants || product.product_variants.length === 0) {
+      return 0;
+    }
+
+    // Count unique components across all variants
+    const allComponents = new Set<string>();
+    product.product_variants.forEach(variant => {
+      if (variant.components) {
+        try {
+          // Try to parse as JSON first
+          const components = JSON.parse(variant.components);
+          if (Array.isArray(components)) {
+            components.forEach(comp => allComponents.add(comp));
+          }
+        } catch {
+          // If not JSON, treat as comma-separated string
+          const components = variant.components.split(',').map(c => c.trim()).filter(Boolean);
+          components.forEach(comp => allComponents.add(comp));
+        }
+      }
+    });
+
+    return allComponents.size;
+  };
+
+  const getLowestPrice = (product: Product) => {
+    // If no variants, return the normal price
+    if (!product.product_variants || product.product_variants.length === 0) {
+      return product.normal_price;
+    }
+
+    // Find the lowest price from variants
+    const prices = product.product_variants
+      .map(v => (v as any).price_regular)
+      .filter(p => p != null && p > 0);
+
+    if (prices.length === 0) {
+      return product.normal_price;
+    }
+
+    return Math.min(...prices);
   };
 
   const handleProductView = (product: Product) => {
@@ -278,9 +319,9 @@ const Catalog = () => {
     setCurrentPage(page);
     // Small delay to ensure content loads before scrolling
     setTimeout(() => {
-      window.scrollTo({ 
-        top: 0, 
-        behavior: 'smooth' 
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
       });
     }, 50);
   };
@@ -290,38 +331,140 @@ const Catalog = () => {
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <Header />
 
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
-          {/* Clean Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Product Catalog
-            </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Discover our extensive range of high-quality automotive parts and accessories
-            </p>
+        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
+          {/* Page Header */}
+          <div className="mb-6 border-b border-gray-200 pb-4">
+            <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic mb-2">Product Catalog</h1>
+            <p className="text-sm text-gray-500 uppercase tracking-wider font-medium">Discover our extensive range of high-quality automotive parts and accessories</p>
           </div>
 
-          {/* Main Layout with Sidebar */}
-          <div className="flex flex-col lg:flex-row gap-6">
-            {/* Left Sidebar - Quick Filters */}
-            <div className="lg:w-56 flex-shrink-0">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sticky top-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Filters</h3>
+          {/* Mobile Filters - Shows only on small screens */}
+          <div className="lg:hidden mb-6">
+            <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 shadow-md">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Search Input */}
+                <div className="sm:col-span-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search products..."
+                      value={searchTerm}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      className="pl-10 h-10 bg-gray-50 border-gray-200 rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
 
-                {/* Categories Section */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-                    <Package className="h-4 w-4 mr-2" />
-                    Categories
-                  </h4>
-                  <div className="space-y-2">
+                {/* Category Filter */}
+                <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                  <SelectTrigger className="h-10 bg-gray-50 border-gray-200 rounded-lg text-sm">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-gray-200 rounded-xl shadow-lg max-h-[280px]">
+                    <SelectItem value="all" className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
+                      All Categories
+                    </SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id} className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Brand Filter */}
+                <Select value={selectedBrand} onValueChange={handleBrandChange}>
+                  <SelectTrigger className="h-10 bg-gray-50 border-gray-200 rounded-lg text-sm">
+                    <SelectValue placeholder="Brand" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-gray-200 rounded-xl shadow-lg max-h-[280px]">
+                    <SelectItem value="all" className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
+                      All Brands
+                    </SelectItem>
+                    {brands.map((brand) => (
+                      <SelectItem key={brand.id} value={brand.id} className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
+                        {brand.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Results Count */}
+                <div className="flex items-center justify-center">
+                  <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
+                    {totalProducts} Found
+                  </span>
+                </div>
+              </div>
+
+              {/* Active Filters Mobile */}
+              {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
+                <div className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-2 flex-wrap">
+                  {selectedCategory !== 'all' && (
+                    <button onClick={() => handleCategoryChange('all')} className="flex items-center gap-1 px-2 py-1 bg-lime-50 text-lime-700 text-[10px] font-bold rounded-lg hover:bg-lime-100">
+                      {categories.find(c => c.id === selectedCategory)?.name}
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                  {selectedBrand !== 'all' && (
+                    <button onClick={() => handleBrandChange('all')} className="flex items-center gap-1 px-2 py-1 bg-lime-50 text-lime-700 text-[10px] font-bold rounded-lg hover:bg-lime-100">
+                      {brands.find(b => b.id === selectedBrand)?.name}
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                  {searchTerm && (
+                    <button onClick={() => handleSearchChange('')} className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-[10px] font-bold rounded-lg hover:bg-gray-200">
+                      "{searchTerm}"
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSelectedBrand('all');
+                      setSelectedCategory('all');
+                      setSearchParams(new URLSearchParams());
+                    }}
+                    className="ml-auto text-[10px] font-bold uppercase tracking-wide text-lime-600 hover:text-lime-700"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Main Content - Sidebar Layout */}
+          <div className="flex gap-5">
+            {/* Left Sidebar - Filters - Desktop Only */}
+            <aside className="hidden lg:block w-64 flex-shrink-0">
+              <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-5 shadow-md sticky top-6">
+                <h2 className="text-lg font-bold text-gray-900 uppercase mb-4">Filters</h2>
+
+                {/* Search Input */}
+                <div className="mb-5">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Search</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search products..."
+                      value={searchTerm}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      className="pl-10 h-10 bg-gray-50 border-gray-200 rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Category Filter */}
+                <div className="mb-5">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Category</label>
+                  <div className="flex flex-col gap-1.5 max-h-[240px] overflow-y-auto pr-1">
                     <button
                       onClick={() => handleCategoryChange('all')}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                        selectedCategory === 'all'
-                          ? 'bg-blue-100 text-blue-800 font-medium'
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
+                      className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedCategory === 'all'
+                        ? 'bg-lime-500 text-white shadow-sm'
+                        : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
+                        }`}
                     >
                       All Categories
                     </button>
@@ -329,11 +472,10 @@ const Catalog = () => {
                       <button
                         key={category.id}
                         onClick={() => handleCategoryChange(category.id)}
-                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                          selectedCategory === category.id
-                            ? 'bg-blue-100 text-blue-800 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50'
-                        }`}
+                        className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedCategory === category.id
+                          ? 'bg-lime-500 text-white shadow-sm'
+                          : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
+                          }`}
                       >
                         {category.name}
                       </button>
@@ -341,20 +483,16 @@ const Catalog = () => {
                   </div>
                 </div>
 
-                {/* Brands Section */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-                    <Store className="h-4 w-4 mr-2" />
-                    Car Brands
-                  </h4>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                {/* Brand Filter */}
+                <div className="mb-5">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Brand</label>
+                  <div className="flex flex-col gap-1.5 max-h-[240px] overflow-y-auto pr-1">
                     <button
                       onClick={() => handleBrandChange('all')}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                        selectedBrand === 'all'
-                          ? 'bg-green-100 text-green-800 font-medium'
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
+                      className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedBrand === 'all'
+                        ? 'bg-lime-500 text-white shadow-sm'
+                        : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
+                        }`}
                     >
                       All Brands
                     </button>
@@ -362,11 +500,10 @@ const Catalog = () => {
                       <button
                         key={brand.id}
                         onClick={() => handleBrandChange(brand.id)}
-                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                          selectedBrand === brand.id
-                            ? 'bg-green-100 text-green-800 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50'
-                        }`}
+                        className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedBrand === brand.id
+                          ? 'bg-lime-500 text-white shadow-sm'
+                          : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
+                          }`}
                       >
                         {brand.name}
                       </button>
@@ -374,290 +511,249 @@ const Catalog = () => {
                   </div>
                 </div>
 
-                {/* Clear Filters */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedBrand('all');
-                    setSelectedCategory('all');
-                    setSearchParams(new URLSearchParams());
-                  }}
-                  className="w-full"
-                >
-                  Clear All Filters
-                </Button>
+                {/* Clear All Filters */}
+                {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
+                  <div className="pt-3 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        setSearchTerm('');
+                        setSelectedBrand('all');
+                        setSelectedCategory('all');
+                        setSearchParams(new URLSearchParams());
+                      }}
+                      className="w-full px-3 py-2 bg-gray-900 text-white text-xs font-bold uppercase tracking-wide rounded-lg hover:bg-lime-600 transition-colors"
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
+            </aside>
 
-            {/* Main Content */}
-            <div className="flex-1">
-              {/* Search Bar */}
-              <div className="mb-6">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                    <Input
-                      placeholder="Search products, brands, or parts..."
-                      value={searchTerm}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      className="pl-10 h-11 border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {/* Mobile Filters - Show on small screens */}
-                  <div className="lg:hidden mt-4 pt-4 border-t border-gray-200">
-                    <div className="flex gap-3">
-                      <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-                        <SelectTrigger className="flex-1">
-                          <Package className="h-4 w-4 mr-2 text-gray-500" />
-                          <SelectValue placeholder="Category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Categories</SelectItem>
-                          {categories.map((category) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <Select value={selectedBrand} onValueChange={handleBrandChange}>
-                        <SelectTrigger className="flex-1">
-                          <Store className="h-4 w-4 mr-2 text-gray-500" />
-                          <SelectValue placeholder="Brand" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Brands</SelectItem>
-                          {brands.map((brand) => (
-                            <SelectItem key={brand.id} value={brand.id}>
-                              {brand.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Results Stats */}
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-600">
-                        Found {totalProducts} products
-                        {isMobile && totalProducts > itemsPerPage && (
-                          <span className="ml-4">Page {currentPage} of {totalPages}</span>
-                        )}
-                      </div>
-
-                      {/* Active Filters */}
-                      {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
-                        <div className="hidden lg:flex items-center gap-2 text-xs">
-                          <span className="text-gray-500">Active filters:</span>
-                          {selectedCategory !== 'all' && (
-                            <Badge variant="secondary" className="text-xs">
-                              {categories.find(c => c.id === selectedCategory)?.name}
-                            </Badge>
-                          )}
-                          {selectedBrand !== 'all' && (
-                            <Badge variant="secondary" className="text-xs">
-                              {brands.find(b => b.id === selectedBrand)?.name}
-                            </Badge>
-                          )}
-                          {searchTerm && (
-                            <Badge variant="secondary" className="text-xs">
-                              "{searchTerm}"
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+            {/* Right Content - Products */}
+            <div className="flex-1 min-w-0">
+              {/* Results Header - Desktop */}
+              <div className="hidden lg:flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+                <h2 className="text-base font-bold text-gray-900 uppercase">
+                  {totalProducts} Products
+                </h2>
+                {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSelectedBrand('all');
+                      setSelectedCategory('all');
+                      setSearchParams(new URLSearchParams());
+                    }}
+                    className="text-xs font-bold uppercase tracking-wide text-lime-600 hover:text-lime-700 transition-colors"
+                  >
+                    Reset Filters
+                  </button>
+                )}
               </div>
 
               {/* Products Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-            {productsLoading ? (
-              Array.from({ length: isMobile ? itemsPerPage : 8 }).map((_, i) => (
-                <Card key={i} className="overflow-hidden">
-                  <CardHeader className="p-0">
-                    <Skeleton className="aspect-square w-full" />
-                  </CardHeader>
-                  <CardContent className="p-3 sm:p-4">
-                    <Skeleton className="h-4 w-3/4 mb-2" />
-                    <Skeleton className="h-3 w-full mb-2" />
-                    <Skeleton className="h-3 w-1/2 mb-3" />
-                    <Skeleton className="h-6 w-24 mx-auto" />
-                  </CardContent>
-                </Card>
-              ))
-            ) : totalProducts === 0 ? (
-              <div className="col-span-full text-center py-16">
-                <div className="text-6xl mb-4">🔍</div>
-                <h3 className="text-xl font-semibold mb-2 text-gray-900">No products found</h3>
-                <p className="text-gray-600 mb-6">
-                  Try adjusting your search criteria or browse all categories
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedBrand('all');
-                    setSelectedCategory('all');
-                    // Clear URL params
-                    setSearchParams(new URLSearchParams());
-                  }}
-                >
-                  Clear Filters
-                </Button>
-              </div>
-            ) : (
-              displayProducts.map((product) => {
-                const productStatus = getProductStatus(product);
-                const primaryImage = getPrimaryImage(product.product_images);
-                
-                return (
-                  <Card
-                    key={product.id}
-                    className="overflow-hidden cursor-pointer bg-white border border-gray-200 hover:border-gray-300 shadow-sm hover:shadow-md transition-all duration-200 group"
-                    onClick={() => handleProductView(product)}
+              {productsLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {Array.from({ length: isMobile ? itemsPerPage : 8 }).map((_, i) => (
+                    <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                      <Skeleton className="aspect-square w-full" />
+                      <div className="p-3">
+                        <Skeleton className="h-4 w-16 mb-2 rounded" />
+                        <Skeleton className="h-4 w-full mb-1.5" />
+                        <Skeleton className="h-5 w-24 mb-2" />
+                        <Skeleton className="h-3 w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : totalProducts === 0 ? (
+                <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">
+                  <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Package className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-xl font-serif font-semibold text-gray-900 mb-2">No Products Found</h3>
+                  <p className="text-[15px] text-gray-500 mb-6">
+                    Try adjusting your filters to see more results
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSelectedBrand('all');
+                      setSelectedCategory('all');
+                      setSearchParams(new URLSearchParams());
+                    }}
+                    className="px-6 py-3 bg-gray-900 text-white font-bold uppercase tracking-wide text-sm hover:bg-lime-600 transition-all rounded-lg"
                   >
-                    {/* Product Image */}
-                    <CardHeader className="p-0 relative">
-                      <div className="aspect-square overflow-hidden bg-gray-50 flex items-center justify-center">
-                        <img
-                          src={primaryImage}
-                          alt={product.name}
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
-                          loading="lazy"
-                          decoding="async"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = '/placeholder.svg';
-                          }}
-                        />
-                      </div>
-                      {/* Status Badges */}
-                      <div className="absolute top-2 right-2 flex flex-col gap-1">
-                        <Badge variant={productStatus.variant} className="text-xs">
-                          {productStatus.label}
-                        </Badge>
-                        {product.featured && (
-                          <Badge className="text-xs bg-blue-600 text-white">
-                            Featured
-                          </Badge>
-                        )}
-                      </div>
-                    </CardHeader>
+                    Clear Filters
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {displayProducts.map((product) => {
+                    const primaryImage = getPrimaryImage(product.product_images);
+                    const componentCount = getComponentCount(product);
 
-                    {/* Product Info */}
-                    <CardContent className="p-3">
-                      <div className="space-y-3">
-                        <h3 className="font-semibold text-sm line-clamp-2 leading-tight text-gray-900">
-                          {product.name}
-                        </h3>
-                        
-                        {/* Category */}
-                        {product.category && (
-                          <div className="mb-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {product.category.name}
-                            </Badge>
-                          </div>
-                        )}
+                    return (
+                      <div
+                        key={product.id}
+                        onClick={() => handleProductView(product)}
+                        className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group relative flex flex-col"
+                      >
+                        {/* Product Image */}
+                        <div className="relative aspect-square overflow-hidden bg-gray-50">
+                          <img
+                            src={primaryImage}
+                            alt={product.name}
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                            decoding="async"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = '/placeholder.svg';
+                            }}
+                          />
 
-                        {/* Brand & Model */}
-                        <div className="space-y-1">
-                          <div className="text-sm text-gray-600">
-                            <span className="font-medium">{product.brand}</span>
-                            {product.model && <span className="ml-1">{product.model}</span>}
-                          </div>
-                          {product.year_from && product.year_to && (
-                            <div className="text-xs text-gray-500">
-                              {product.year_from}-{product.year_to}
+                          {/* Status Badge - Top Left */}
+                          {product.featured && (
+                            <div className="absolute top-1.5 left-1.5">
+                              <span className="px-1.5 py-0.5 bg-amber-600 text-white text-[9px] font-bold rounded shadow-lg">
+                                Premium
+                              </span>
                             </div>
                           )}
                         </div>
 
-                        {/* Screen Sizes */}
-                        {product.screen_size && product.screen_size.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {product.screen_size.slice(0, 2).map((size) => (
-                              <Badge key={size} variant="outline" className="text-xs">
-                                {size}"
-                              </Badge>
-                            ))}
-                            {product.screen_size.length > 2 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{product.screen_size.length - 2}
-                              </Badge>
+                        {/* Glassmorphism Specs Overlay - Shows on Hover - Covers bottom 50% of entire card */}
+                        <div className="absolute top-[50%] left-0 right-0 bottom-0 flex items-center justify-center px-3 py-2 pointer-events-none">
+                          <div className="backdrop-blur-lg bg-black/5 rounded-lg p-3 border-2 border-white/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out w-full h-full flex flex-col justify-center overflow-y-auto shadow-lg">
+                            {/* Header with accent line */}
+                            <div className="mb-2">
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <div className="w-1 h-4 bg-lime-500 rounded-full shadow-sm"></div>
+                                <h4 className="text-black font-bold text-xs uppercase tracking-wide">Specifications</h4>
+                              </div>
+                              <div className="h-0.5 bg-gradient-to-r from-lime-500 via-lime-400/70 to-transparent rounded-full"></div>
+                            </div>
+
+                            {/* Specs Grid */}
+                            <div className="space-y-2">
+                              {product.brand && (
+                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-2 py-1.5 border border-gray-300/60 shadow-sm">
+                                  <span className="text-[10px] font-medium text-gray-700 uppercase tracking-wide">Brand</span>
+                                  <span className="text-xs font-bold text-black truncate ml-2">{product.brand}</span>
+                                </div>
+                              )}
+                              {product.model && (
+                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-2 py-1.5 border border-gray-300/60 shadow-sm">
+                                  <span className="text-[10px] font-medium text-gray-700 uppercase tracking-wide">Model</span>
+                                  <span className="text-xs font-bold text-black truncate ml-2">{product.model}</span>
+                                </div>
+                              )}
+                              {product.category && (
+                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-2 py-1.5 border border-gray-300/60 shadow-sm">
+                                  <span className="text-[10px] font-medium text-gray-700 uppercase tracking-wide">Category</span>
+                                  <span className="text-xs font-bold text-black truncate ml-2">{product.category.name}</span>
+                                </div>
+                              )}
+                              {product.year_from && product.year_to && (
+                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-2 py-1.5 border border-gray-300/60 shadow-sm">
+                                  <span className="text-[10px] font-medium text-gray-700 uppercase tracking-wide">Year</span>
+                                  <span className="text-xs font-bold text-black truncate ml-2">{product.year_from}-{product.year_to}</span>
+                                </div>
+                              )}
+                              {componentCount > 0 && (
+                                <div className="flex items-center justify-between bg-lime-400/30 backdrop-blur-sm rounded px-2 py-1.5 border-2 border-lime-500/60 shadow-sm">
+                                  <span className="text-[10px] font-bold text-lime-800 uppercase tracking-wide">Components</span>
+                                  <span className="text-xs font-bold text-lime-900 truncate ml-2">{componentCount} Included</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Product Info */}
+                        <div className="p-3 flex-1 flex flex-col">
+                          {/* Brand Badge */}
+                          <div className="mb-1.5">
+                            <span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[9px] font-semibold rounded uppercase tracking-wide truncate max-w-full">
+                              {product.brand}
+                            </span>
+                          </div>
+
+                          {/* Product Title */}
+                          <h3 className="font-sans text-gray-900 text-xs font-semibold mb-2 line-clamp-2 leading-snug flex-1">
+                            {product.name}
+                          </h3>
+
+                          {/* Footer Info */}
+                          <div className="flex items-center justify-between text-[9px] text-gray-400 pt-1.5 border-t border-gray-100">
+                            <span className="uppercase tracking-wider font-medium truncate max-w-[60%]">
+                              {product.category?.name || 'Details'}
+                            </span>
+                            {componentCount > 0 ? (
+                              <span className="font-semibold text-gray-600 truncate">
+                                {componentCount} {componentCount === 1 ? 'Component' : 'Components'}
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-gray-600">
+                                View Details
+                              </span>
                             )}
                           </div>
-                        )}
-                      </div>
-
-                      {/* Action Area */}
-                      <div className="mt-4 pt-3 border-t border-gray-100">
-                        <div className="flex items-center justify-center text-sm text-blue-600 group-hover:text-blue-700 transition-colors">
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Mobile Pagination */}
               {isMobile && totalPages > 1 && (
                 <div className="mt-8">
-                  <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200 p-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
+                  <div className="flex items-center justify-between bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 shadow-md">
+                    <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
+                      className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 font-bold uppercase tracking-widest text-[10px] hover:bg-gray-100 transition-all rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <ChevronLeft className="h-4 w-4 mr-2" />
-                      Previous
-                    </Button>
+                      <ChevronLeft className="h-4 w-4" />
+                      Prev
+                    </button>
 
-                    <span className="text-sm text-gray-600">
-                      Page {currentPage} of {totalPages}
+                    <span className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                      {currentPage} / {totalPages}
                     </span>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
+                    <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
+                      className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 font-bold uppercase tracking-widest text-[10px] hover:bg-gray-100 transition-all rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next
-                      <ChevronRight className="h-4 w-4 ml-2" />
-                    </Button>
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               )}
 
               {/* Results Summary */}
               {totalProducts > 0 && (
-                <div className="text-center mt-8 mb-12">
-                  <p className="text-sm text-gray-600">
+                <div className="text-center mt-8 mb-4">
+                  <p className="text-xs font-medium uppercase tracking-widest text-gray-400">
                     {isMobile ? (
                       `Showing ${startIndex + 1}-${Math.min(endIndex, totalProducts)} of ${totalProducts} products`
                     ) : (
-                      `Showing ${totalProducts} product${totalProducts !== 1 ? 's' : ''}`
+                      `Showing all ${totalProducts} product${totalProducts !== 1 ? 's' : ''}`
                     )}
                   </p>
                 </div>
               )}
             </div>
+            {/* End Right Content */}
           </div>
-        </div>
+          {/* End Main Content Flex Container */}
+        </main>
 
         <Footer />
       </div>
