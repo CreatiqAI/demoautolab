@@ -19,7 +19,6 @@ npm run build
 
 - **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** - Complete setup and feature documentation
 - **[database/README.md](./database/README.md)** - Database migration guide
-- **[docs/archive/](./docs/archive/)** - Historical documentation
 
 ## 🎯 Key Features
 
@@ -69,9 +68,7 @@ autolab-website/
 │   └── index.css        # Global styles
 ├── database/            # SQL migration scripts
 │   ├── README.md        # Database setup guide
-│   └── *.sql            # Migration files
-├── docs/
-│   └── archive/         # Old documentation
+│   └── *.sql            # Migration files (24 essential files)
 ├── public/              # Static assets
 ├── SETUP_GUIDE.md       # Complete setup guide
 └── README.md            # This file

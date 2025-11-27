@@ -91,13 +91,9 @@ Since admins use localStorage auth (not Supabase Auth), RLS needs to be disabled
 - `categories-rls-fix.sql` - Fix category RLS
 - `orders-rls-fix.sql` - Fix orders RLS
 
-## Archive Folder
+## About These Files
 
-Old, deprecated, and test files have been moved to `database/archive/`:
-- Versioned files (v1, v2, etc.)
-- Test files (test-*.sql)
-- Debug scripts (debug-*.sql)
-- Deprecated migrations
+This folder contains only the essential SQL migration scripts needed for the system. All old versions, test files, and deprecated scripts have been removed to keep the database folder clean and maintainable.
 
 ## Quick Commands
 
