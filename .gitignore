@@ -37,3 +37,15 @@ npm-debug.log*
 # Supabase
 supabase/.env
 src/config/api-keys.ts
+
+# Temporary/test files (should be in docs/archive or database/archive)
+*.sql
+!database/*.sql
+*.bak
+*.old
+*.tmp
+*_test.js
+*_temp.js
+execute-*.js
+test-*.js
+!playwright.config.ts
