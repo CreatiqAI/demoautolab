@@ -895,8 +895,8 @@ export default function WarehouseOperations() {
                       </Button>
                     )}
 
-                    {/* Show Generate Packing List for PACKING tab */}
-                    {status === 'PACKING' && (
+                    {/* Show Generate Packing List for PICKING tab */}
+                    {status === 'PICKING' && (
                       <Button
                         onClick={openPackingListModal}
                         className="bg-yellow-600 hover:bg-yellow-700 text-white"
