@@ -3,26 +3,37 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import {
-  LayoutDashboard,
   Store,
   CreditCard,
   BookOpen,
-  TrendingUp,
-  TrendingDown,
   Search,
   Upload,
   Save,
-  Calendar,
-  Gift,
   Lock,
   Check,
   X as XIcon,
   Image as ImageIcon,
   Eye,
-  Clock
+  Clock,
+  Gift,
+  MapPin,
+  Phone,
+  Mail,
+  Package,
+  Calendar,
+  ExternalLink,
+  Settings,
+  Users,
+  DollarSign,
+  Video,
+  Info
 } from 'lucide-react';
 
 type TabType = 'dashboard' | 'profile' | 'subscription' | 'guides';
@@ -61,21 +72,32 @@ const MerchantConsole = () => {
   const [partnership, setPartnership] = useState<PartnershipData | null>(null);
   const [isMerchant, setIsMerchant] = useState(false);
 
-  // Check if user has enterprise plan for guides access
-  const hasGuidesAccess = partnership?.subscription_plan === 'enterprise' &&
+  const hasGuidesAccess = (partnership?.subscription_plan === 'professional' || partnership?.subscription_plan === 'panel') &&
                           partnership?.subscription_status === 'ACTIVE' &&
-                          partnership?.admin_approved;
+                          partnership?.admin_approved &&
+                          partnership?.subscription_end_date &&
+                          new Date(partnership.subscription_end_date) > new Date();
 
   const navItems = [
-    { id: 'dashboard' as TabType, label: 'Dashboard', icon: LayoutDashboard, locked: false },
-    { id: 'profile' as TabType, label: 'Business Profile', icon: Store, locked: false },
-    { id: 'subscription' as TabType, label: 'Subscription', icon: CreditCard, locked: false },
-    { id: 'guides' as TabType, label: 'Install Guides', icon: BookOpen, locked: !hasGuidesAccess },
+    { id: 'dashboard' as TabType, label: 'Dashboard', icon: Store },
+    { id: 'profile' as TabType, label: 'Business Profile', icon: Settings },
+    { id: 'subscription' as TabType, label: 'Subscription', icon: CreditCard },
+    { id: 'guides' as TabType, label: 'Installation Guides', icon: BookOpen, locked: !hasGuidesAccess },
   ];
 
   useEffect(() => {
     checkMerchantAndFetchData();
   }, [user]);
+
+  // Auto-open Subscription tab if subscription is expired
+  useEffect(() => {
+    if (partnership?.subscription_end_date) {
+      const isExpired = new Date(partnership.subscription_end_date) < new Date();
+      if (isExpired) {
+        setActiveTab('subscription');
+      }
+    }
+  }, [partnership]);
 
   const checkMerchantAndFetchData = async () => {
     if (!user) {
@@ -86,7 +108,6 @@ const MerchantConsole = () => {
     try {
       setLoading(true);
 
-      // Check if user is a merchant
       const { data: profile } = await supabase
         .from('customer_profiles')
         .select('customer_type, id')
@@ -105,7 +126,6 @@ const MerchantConsole = () => {
 
       setIsMerchant(true);
 
-      // Fetch partnership data
       if (profile?.id) {
         const { data: partnershipData } = await supabase
           .from('premium_partnerships' as any)
@@ -129,7 +149,7 @@ const MerchantConsole = () => {
         <div className="flex items-center justify-center flex-1">
           <div className="text-center">
             <Store className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
-            <p className="text-gray-500 text-[15px]">Loading Merchant Console...</p>
+            <p className="text-gray-500">Loading Merchant Console...</p>
           </div>
         </div>
         <Footer />
@@ -144,8 +164,8 @@ const MerchantConsole = () => {
   const handleTabClick = (tab: TabType, locked: boolean) => {
     if (locked) {
       toast({
-        title: 'Enterprise Feature',
-        description: 'Installation Guides are only available with Enterprise subscription (RM388/year).',
+        title: 'Subscription Required',
+        description: 'Installation Guides require Professional or Panel subscription.',
         variant: 'destructive'
       });
       return;
@@ -157,99 +177,69 @@ const MerchantConsole = () => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
 
-      {/* Sub-Navigation Bar */}
-      <div className="sticky top-20 z-30 px-3 md:px-4 py-3 w-full bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-6xl mx-auto w-full">
-          <div className="bg-white/80 backdrop-blur-xl px-3 md:px-5 py-2 flex items-center justify-between shadow-md rounded-xl border border-gray-100">
-
-            <div className="flex items-center gap-3 md:gap-4 overflow-x-auto no-scrollbar">
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <div className="w-1.5 h-1.5 bg-lime-600 rounded-full shadow-[0_0_4px_lime] animate-pulse"></div>
-                <span className="text-gray-900 font-heading font-bold uppercase italic tracking-wider hidden md:block text-sm">
-                  Auto Lab Console
-                </span>
-              </div>
-
-              <div className="h-5 w-px bg-gray-200 mx-1 hidden md:block"></div>
-
-              <nav className="flex space-x-1">
-                {navItems.map((item) => {
-                  const isActive = activeTab === item.id;
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => handleTabClick(item.id, item.locked)}
-                      className={`relative px-4 md:px-5 py-2.5 text-xs md:text-sm font-bold uppercase tracking-wide transition-all duration-300 rounded-lg overflow-hidden whitespace-nowrap flex items-center gap-2 ${
-                        isActive
-                          ? 'text-white bg-gray-900 shadow-sm'
-                          : item.locked
-                          ? 'text-gray-300 cursor-not-allowed'
-                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
-                      }`}
-                    >
-                      {item.locked ? <Lock className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
-                      <span className="hidden sm:inline">{item.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-
-            {/* Status Indicator */}
-            <div className="hidden md:flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
-              <span className="flex h-2 w-2 relative">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${partnership?.subscription_status === 'ACTIVE' && partnership?.admin_approved ? 'bg-green-400' : 'bg-orange-400'} opacity-75`}></span>
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${partnership?.subscription_status === 'ACTIVE' && partnership?.admin_approved ? 'bg-green-500' : 'bg-orange-500'}`}></span>
-              </span>
-              <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
+      <div className="flex-1">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Page Header */}
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">Merchant Console</h1>
+            <p className="text-sm text-gray-500 mt-1">{partnership?.business_name}</p>
+            <div className="flex items-center gap-2 mt-3">
+              <Badge variant={
+                partnership?.subscription_status === 'ACTIVE' && partnership?.admin_approved
+                  ? 'default'
+                  : 'secondary'
+              } className="text-xs">
                 {partnership?.subscription_status === 'ACTIVE' && partnership?.admin_approved ? 'Active' : 'Pending'}
-              </span>
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                {partnership?.subscription_plan || 'No Plan'}
+              </Badge>
             </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-8 overflow-x-auto">
+              {navItems.map((item) => {
+                const isActive = activeTab === item.id;
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleTabClick(item.id, item.locked || false)}
+                    className={`group inline-flex items-center gap-2 px-1 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                      isActive
+                        ? 'border-lime-600 text-lime-700'
+                        : item.locked
+                        ? 'border-transparent text-gray-300 cursor-not-allowed'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {item.locked ? <Lock className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Tab Content */}
+          <div>
+            {activeTab === 'dashboard' && <DashboardTab partnership={partnership} />}
+            {activeTab === 'profile' && <ProfileTab partnership={partnership} onUpdate={checkMerchantAndFetchData} />}
+            {activeTab === 'subscription' && <SubscriptionTab partnership={partnership} onUpdate={checkMerchantAndFetchData} />}
+            {activeTab === 'guides' && hasGuidesAccess && <GuidesTab />}
           </div>
         </div>
       </div>
-
-      {/* Main Content Area */}
-      <main className="p-3 md:p-4 lg:p-6 max-w-6xl mx-auto w-full flex-1">
-        {activeTab === 'dashboard' && <DashboardTab partnership={partnership} />}
-        {activeTab === 'profile' && <ProfileTab partnership={partnership} onUpdate={checkMerchantAndFetchData} />}
-        {activeTab === 'subscription' && <SubscriptionTab partnership={partnership} onUpdate={checkMerchantAndFetchData} />}
-        {activeTab === 'guides' && hasGuidesAccess && <GuidesTab />}
-      </main>
 
       <Footer />
     </div>
   );
 };
 
-// Dashboard Tab Component - Real data from database
+// Dashboard Tab
 const DashboardTab = ({ partnership }: { partnership: PartnershipData | null }) => {
-  const [analytics, setAnalytics] = useState({
-    totalViews: partnership?.total_views || 0,
-    directionClicks: 0,
-    callClicks: 0,
-    weeklyViews: [] as number[]
-  });
-
-  useEffect(() => {
-    const fetchAnalytics = async () => {
-      if (!partnership?.id) return;
-      const baseViews = partnership.total_views || 0;
-      const weeklyData = Array.from({ length: 14 }, (_, i) => {
-        const variance = Math.random() * 0.4 - 0.2;
-        return Math.max(10, Math.floor((baseViews / 30) * (1 + variance)));
-      });
-      setAnalytics({
-        totalViews: baseViews,
-        directionClicks: Math.floor(baseViews * 0.15),
-        callClicks: Math.floor(baseViews * 0.05),
-        weeklyViews: weeklyData
-      });
-    };
-    fetchAnalytics();
-  }, [partnership]);
-
   const getDaysRemaining = () => {
     if (!partnership?.subscription_end_date) return null;
     const endDate = new Date(partnership.subscription_end_date);
@@ -259,151 +249,154 @@ const DashboardTab = ({ partnership }: { partnership: PartnershipData | null }) 
 
   const daysRemaining = getDaysRemaining();
 
-  const stats = [
-    { label: 'Listing Views', value: analytics.totalViews.toLocaleString(), change: '+12%', isPositive: true },
-    { label: 'Direction Clicks', value: analytics.directionClicks.toLocaleString(), change: '+8%', isPositive: true },
-    { label: 'Call Clicks', value: analytics.callClicks.toLocaleString(), change: '-2%', isPositive: false },
-    { label: 'Days Remaining', value: daysRemaining !== null ? `${daysRemaining}` : 'N/A', sub: 'subscription', isPositive: daysRemaining !== null && daysRemaining > 30 }
-  ];
-
   return (
-    <div className="animate-fade-in-up">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 border-b border-gray-200 pb-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-gray-900 uppercase italic mb-1">Overview</h1>
-          <p className="text-sm text-gray-500 uppercase tracking-wide font-medium">
-            {partnership?.business_name || 'Your Business'} - Performance metrics
-          </p>
-        </div>
-        <div className="flex items-center gap-2 mt-3 md:mt-0">
-          <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide ${
-            partnership?.subscription_plan === 'enterprise'
-              ? 'bg-purple-100 text-purple-700 border border-purple-200'
-              : partnership?.subscription_plan === 'professional'
-              ? 'bg-lime-100 text-lime-700 border border-lime-200'
-              : 'bg-gray-100 text-gray-600 border border-gray-200'
-          }`}>
-            {partnership?.subscription_plan || 'No Plan'}
-          </span>
-        </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {partnership?.business_name || 'Merchant'}!</h1>
+        <p className="text-sm text-gray-500 mt-1">Manage your business and track your performance</p>
       </div>
 
-      {/* Subscription Status Banner */}
-      {partnership && !partnership.admin_approved && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex items-center gap-3">
-          <div className="w-9 h-9 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <Calendar className="w-5 h-5 text-orange-600" />
-          </div>
-          <div>
-            <p className="font-semibold text-orange-800 text-sm">Pending Admin Approval</p>
-            <p className="text-orange-600 text-[13px]">Your subscription is being reviewed. Your shop will be visible once approved.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Welcome Voucher Banner */}
-      {partnership?.subscription_plan === 'professional' && partnership?.admin_approved && (
-        <div className="bg-lime-50 border border-lime-200 rounded-xl p-4 mb-6 flex items-center gap-3">
-          <div className="w-9 h-9 bg-lime-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <Gift className="w-5 h-5 text-lime-600" />
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold text-lime-800 text-sm">Welcome Voucher Available!</p>
-            <p className="text-lime-600 text-[13px]">RM50 voucher (min. spend RM100) for your next purchase.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Key Metrics Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-        {stats.map((stat, idx) => (
-          <div key={idx} className="bg-white border border-gray-200 p-4 rounded-xl relative group hover:border-lime-200 hover:shadow-lg transition-all duration-300 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-400 mb-2">{stat.label}</p>
-            <div className="flex items-end justify-between gap-1">
-              <span className="text-2xl font-heading font-bold text-gray-900 italic">{stat.value}</span>
-              {stat.sub ? (
-                <span className="text-xs text-gray-500 font-medium mb-0.5">{stat.sub}</span>
-              ) : (
-                <span className={`text-xs font-bold ${stat.isPositive ? 'text-green-600' : 'text-red-600'} flex items-center gap-0.5 bg-gray-50 px-2 py-0.5 rounded mb-0.5`}>
-                  {stat.isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {stat.change}
-                </span>
-              )}
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription className="text-xs">Profile Views</CardDescription>
+            <CardTitle className="text-2xl">{partnership?.total_views || 0}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-gray-400" />
+              <span className="text-xs text-gray-500">Total views</span>
             </div>
-          </div>
-        ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription className="text-xs">Services</CardDescription>
+            <CardTitle className="text-2xl">{partnership?.services_offered?.length || 0}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-gray-400" />
+              <span className="text-xs text-gray-500">Listed services</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription className="text-xs">Gallery Photos</CardDescription>
+            <CardTitle className="text-2xl">{partnership?.shop_photos?.length || 0}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-gray-400" />
+              <span className="text-xs text-gray-500">Uploaded images</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription className="text-xs">Subscription</CardDescription>
+            <CardTitle className="text-2xl">{daysRemaining !== null ? `${daysRemaining}d` : 'N/A'}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-gray-400" />
+              <span className="text-xs text-gray-500">Days remaining</span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
-        {/* Traffic Chart */}
-        <div className="lg:col-span-2 bg-white border border-gray-200 p-5 rounded-xl shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-base font-heading font-bold uppercase italic text-gray-900">Listing Traffic</h3>
-            <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg">
-              <button className="px-3 py-1.5 text-xs font-bold uppercase bg-white text-gray-900 rounded shadow-sm">14D</button>
-              <button className="px-3 py-1.5 text-xs font-bold uppercase text-gray-500 hover:text-gray-900">30D</button>
+      {/* Business Info */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Business Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-start gap-3">
+              <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">{partnership?.address || 'Not set'}</p>
+                <p className="text-xs text-gray-500">{partnership?.city}, {partnership?.state} {partnership?.postcode}</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-end gap-1.5 h-36 md:h-44 w-full pt-3 border-b border-gray-100">
-            {analytics.weeklyViews.length > 0 ? analytics.weeklyViews.map((views, i) => {
-              const maxViews = Math.max(...analytics.weeklyViews);
-              const height = maxViews > 0 ? (views / maxViews) * 100 : 10;
-              return (
-                <div key={i} className="flex-1 flex flex-col justify-end group h-full relative">
-                  <div
-                    className="bg-gray-200 group-hover:bg-lime-600 transition-all duration-300 w-full relative rounded-t-sm"
-                    style={{ height: `${Math.max(5, height)}%` }}
-                  >
-                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none shadow-lg">
-                      {views} Views
-                    </div>
-                  </div>
-                </div>
-              );
-            }) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">No data available</div>
+            <div className="flex items-start gap-3">
+              <Phone className="w-4 h-4 text-gray-400 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-900">{partnership?.contact_phone || 'Not set'}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Mail className="w-4 h-4 text-gray-400 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 break-all">{partnership?.contact_email || 'Not set'}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Subscription Status</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-xs text-gray-500 mb-2">Current Plan</p>
+              <Badge className="text-xs">{partnership?.subscription_plan || 'No Plan'}</Badge>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-2">Status</p>
+              <Badge variant={
+                partnership?.admin_approved && partnership?.subscription_status === 'ACTIVE'
+                  ? 'default'
+                  : 'secondary'
+              } className="text-xs">
+                {partnership?.admin_approved && partnership?.subscription_status === 'ACTIVE' ? 'Active' : 'Pending'}
+              </Badge>
+            </div>
+            {partnership?.subscription_end_date && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Valid Until</p>
+                <p className="text-sm font-medium">
+                  {new Date(partnership.subscription_end_date).toLocaleDateString('en-MY', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </p>
+              </div>
             )}
-          </div>
-          <div className="flex justify-between mt-2 text-[9px] text-gray-400 uppercase font-medium">
-            <span>14 days ago</span>
-            <span>Today</span>
-          </div>
-        </div>
-
-        {/* Business Info Summary */}
-        <div className="bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-gray-100 bg-gray-50">
-            <h3 className="text-base font-heading font-bold uppercase italic text-gray-900">Business Summary</h3>
-          </div>
-          <div className="flex-1 p-4 space-y-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 mb-1">Business Name</p>
-              <p className="text-[15px] font-semibold text-gray-900">{partnership?.business_name || 'Not set'}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 mb-1">Category</p>
-              <p className="text-[15px] text-gray-700">{partnership?.business_type || 'Not set'}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 mb-1">Location</p>
-              <p className="text-[15px] text-gray-700">{partnership?.city ? `${partnership.city}, ${partnership.state}` : 'Not set'}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 mb-1">Services</p>
-              <p className="text-[15px] text-gray-700">{partnership?.services_offered?.length || 0} services listed</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 mb-1">Photos</p>
-              <p className="text-[15px] text-gray-700">{partnership?.shop_photos?.length || 0} photos uploaded</p>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Pending Banner */}
+      {partnership && !partnership.admin_approved && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <Clock className="w-5 h-5 text-orange-600 mt-0.5" />
+              <div>
+                <h3 className="text-sm font-semibold text-orange-900 mb-1">Pending Admin Approval</h3>
+                <p className="text-sm text-orange-700">
+                  Your subscription is being reviewed. Your shop will be visible once approved (1-2 business days).
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
 
-// Profile Tab Component - Fixed image display with upload
+// Profile Tab
 const ProfileTab = ({ partnership, onUpdate }: { partnership: PartnershipData | null, onUpdate: () => void }) => {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -421,9 +414,6 @@ const ProfileTab = ({ partnership, onUpdate }: { partnership: PartnershipData | 
     postcode: partnership?.postcode || '',
     services_offered: partnership?.services_offered || [],
   });
-
-  const inputClass = "w-full bg-white border border-gray-200 px-3 py-2.5 text-[15px] outline-none focus:border-lime-600 transition-all rounded-lg placeholder-gray-400";
-  const labelClass = "block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5";
 
   const SERVICES = [
     'Installation Service', 'Repair & Maintenance', 'Consultation', 'Product Sourcing',
@@ -443,53 +433,48 @@ const ProfileTab = ({ partnership, onUpdate }: { partnership: PartnershipData | 
     if (!e.target.files || !e.target.files[0] || !partnership?.id) return;
 
     const file = e.target.files[0];
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Invalid File', description: 'Please select an image file', variant: 'destructive' });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: 'File Too Large', description: 'Image must be less than 5MB', variant: 'destructive' });
+      return;
+    }
+
     const fileExt = file.name.split('.').pop();
     const fileName = `${partnership.id}-${Date.now()}.${fileExt}`;
     const filePath = `shop-photos/${fileName}`;
 
     setUploading(true);
     try {
-      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('premium-partners')
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from('premium-partners')
         .getPublicUrl(filePath);
 
       const newPhotoUrl = urlData.publicUrl;
-
-      // Update shop_photos array - add new photo at the beginning
       const updatedPhotos = [newPhotoUrl, ...shopPhotos.filter(p => p !== newPhotoUrl)];
       setShopPhotos(updatedPhotos);
 
-      // Save to database
       const { error: updateError } = await supabase
         .from('premium_partnerships' as any)
-        .update({
-          shop_photos: updatedPhotos,
-          cover_image_url: newPhotoUrl // Also set as cover image
-        })
+        .update({ shop_photos: updatedPhotos, cover_image_url: newPhotoUrl })
         .eq('id', partnership.id);
 
       if (updateError) throw updateError;
 
-      toast({
-        title: 'Image Uploaded',
-        description: 'Your storefront image has been updated successfully.',
-      });
+      toast({ title: 'Success', description: 'Image uploaded successfully!' });
       onUpdate();
     } catch (error: any) {
-      console.error('Upload error:', error);
-      toast({
-        title: 'Upload Failed',
-        description: error.message || 'Failed to upload image',
-        variant: 'destructive'
-      });
+      toast({ title: 'Upload Failed', description: error.message, variant: 'destructive' });
     } finally {
       setUploading(false);
     }
@@ -507,418 +492,377 @@ const ProfileTab = ({ partnership, onUpdate }: { partnership: PartnershipData | 
 
       if (error) throw error;
 
-      toast({
-        title: 'Profile Updated',
-        description: 'Your business profile has been saved successfully.',
-      });
+      toast({ title: 'Success', description: 'Profile updated successfully!' });
       onUpdate();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to update profile',
-        variant: 'destructive'
-      });
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
   };
 
-  // Get the first shop photo or cover image
   const displayImage = shopPhotos?.[0] || partnership?.cover_image_url;
 
   return (
-    <div className="animate-fade-in-up max-w-5xl mx-auto">
-      <div className="mb-6 text-center">
-        <h1 className="text-2xl md:text-3xl font-heading font-bold text-gray-900 uppercase italic mb-1">Business Profile</h1>
-        <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Manage your public listing details</p>
+    <div className="space-y-6 max-w-5xl">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Business Profile</h1>
+        <p className="text-sm text-gray-500 mt-1">Manage your shop information and listing details</p>
       </div>
 
-      <div className="bg-white rounded-2xl p-4 md:p-6 space-y-6 shadow-lg border border-gray-100">
-
-        {/* Branding */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          <div className="lg:col-span-4">
-            <h3 className="text-sm font-heading font-bold uppercase italic text-gray-900 mb-3 pl-3 border-l-4 border-lime-600">Storefront Image</h3>
-            <p className="text-[11px] text-gray-500 mb-3">This image will appear on search results.</p>
-
-            <label className="aspect-[4/3] bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-lime-600 hover:bg-lime-50 transition-all group relative overflow-hidden">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-                disabled={uploading}
-              />
-              {displayImage ? (
-                <img
-                  src={displayImage}
-                  alt="Storefront"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              ) : (
-                <div className="flex flex-col items-center text-gray-400">
-                  <ImageIcon className="w-10 h-10 mb-2" />
-                  <span className="text-[11px] font-medium">No image uploaded</span>
-                </div>
-              )}
-              <div className={`absolute inset-0 bg-black/50 ${uploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity flex items-center justify-center`}>
-                {uploading ? (
-                  <div className="flex flex-col items-center bg-white/90 p-3 backdrop-blur-sm rounded-lg shadow-lg">
-                    <div className="w-5 h-5 border-2 border-lime-600 border-t-transparent rounded-full animate-spin mb-2"></div>
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-gray-900">Uploading...</span>
-                  </div>
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Image */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Storefront Image</label>
+              <label className="aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-lime-600 group relative overflow-hidden">
+                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={uploading} />
+                {displayImage ? (
+                  <img src={displayImage} alt="Storefront" className="absolute inset-0 w-full h-full object-cover" />
                 ) : (
-                  <div className="flex flex-col items-center bg-white/90 p-3 backdrop-blur-sm rounded-lg shadow-lg">
-                    <Upload className="w-5 h-5 text-gray-900 mb-1" />
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-gray-900">Upload New</span>
+                  <div className="flex flex-col items-center text-gray-400">
+                    <ImageIcon className="w-10 h-10 mb-2" />
+                    <span className="text-xs">No image</span>
                   </div>
                 )}
-              </div>
-            </label>
-
-            {/* Shop Photos Gallery */}
-            {shopPhotos && shopPhotos.length > 1 && (
-              <div className="mt-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-2">Gallery ({shopPhotos.length} photos)</p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {shopPhotos.slice(0, 4).map((photo, idx) => (
-                    <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                      <img src={photo} alt={`Shop photo ${idx + 1}`} className="w-full h-full object-cover" />
+                <div className={`absolute inset-0 bg-black/50 ${uploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity flex items-center justify-center`}>
+                  {uploading ? (
+                    <div className="text-white text-xs">Uploading...</div>
+                  ) : (
+                    <div className="flex flex-col items-center text-white">
+                      <Upload className="w-6 h-6 mb-1" />
+                      <span className="text-xs">Upload Image</span>
                     </div>
+                  )}
+                </div>
+              </label>
+
+              {shopPhotos && shopPhotos.length > 1 && (
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-gray-500 mb-2">Gallery ({shopPhotos.length})</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {shopPhotos.slice(0, 6).map((photo, idx) => (
+                      <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-gray-200">
+                        <img src={photo} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Form */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Shop Name</label>
+                  <input
+                    type="text"
+                    value={formData.business_name}
+                    onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
+                  <select
+                    value={formData.business_type}
+                    onChange={(e) => setFormData({ ...formData, business_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                  >
+                    <option value="">Select Category</option>
+                    <option value="Auto Accessories Shop">Auto Accessories Shop</option>
+                    <option value="Performance Workshop">Performance Workshop</option>
+                    <option value="Tinting Specialist">Tinting Specialist</option>
+                    <option value="Car Care Center">Car Care Center</option>
+                    <option value="Car Audio Specialist">Car Audio Specialist</option>
+                    <option value="General Workshop">General Workshop</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+                <textarea
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                  placeholder="Tell customers about your business..."
+                ></textarea>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
+                  <input
+                    type="tel"
+                    value={formData.contact_phone}
+                    onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+                  <input
+                    type="email"
+                    value={formData.contact_email}
+                    onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Address</label>
+                <input
+                  type="text"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">City</label>
+                  <input
+                    type="text"
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">State</label>
+                  <select
+                    value={formData.state}
+                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                  >
+                    <option value="">Select</option>
+                    {['Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 'Pahang', 'Penang', 'Perak', 'Perlis', 'Sabah', 'Sarawak', 'Selangor', 'Terengganu', 'Kuala Lumpur', 'Labuan', 'Putrajaya'].map(state => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Postcode</label>
+                  <input
+                    type="text"
+                    value={formData.postcode}
+                    onChange={(e) => setFormData({ ...formData, postcode: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Services Offered</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {SERVICES.map(service => (
+                    <label key={service} className="flex items-center gap-2 cursor-pointer p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={formData.services_offered.includes(service)}
+                        onChange={() => handleServiceToggle(service)}
+                        className="w-4 h-4 text-lime-600 border-gray-300 rounded focus:ring-lime-500"
+                      />
+                      <span className="text-xs">{service}</span>
+                    </label>
                   ))}
                 </div>
               </div>
-            )}
-          </div>
-
-          <div className="lg:col-span-8 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>Shop Name</label>
-                <input
-                  type="text"
-                  value={formData.business_name}
-                  onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Category</label>
-                <select
-                  value={formData.business_type}
-                  onChange={(e) => setFormData({ ...formData, business_type: e.target.value })}
-                  className={`${inputClass} appearance-none cursor-pointer`}
-                >
-                  <option value="">Select Category</option>
-                  <option value="Auto Accessories Shop">Auto Accessories Shop</option>
-                  <option value="Performance Workshop">Performance Workshop</option>
-                  <option value="Tinting Specialist">Tinting Specialist</option>
-                  <option value="Car Care Center">Car Care Center</option>
-                  <option value="Car Audio Specialist">Car Audio Specialist</option>
-                  <option value="General Workshop">General Workshop</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className={labelClass}>Introduction / Bio</label>
-              <textarea
-                rows={3}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className={inputClass}
-                placeholder="Tell customers about your business..."
-              ></textarea>
             </div>
           </div>
-        </div>
 
-        <hr className="border-gray-200" />
-
-        {/* Contact Info */}
-        <div>
-          <h3 className="text-sm font-heading font-bold uppercase italic text-gray-900 mb-4 pl-3 border-l-4 border-lime-600">Contact & Location</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Phone Number</label>
-              <input
-                type="tel"
-                value={formData.contact_phone}
-                onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                className={inputClass}
-                placeholder="+60 12-345 6789"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Email Address</label>
-              <input
-                type="email"
-                value={formData.contact_email}
-                onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                className={inputClass}
-                placeholder="shop@example.com"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelClass}>Full Address</label>
-              <input
-                type="text"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className={inputClass}
-                placeholder="123, Jalan Example, Taman ABC"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>City</label>
-              <input
-                type="text"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className={inputClass}
-                placeholder="Kuala Lumpur"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>State</label>
-              <select
-                value={formData.state}
-                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                className={`${inputClass} appearance-none cursor-pointer`}
-              >
-                <option value="">Select State</option>
-                {['Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 'Pahang', 'Penang', 'Perak', 'Perlis', 'Sabah', 'Sarawak', 'Selangor', 'Terengganu', 'Kuala Lumpur', 'Labuan', 'Putrajaya'].map(state => (
-                  <option key={state} value={state}>{state}</option>
-                ))}
-              </select>
-            </div>
+          <div className="mt-6 pt-6 border-t border-gray-200 flex justify-end">
+            <Button onClick={handleSave} disabled={saving} className="bg-lime-600 hover:bg-lime-700">
+              <Save className="w-4 h-4 mr-2" />
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
           </div>
-        </div>
-
-        <hr className="border-gray-200" />
-
-        {/* Services */}
-        <div>
-          <h3 className="text-sm font-heading font-bold uppercase italic text-gray-900 mb-4 pl-3 border-l-4 border-lime-600">Services Offered</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {SERVICES.map(service => (
-              <label key={service} className="flex items-center gap-2 cursor-pointer bg-gray-50 px-3 py-2.5 border border-gray-200 hover:border-lime-600 transition-all group select-none rounded-lg">
-                <div className="relative flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.services_offered.includes(service)}
-                    onChange={() => handleServiceToggle(service)}
-                    className="peer appearance-none w-4 h-4 border-2 border-gray-300 rounded checked:bg-lime-600 checked:border-lime-600 transition-colors cursor-pointer"
-                  />
-                  <svg className="absolute w-3 h-3 text-white hidden peer-checked:block pointer-events-none left-[2px] top-[2px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </div>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 group-hover:text-gray-900">{service}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="pt-4 flex justify-end border-t border-gray-200">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="px-6 py-2.5 bg-lime-600 text-white font-bold uppercase tracking-wider text-[11px] hover:bg-lime-700 transition-all rounded-full disabled:opacity-50 flex items-center gap-2"
-          >
-            <Save className="w-3.5 h-3.5" />
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
 
-// Subscription Tab Component - Updated tiers
-const SubscriptionTab = ({ partnership, onUpdate }: { partnership: PartnershipData | null, onUpdate: () => void }) => {
+// Subscription Tab
+const SubscriptionTab = ({ partnership }: { partnership: PartnershipData | null }) => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { toast } = useToast();
   const currentPlan = partnership?.subscription_plan || 'none';
   const isActive = partnership?.subscription_status === 'ACTIVE' && partnership?.admin_approved;
 
-  const formatEndDate = () => {
-    if (!partnership?.subscription_end_date) return 'N/A';
-    return new Date(partnership.subscription_end_date).toLocaleDateString('en-MY', {
-      year: 'numeric', month: 'long', day: 'numeric'
-    });
-  };
+  // Check if subscription is expired
+  const isExpired = partnership?.subscription_end_date
+    ? new Date(partnership.subscription_end_date) < new Date()
+    : false;
+  const isPending = !partnership?.admin_approved && partnership?.subscription_status !== 'EXPIRED';
 
-  const handleSubscribe = async (plan: string) => {
-    toast({
-      title: 'Contact Admin',
-      description: `To subscribe to the ${plan} plan, please contact our admin team or visit the Premium Partner page.`,
+  const handleRenewSubscription = async (plan: 'professional' | 'panel') => {
+    if (!user || !partnership) return;
+
+    const amount = plan === 'professional' ? 99 : 350;
+    const period = plan === 'professional' ? 'year' : 'month';
+
+    // Navigate to payment gateway with subscription renewal data
+    navigate('/payment-gateway', {
+      state: {
+        orderData: {
+          orderId: `SUB-${partnership.id}-${Date.now()}`,
+          orderNumber: `RENEWAL-${partnership.id.slice(0, 8).toUpperCase()}`,
+          total: amount,
+          paymentMethod: '',
+          customerName: partnership.business_name,
+          customerEmail: partnership.contact_email
+        },
+        isSubscriptionRenewal: true,
+        subscriptionPlan: plan,
+        partnershipId: partnership.id
+      }
     });
   };
 
   return (
-    <div className="animate-fade-in-up">
-      <div className="mb-8 text-center max-w-2xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-heading font-bold text-gray-900 uppercase italic mb-2">Subscription Plans</h1>
-        <p className="text-gray-500 text-sm">Maximize your workshop's visibility with our premium tiers.</p>
+    <div className="space-y-6 max-w-5xl">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Subscription Plans</h1>
+        <p className="text-sm text-gray-500 mt-1">Choose the plan that fits your business needs</p>
       </div>
 
-      {/* Current Subscription Status */}
       {partnership && currentPlan !== 'none' && (
-        <div className={`max-w-2xl mx-auto mb-8 p-4 rounded-xl border ${isActive ? 'bg-lime-50 border-lime-200' : 'bg-orange-50 border-orange-200'}`}>
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <p className={`text-xs font-bold ${isActive ? 'text-lime-800' : 'text-orange-800'}`}>
-                Current Plan: <span className="uppercase">{currentPlan}</span>
-              </p>
-              <p className={`text-[11px] ${isActive ? 'text-lime-600' : 'text-orange-600'}`}>
-                {isActive ? `Active until ${formatEndDate()}` : 'Pending admin approval'}
-              </p>
+        <Card className={
+          isExpired
+            ? 'border-red-200 bg-red-50'
+            : isActive
+            ? 'border-lime-200 bg-lime-50'
+            : 'border-orange-200 bg-orange-50'
+        }>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Current Plan: {currentPlan}</p>
+                <p className="text-xs text-gray-600 mt-1">
+                  {isExpired
+                    ? `Expired on ${new Date(partnership.subscription_end_date).toLocaleDateString('en-MY')}`
+                    : isActive
+                    ? `Active until ${new Date(partnership.subscription_end_date).toLocaleDateString('en-MY')}`
+                    : 'Pending admin approval'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={isExpired ? 'destructive' : isActive ? 'default' : 'secondary'}>
+                  {isExpired ? 'Expired' : isActive ? 'Active' : 'Pending'}
+                </Badge>
+                {isExpired && (
+                  <Button
+                    size="sm"
+                    onClick={() => handleRenewSubscription(currentPlan as 'professional' | 'panel')}
+                    className="bg-lime-600 hover:bg-lime-700"
+                  >
+                    Renew Now
+                  </Button>
+                )}
+              </div>
             </div>
-            <span className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-              isActive ? 'bg-lime-600 text-white' : 'bg-orange-500 text-white'
-            }`}>
-              {isActive ? 'Active' : 'Pending'}
-            </span>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 max-w-4xl mx-auto">
-        {/* Professional Plan */}
-        <div className={`bg-white border p-5 md:p-6 flex flex-col relative rounded-2xl shadow-md transition-all ${
-          currentPlan === 'professional' ? 'border-lime-500 ring-2 ring-lime-500/20' : 'border-gray-200 hover:border-lime-200'
-        }`}>
-          {currentPlan === 'professional' && (
-            <div className="absolute -top-2.5 left-4 bg-lime-600 text-white px-3 py-0.5 text-[9px] font-bold uppercase tracking-wide rounded-full">
-              Current Plan
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Professional */}
+        <Card className={currentPlan === 'professional' ? 'border-lime-500' : ''}>
+          <CardHeader>
+            <div className="flex items-center justify-between mb-2">
+              <CardTitle>Professional</CardTitle>
+              {currentPlan === 'professional' && <Badge>Current</Badge>}
             </div>
-          )}
-          <h3 className="text-lg font-heading font-bold uppercase italic text-gray-900 mb-1">Professional</h3>
-          <p className="text-[11px] text-gray-500 mb-4">Perfect for single-location workshops</p>
-          <div className="mb-5">
-            <span className="text-3xl font-bold text-gray-900">RM 99</span>
-            <span className="text-gray-500 text-xs font-bold uppercase">/year</span>
-          </div>
-          <div className="w-10 h-0.5 bg-lime-600 mb-5 rounded-full"></div>
-          <ul className="space-y-2.5 flex-1 text-xs">
-            <li className="flex items-start gap-2 text-gray-600">
-              <Check className="w-4 h-4 text-lime-600 flex-shrink-0 mt-0.5" />
-              <span>Shop listing on <strong>Find Shops</strong> page</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-600">
-              <Check className="w-4 h-4 text-lime-600 flex-shrink-0 mt-0.5" />
-              <span>Basic <strong>Analytics Dashboard</strong></span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-600">
-              <Check className="w-4 h-4 text-lime-600 flex-shrink-0 mt-0.5" />
-              <span><strong>B2B Pricing</strong> access for products</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-600">
-              <Gift className="w-4 h-4 text-lime-600 flex-shrink-0 mt-0.5" />
-              <span><strong>RM50 Welcome Voucher</strong> (min. spend RM100)</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-400 line-through">
-              <XIcon className="w-4 h-4 text-gray-300 flex-shrink-0 mt-0.5" />
-              <span>Installation Guides Library</span>
-            </li>
-          </ul>
-          <button
-            onClick={() => handleSubscribe('Professional')}
-            disabled={currentPlan === 'professional'}
-            className={`w-full py-2.5 font-bold text-[10px] uppercase tracking-wide mt-5 rounded-full transition-all ${
-              currentPlan === 'professional'
-                ? 'bg-lime-100 text-lime-700 cursor-not-allowed border border-lime-300'
-                : 'bg-lime-600 text-white hover:bg-lime-700'
-            }`}
-          >
-            {currentPlan === 'professional' ? 'Current Plan - Active' : 'Subscribe Now'}
-          </button>
-        </div>
+            <CardDescription>Essential features for B2B merchants</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-6">
+              <span className="text-3xl font-bold">RM 99</span>
+              <span className="text-gray-500 text-sm">/year</span>
+            </div>
+            <div className="space-y-2 mb-6">
+              <div className="flex items-center gap-2 text-sm">
+                <Check className="w-4 h-4 text-lime-600" />
+                <span>B2B Merchant Pricing</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Check className="w-4 h-4 text-lime-600" />
+                <span>Installation Guides Library</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Gift className="w-4 h-4 text-lime-600" />
+                <span>RM50 Welcome Voucher</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <XIcon className="w-4 h-4" />
+                <span>Find Shops listing</span>
+              </div>
+            </div>
+            <Button
+              disabled={currentPlan === 'professional'}
+              className="w-full bg-lime-600 hover:bg-lime-700"
+              onClick={() => toast({ title: 'Contact Admin', description: 'Please contact our team to subscribe' })}
+            >
+              {currentPlan === 'professional' ? 'Current Plan' : 'Subscribe'}
+            </Button>
+          </CardContent>
+        </Card>
 
-        {/* Enterprise Plan */}
-        <div className={`bg-gray-900 border p-5 md:p-6 flex flex-col relative rounded-2xl shadow-xl overflow-hidden ${
-          currentPlan === 'enterprise' ? 'ring-2 ring-purple-500/50' : 'border-gray-800'
-        }`}>
-          <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-purple-600 to-lime-600"></div>
-          {currentPlan !== 'enterprise' && (
-            <div className="absolute top-4 right-4 bg-purple-600 text-white px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wide rounded-full">
-              Best Value
+        {/* Panel */}
+        <Card className={`${currentPlan === 'panel' ? 'border-purple-500' : ''} bg-gray-900 text-white`}>
+          <CardHeader>
+            <div className="flex items-center justify-between mb-2">
+              <CardTitle className="text-white">Panel (Authorized)</CardTitle>
+              {currentPlan === 'panel' ? (
+                <Badge className="bg-purple-500">Current</Badge>
+              ) : (
+                <Badge variant="outline" className="text-white border-white/20">Invite Only</Badge>
+              )}
             </div>
-          )}
-          {currentPlan === 'enterprise' && (
-            <div className="absolute top-4 right-4 bg-lime-500 text-white px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wide rounded-full">
-              Current Plan
+            <CardDescription className="text-gray-300">Top 100 authorized shops</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-6">
+              <span className="text-3xl font-bold text-white">RM 350</span>
+              <span className="text-gray-400 text-sm">/month</span>
             </div>
-          )}
-          <h3 className="text-lg font-heading font-bold uppercase italic text-white mb-1">Enterprise</h3>
-          <p className="text-[11px] text-gray-400 mb-4">For serious installers who want the edge</p>
-          <div className="mb-5">
-            <span className="text-3xl font-bold text-white">RM 388</span>
-            <span className="text-gray-400 text-xs font-bold uppercase">/year</span>
-          </div>
-          <div className="w-10 h-0.5 bg-purple-600 mb-5 rounded-full"></div>
-          <ul className="space-y-2.5 flex-1 text-xs">
-            <li className="flex items-start gap-2 text-gray-300">
-              <Check className="w-4 h-4 text-lime-500 flex-shrink-0 mt-0.5" />
-              <span>Everything in <strong>Professional</strong></span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-300">
-              <Check className="w-4 h-4 text-lime-500 flex-shrink-0 mt-0.5" />
-              <span>Shop listing on Find Shops page</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-300">
-              <Check className="w-4 h-4 text-lime-500 flex-shrink-0 mt-0.5" />
-              <span>Basic Analytics Dashboard</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-300">
-              <Check className="w-4 h-4 text-lime-500 flex-shrink-0 mt-0.5" />
-              <span>B2B Pricing access</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-300">
-              <Gift className="w-4 h-4 text-lime-500 flex-shrink-0 mt-0.5" />
-              <span>RM50 Welcome Voucher</span>
-            </li>
-            <li className="flex items-start gap-2 text-white font-semibold">
-              <BookOpen className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
-              <span><strong>Installation Guides Library</strong></span>
-            </li>
-          </ul>
-          <button
-            onClick={() => handleSubscribe('Enterprise')}
-            disabled={currentPlan === 'enterprise'}
-            className={`w-full py-2.5 font-bold text-[10px] uppercase tracking-wide mt-5 rounded-full transition-all ${
-              currentPlan === 'enterprise'
-                ? 'bg-purple-600/30 text-purple-300 border border-purple-500 cursor-not-allowed'
-                : 'bg-purple-600 text-white hover:bg-purple-700'
-            }`}
-          >
-            {currentPlan === 'enterprise' ? 'Current Plan' : 'Upgrade Now'}
-          </button>
-        </div>
-      </div>
-
-      {/* FAQ Section */}
-      <div className="max-w-2xl mx-auto mt-10">
-        <h3 className="text-sm font-heading font-bold uppercase italic text-gray-900 mb-4 text-center">Frequently Asked Questions</h3>
-        <div className="space-y-3">
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <p className="font-semibold text-gray-900 text-xs mb-1">How do I subscribe?</p>
-            <p className="text-gray-600 text-[11px]">Contact our admin team via WhatsApp or email. Once payment is confirmed, your subscription will be activated within 24 hours.</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <p className="font-semibold text-gray-900 text-xs mb-1">What is the RM50 Welcome Voucher?</p>
-            <p className="text-gray-600 text-[11px]">As a subscribed merchant, you'll receive a RM50 voucher that can be used on any purchase with a minimum spend of RM100 on our platform.</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <p className="font-semibold text-gray-900 text-xs mb-1">What are Installation Guides?</p>
-            <p className="text-gray-600 text-[11px]">Enterprise subscribers get access to our exclusive library of video tutorials and documentation for installing various car accessories across different car models.</p>
-          </div>
-        </div>
+            <div className="space-y-2 mb-6">
+              <div className="flex items-center gap-2 text-sm text-gray-200">
+                <Check className="w-4 h-4 text-purple-400" />
+                <span>Everything in Professional</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-white font-medium">
+                <Check className="w-4 h-4 text-purple-400" />
+                <span>Featured Find Shops listing</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-white font-medium">
+                <Check className="w-4 h-4 text-purple-400" />
+                <span>Authorized Panel Badge</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-200">
+                <Check className="w-4 h-4 text-purple-400" />
+                <span>Priority support</span>
+              </div>
+            </div>
+            <Button disabled className="w-full bg-white/10 text-white cursor-not-allowed">
+              {currentPlan === 'panel' ? 'Current Plan' : 'By Invitation Only'}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 };
 
-// Guides Tab Component - Only for Enterprise subscribers
+// Guides Tab
 const GuidesTab = () => {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
@@ -926,6 +870,8 @@ const GuidesTab = () => {
   const [guides, setGuides] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [brands, setBrands] = useState<string[]>(['All Brands']);
+  const [selectedGuide, setSelectedGuide] = useState<any | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   useEffect(() => {
     fetchGuides();
@@ -933,7 +879,6 @@ const GuidesTab = () => {
 
   const fetchGuides = async () => {
     try {
-      setLoading(true);
       const { data, error } = await supabase
         .from('installation_guides')
         .select('*')
@@ -943,17 +888,10 @@ const GuidesTab = () => {
       if (error) throw error;
 
       setGuides(data || []);
-
-      // Extract unique brands from guides
       const uniqueBrands = ['All Brands', ...new Set(data?.map((g: any) => g.car_brand).filter(Boolean) || [])];
       setBrands(uniqueBrands as string[]);
     } catch (error: any) {
-      console.error('Error fetching guides:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load installation guides',
-        variant: 'destructive'
-      });
+      toast({ title: 'Error', description: 'Failed to load guides', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -969,135 +907,264 @@ const GuidesTab = () => {
 
   if (loading) {
     return (
-      <div className="animate-fade-in-up flex items-center justify-center py-12">
-        <div className="text-center">
-          <BookOpen className="h-12 w-12 animate-pulse mx-auto mb-4 text-purple-600" />
-          <p className="text-gray-500 text-sm">Loading installation guides...</p>
-        </div>
+      <div className="flex items-center justify-center py-12">
+        <BookOpen className="h-12 w-12 animate-pulse text-lime-600" />
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in-up">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4 border-b border-gray-200 pb-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-bold uppercase tracking-wide rounded-full">Enterprise Feature</span>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-gray-900 uppercase italic mb-1">Installation Library</h1>
-          <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Technical resources for authorized installers</p>
-        </div>
-        <div className="w-full md:w-72 relative">
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Installation Guides</h1>
+        <p className="text-sm text-gray-500 mt-1">Professional video guides and resources</p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
             placeholder="Search guides..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-white border border-gray-200 pl-3 pr-9 py-2 text-sm outline-none focus:border-lime-600 transition-all rounded-lg"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
           />
-          <Search className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" />
         </div>
-      </div>
-
-      {/* Brand Tabs */}
-      <div className="mb-6 overflow-x-auto pb-2 no-scrollbar">
-        <div className="flex gap-1.5">
+        <div className="flex gap-2 overflow-x-auto">
           {brands.map(brand => (
-            <button
+            <Button
               key={brand}
+              variant={selectedBrand === brand ? 'default' : 'outline'}
+              size="sm"
               onClick={() => setSelectedBrand(brand)}
-              className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded-full transition-all whitespace-nowrap border ${
-                selectedBrand === brand
-                  ? 'bg-lime-600 text-white border-lime-600'
-                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-900'
-              }`}
+              className={selectedBrand === brand ? 'bg-lime-600 hover:bg-lime-700' : ''}
             >
               {brand}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
-      {/* Video Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredGuides.map((guide) => (
-          <div key={guide.id} className="group cursor-pointer bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-lime-200 shadow-sm hover:shadow-lg transition-all duration-300">
-            <div className="aspect-video bg-gray-900 relative overflow-hidden">
+          <Card key={guide.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+            <div
+              className="aspect-video bg-gray-900 relative group cursor-pointer"
+              onClick={() => {
+                setSelectedGuide(guide);
+                setIsDetailModalOpen(true);
+              }}
+            >
               <img
                 src={guide.thumbnail_url || 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400'}
                 alt={guide.title}
-                className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-all duration-500"
+                className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform"
               />
-              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors"></div>
-              {/* Play Button */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-10 h-10 bg-white/20 backdrop-blur-md border border-white/50 flex items-center justify-center rounded-full shadow-lg transform group-hover:scale-110 transition-transform duration-300">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
-                    <path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
-                  </svg>
+                <div className="w-12 h-12 bg-white/20 backdrop-blur-sm border-2 border-white/50 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Info className="w-6 h-6 text-white" />
                 </div>
               </div>
-              <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur text-white text-[9px] font-bold px-1.5 py-0.5 uppercase tracking-wide rounded">
-                {guide.video_duration || 'N/A'}
-              </div>
-              {/* Difficulty Badge */}
-              <div className="absolute top-2 left-2">
-                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                  guide.difficulty_level === 'Easy' ? 'bg-green-500 text-white' :
-                  guide.difficulty_level === 'Medium' ? 'bg-yellow-500 text-white' :
-                  guide.difficulty_level === 'Hard' ? 'bg-orange-500 text-white' :
-                  'bg-red-500 text-white'
-                }`}>
+              <div className="absolute top-3 left-3">
+                <Badge variant={
+                  guide.difficulty_level === 'Easy' ? 'default' :
+                  guide.difficulty_level === 'Medium' ? 'secondary' :
+                  'destructive'
+                } className="text-xs">
                   {guide.difficulty_level}
-                </span>
+                </Badge>
               </div>
-            </div>
-
-            <div className="p-4">
-              <div className="flex items-center gap-1.5 mb-2">
-                <span className="w-1 h-1 bg-lime-600 rounded-full"></span>
-                <span className="text-[9px] font-bold uppercase tracking-wide text-gray-500">{guide.category}</span>
-              </div>
-              <h3 className="text-sm font-bold text-gray-900 leading-tight mb-3 group-hover:text-lime-600 transition-colors uppercase line-clamp-2">
-                {guide.title}
-              </h3>
-              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                <p className="text-[11px] text-gray-500">
-                  Model: <span className="text-gray-900 font-semibold">
-                    {guide.car_brand} {guide.car_model}
-                    {guide.car_year_start && ` (${guide.car_year_start}${guide.car_year_end ? `-${guide.car_year_end}` : '+'})`}
-                  </span>
-                </p>
-                <button
-                  onClick={() => window.open(guide.video_url, '_blank')}
-                  className="text-[9px] font-bold uppercase tracking-wide text-gray-400 group-hover:text-lime-600 transition-colors"
-                >
-                  Watch
-                </button>
-              </div>
-              {/* Stats */}
-              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
-                <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                  <Eye className="w-3 h-3" />
-                  {guide.views_count || 0}
-                </span>
-                <span className="text-[10px] text-gray-400 flex items-center gap-1">
+              {guide.recommended_time && (
+                <div className="absolute bottom-3 right-3 bg-black/80 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
                   <Clock className="w-3 h-3" />
-                  {guide.estimated_time_minutes}min
-                </span>
-              </div>
+                  {guide.recommended_time}
+                </div>
+              )}
             </div>
-          </div>
+            <CardHeader className="pb-3">
+              <CardDescription className="text-xs uppercase tracking-wide">{guide.category}</CardDescription>
+              <CardTitle className="text-sm line-clamp-2">{guide.title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {guide.description && (
+                <p className="text-xs text-gray-600 mb-3 line-clamp-2">{guide.description}</p>
+              )}
+              <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                <span className="font-medium">{guide.car_brand} {guide.car_model}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
+                {guide.workman_power && (
+                  <div className="flex items-center gap-1 text-gray-600">
+                    <Users className="w-3 h-3" />
+                    <span>{guide.workman_power} {guide.workman_power === 1 ? 'worker' : 'workers'}</span>
+                  </div>
+                )}
+                {guide.installation_price > 0 && (
+                  <div className="flex items-center gap-1 text-lime-600 font-medium col-span-2">
+                    <DollarSign className="w-3 h-3" />
+                    <span>RM {guide.installation_price.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedGuide(guide);
+                    setIsDetailModalOpen(true);
+                  }}
+                >
+                  <Info className="w-3 h-3 mr-1" />
+                  Details
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1 bg-lime-600 hover:bg-lime-700"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(guide.video_url, '_blank');
+                  }}
+                >
+                  <Video className="w-3 h-3 mr-1" />
+                  Watch
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         ))}
-        {filteredGuides.length === 0 && (
-          <div className="col-span-full py-8 text-center text-gray-400">
-            <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-sm font-heading font-bold uppercase italic">No guides found.</p>
-            <p className="text-xs mt-1">Try adjusting your search or filter criteria</p>
-          </div>
-        )}
       </div>
+
+      {filteredGuides.length === 0 && (
+        <div className="text-center py-12">
+          <BookOpen className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+          <p className="text-sm text-gray-500">No guides found</p>
+        </div>
+      )}
+
+      {/* Guide Detail Modal */}
+      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {selectedGuide && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl">{selectedGuide.title}</DialogTitle>
+                <DialogDescription>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant={
+                      selectedGuide.difficulty_level === 'Easy' ? 'default' :
+                      selectedGuide.difficulty_level === 'Medium' ? 'secondary' :
+                      'destructive'
+                    }>
+                      {selectedGuide.difficulty_level}
+                    </Badge>
+                    <Badge variant="outline">{selectedGuide.category}</Badge>
+                    <span className="text-sm text-gray-600">{selectedGuide.car_brand} {selectedGuide.car_model}</span>
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-6">
+                {/* Thumbnail */}
+                {selectedGuide.thumbnail_url && (
+                  <div className="aspect-video rounded-lg overflow-hidden bg-gray-900">
+                    <img
+                      src={selectedGuide.thumbnail_url}
+                      alt={selectedGuide.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+
+                {/* Description */}
+                {selectedGuide.description && (
+                  <div>
+                    <h3 className="font-semibold text-sm mb-2">Description</h3>
+                    <p className="text-sm text-gray-600">{selectedGuide.description}</p>
+                  </div>
+                )}
+
+                {/* Installation Details */}
+                <div>
+                  <h3 className="font-semibold text-sm mb-3">Installation Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {selectedGuide.recommended_time && (
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                              <Clock className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Recommended Time</p>
+                              <p className="font-semibold text-sm">{selectedGuide.recommended_time}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {selectedGuide.workman_power && (
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-purple-100 rounded-lg">
+                              <Users className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Workman Power</p>
+                              <p className="font-semibold text-sm">
+                                {selectedGuide.workman_power} {selectedGuide.workman_power === 1 ? 'worker' : 'workers'}
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {selectedGuide.installation_price > 0 && (
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-lime-100 rounded-lg">
+                              <DollarSign className="w-5 h-5 text-lime-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Installation Price</p>
+                              <p className="font-semibold text-sm text-lime-600">RM {selectedGuide.installation_price.toFixed(2)}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+
+                {/* Video Link */}
+                <div className="flex gap-3 pt-4 border-t">
+                  <Button
+                    className="flex-1 bg-lime-600 hover:bg-lime-700"
+                    onClick={() => window.open(selectedGuide.video_url, '_blank')}
+                  >
+                    <Video className="w-4 h-4 mr-2" />
+                    Watch Installation Video
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsDetailModalOpen(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

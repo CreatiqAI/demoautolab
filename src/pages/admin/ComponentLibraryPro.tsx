@@ -31,24 +31,20 @@ interface ComponentItem {
 }
 
 
-const COMPONENT_TYPES = [
-  { value: 'Casing', label: 'Casing', icon: '📱' },
-  { value: 'Socket', label: 'Socket', icon: '🔌' },
-  { value: 'Canbus', label: 'Canbus', icon: '🔗' },
-  { value: 'Cable', label: 'Cable', icon: '🔌' },
-  { value: 'Adapter', label: 'Adapter', icon: '⚡' },
-  { value: 'Screen', label: 'Screen', icon: '📺' },
-  { value: 'Frame', label: 'Frame', icon: '🖼️' },
-  { value: 'Others', label: 'Others', icon: '📦' }
-];
+// Component types will be fetched from database
+// Users can also create new types on the fly
+const DEFAULT_COMPONENT_ICON = '📦';
 
 export default function ComponentLibraryPro() {
   const [components, setComponents] = useState<ComponentItem[]>([]);
+  const [componentTypes, setComponentTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<ComponentItem[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isCreatingNewType, setIsCreatingNewType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
   const [selectedComponent, setSelectedComponent] = useState<ComponentItem | null>(null);
   const [stockAdjustment, setStockAdjustment] = useState({ type: 'add', quantity: 0, reason: '' });
@@ -69,8 +65,26 @@ export default function ComponentLibraryPro() {
 
   useEffect(() => {
     fetchComponents();
-    // fetchSuppliers(); // Disabled - suppliers table doesn't exist
+    fetchComponentTypes();
   }, []);
+
+  const fetchComponentTypes = async () => {
+    try {
+      // Get unique component types from existing components
+      const { data, error } = await supabase
+        .from('component_library' as any)
+        .select('component_type')
+        .not('component_type', 'is', null);
+
+      if (error) throw error;
+
+      // Extract unique types
+      const uniqueTypes = [...new Set((data || []).map((item: any) => item.component_type))].sort();
+      setComponentTypes(uniqueTypes);
+    } catch (error: any) {
+      console.error('Error fetching component types:', error);
+    }
+  };
 
   // Debounced search effect
   useEffect(() => {
@@ -188,7 +202,7 @@ export default function ComponentLibraryPro() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.component_sku.trim()) {
       toast({
         title: "Error",
@@ -198,12 +212,26 @@ export default function ComponentLibraryPro() {
       return;
     }
 
+    // Use new type name if creating new, otherwise use selected type
+    const typeToSave = isCreatingNewType
+      ? newTypeName.trim()
+      : formData.component_type;
+
+    if (!typeToSave) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please select a type or create a new one',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     try {
       const componentData = {
         component_sku: formData.component_sku,
         name: formData.name,
         description: formData.description,
-        component_type: formData.component_type,
+        component_type: typeToSave,
         component_value: formData.component_value,
         stock_level: formData.stock_level,
         normal_price: formData.normal_price,
@@ -242,6 +270,7 @@ export default function ComponentLibraryPro() {
       setDialogOpen(false);
       resetForm();
       fetchComponents();
+      fetchComponentTypes(); // Refresh types list
     } catch (error: any) {
       console.error('Error saving component:', error);
       
@@ -275,6 +304,8 @@ export default function ComponentLibraryPro() {
       default_image_url: component.default_image_url || ''
     });
     setIsEditing(true);
+    setIsCreatingNewType(false);
+    setNewTypeName('');
     setDialogOpen(true);
   };
 
@@ -386,6 +417,8 @@ export default function ComponentLibraryPro() {
       default_image_url: ''
     });
     setIsEditing(false);
+    setIsCreatingNewType(false);
+    setNewTypeName('');
   };
 
   const handleStockAdjustment = async () => {
@@ -432,8 +465,9 @@ export default function ComponentLibraryPro() {
     }
   };
 
-  const getTypeInfo = (type: string) => {
-    return COMPONENT_TYPES.find(t => t.value === type) || { value: type, label: type, icon: '📦' };
+  const getTypeIcon = (type: string) => {
+    // Return default icon for all types
+    return DEFAULT_COMPONENT_ICON;
   };
 
   return (
@@ -487,26 +521,49 @@ export default function ComponentLibraryPro() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="component_type">Type *</Label>
-                  <Select 
-                    value={formData.component_type} 
-                    onValueChange={handleTypeChange}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMPONENT_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          <span className="flex items-center gap-2">
-                            <span>{type.icon}</span>
-                            {type.label}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="component_type">Type *</Label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCreatingNewType(!isCreatingNewType);
+                        if (!isCreatingNewType) {
+                          setFormData(prev => ({ ...prev, component_type: '' }));
+                        }
+                      }}
+                      className="text-xs text-lime-600 hover:text-lime-700 font-medium"
+                    >
+                      {isCreatingNewType ? 'Select Existing' : '+ Create New'}
+                    </button>
+                  </div>
+                  {isCreatingNewType ? (
+                    <Input
+                      value={newTypeName}
+                      onChange={(e) => setNewTypeName(e.target.value)}
+                      placeholder="Enter new type name (e.g., Bracket, Connector)"
+                    />
+                  ) : (
+                    <Select
+                      value={formData.component_type}
+                      onValueChange={handleTypeChange}
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {componentTypes.length > 0 ? (
+                          componentTypes.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="General" disabled>No types yet</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
 
@@ -628,19 +685,19 @@ export default function ComponentLibraryPro() {
               </TableHeader>
               <TableBody>
                 {searchResults.map((component) => {
-                  const typeInfo = getTypeInfo(component.component_type);
+                  const typeIcon = getTypeIcon(component.component_type);
                   return (
                     <TableRow key={component.id}>
                       <TableCell>
                         {component.default_image_url ? (
-                          <img 
-                            src={component.default_image_url} 
+                          <img
+                            src={component.default_image_url}
                             alt={component.name}
                             className="w-12 h-12 rounded object-cover"
                           />
                         ) : (
                           <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-lg">
-                            {typeInfo.icon}
+                            {typeIcon}
                           </div>
                         )}
                       </TableCell>
@@ -659,8 +716,8 @@ export default function ComponentLibraryPro() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">
-                          <span className="mr-1">{typeInfo.icon}</span>
-                          {typeInfo.label}
+                          <span className="mr-1">{typeIcon}</span>
+                          {component.component_type}
                         </Badge>
                       </TableCell>
                       <TableCell>

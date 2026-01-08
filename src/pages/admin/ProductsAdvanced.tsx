@@ -40,6 +40,8 @@ export default function ProductsAdvanced() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [activeTab, setActiveTab] = useState('basic');
   const { toast } = useToast();
 
@@ -56,7 +58,6 @@ export default function ProductsAdvanced() {
     dimensions_cm: '',
     year_from: undefined,
     year_to: undefined,
-    keywords: [],
     tags: [],
     images: [{ url: '', alt_text: '', is_primary: true }],
     component_variants: [
@@ -165,7 +166,25 @@ export default function ProductsAdvanced() {
     try {
       // Auto-generate slug if empty
       const slug = formData.slug || generateSlug(formData.name);
-      
+
+      let categoryIdToUse = formData.category_id;
+
+      // If creating a new category, insert it first
+      if (isCreatingNewCategory && newCategoryName.trim()) {
+        const { data: newCategory, error: categoryError } = await supabase
+          .from('categories' as any)
+          .insert([{
+            name: newCategoryName.trim(),
+            slug: newCategoryName.trim().toLowerCase().replace(/\s+/g, '-'),
+            active: true
+          }])
+          .select()
+          .single();
+
+        if (categoryError) throw categoryError;
+        categoryIdToUse = newCategory.id;
+      }
+
       let productId = editingProduct?.id;
 
       // Step 1: Create or update the main product
@@ -174,8 +193,8 @@ export default function ProductsAdvanced() {
           .from('products_new' as any)
           .update({
             ...formData,
+            category_id: categoryIdToUse || null,
             slug,
-            keywords: formData.keywords?.length ? formData.keywords : null,
             tags: formData.tags?.length ? formData.tags : null
           })
           .eq('id', editingProduct.id);
@@ -186,8 +205,8 @@ export default function ProductsAdvanced() {
           .from('products_new' as any)
           .insert([{
             ...formData,
+            category_id: categoryIdToUse || null,
             slug,
-            keywords: formData.keywords?.length ? formData.keywords : null,
             tags: formData.tags?.length ? formData.tags : null
           }])
           .select('id')
@@ -359,6 +378,7 @@ export default function ProductsAdvanced() {
       setIsDialogOpen(false);
       resetForm();
       fetchProducts();
+      fetchCategories(); // Refresh categories list
     } catch (error: any) {
       console.error('Error saving product:', error);
       toast({
@@ -385,7 +405,6 @@ export default function ProductsAdvanced() {
       dimensions_cm: '',
       year_from: undefined,
       year_to: undefined,
-      keywords: [],
       tags: [],
       images: [{ url: '', alt_text: '', is_primary: true }],
       component_variants: [
@@ -409,6 +428,8 @@ export default function ProductsAdvanced() {
       variant_combinations: []
     });
     setEditingProduct(null);
+    setIsCreatingNewCategory(false);
+    setNewCategoryName('');
     setActiveTab('basic');
   };
 
@@ -564,22 +585,48 @@ export default function ProductsAdvanced() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="category_id">Category</Label>
-                      <Select
-                        value={formData.category_id}
-                        onValueChange={(value) => setFormData({...formData, category_id: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map((category) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="category_id">Category</Label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingNewCategory(!isCreatingNewCategory);
+                            if (!isCreatingNewCategory) {
+                              setFormData({ ...formData, category_id: '' });
+                            }
+                          }}
+                          className="text-xs text-lime-600 hover:text-lime-700 font-medium"
+                        >
+                          {isCreatingNewCategory ? 'Select Existing' : '+ Create New'}
+                        </button>
+                      </div>
+                      {isCreatingNewCategory ? (
+                        <Input
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          placeholder="Enter new category name"
+                        />
+                      ) : (
+                        <Select
+                          value={formData.category_id}
+                          onValueChange={(value) => setFormData({...formData, category_id: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.length > 0 ? (
+                              categories.map((category) => (
+                                <SelectItem key={category.id} value={category.id}>
+                                  {category.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="none" disabled>No categories yet</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                   </div>
 

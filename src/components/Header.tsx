@@ -12,7 +12,9 @@ import {
   XCircle,
   AlertCircle,
   X,
-  ChevronDown
+  ChevronDown,
+  Coins,
+  Settings
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -295,6 +297,14 @@ const Header = () => {
                     <Tag className="h-3.5 w-3.5" />
                     Vouchers
                   </Link>
+
+                  <Link
+                    to="/my-points"
+                    className={`relative h-full flex items-center text-xs font-bold tracking-widest uppercase transition-all duration-300 ${linkHoverColor} liquid-underline gap-1.5`}
+                  >
+                    <Coins className="h-3.5 w-3.5" />
+                    My Points
+                  </Link>
                 </>
               )}
             </nav>
@@ -320,56 +330,38 @@ const Header = () => {
                 </div>
               )}
 
-              {/* Account */}
+              {/* Account Actions */}
               {user ? (
-                <div className="relative group/account hidden sm:block">
-                  <button className={`flex items-center gap-3 px-4 py-2 border rounded-full ${borderColor} uppercase text-[10px] font-bold tracking-widest transition-all hover:bg-lime-600 hover:text-white hover:border-lime-600`}>
-                    <span className="hidden md:inline">{isMerchant ? 'Merchant' : 'Account'}</span>
-                    <div className="w-6 h-6 bg-gray-200 rounded-full overflow-hidden border border-white/20">
-                      <User className="w-full h-full p-1 text-gray-600" />
-                    </div>
+                <>
+                  {/* Merchant Console Button (for merchants only) */}
+                  {isMerchant && (
+                    <Link
+                      to="/merchant-console"
+                      className={`hidden sm:block relative p-2 ${linkHoverColor} transition-colors duration-300`}
+                      title="Merchant Console"
+                    >
+                      <Store className="h-5 w-5" />
+                    </Link>
+                  )}
+
+                  {/* Profile/Settings Button */}
+                  <Link
+                    to="/settings"
+                    className={`hidden sm:block relative p-2 ${linkHoverColor} transition-colors duration-300`}
+                    title="Settings"
+                  >
+                    <Settings className="h-5 w-5" />
+                  </Link>
+
+                  {/* Logout Button */}
+                  <button
+                    onClick={handleSignOut}
+                    className="hidden sm:block relative p-2 text-gray-900 hover:text-red-600 transition-colors duration-300"
+                    title="Logout"
+                  >
+                    <LogOut className="h-5 w-5" />
                   </button>
-
-                  {/* Account Dropdown */}
-                  <div className="absolute top-full right-0 pt-4 w-56 opacity-0 invisible group-hover/account:opacity-100 group-hover/account:visible transition-all duration-300 transform translate-y-2 group-hover/account:translate-y-0">
-                    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden p-1 shadow-2xl">
-                      <div className="p-4 border-b border-gray-100">
-                        <p className="text-xs font-bold uppercase text-gray-900">Welcome Back</p>
-                        <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
-                      </div>
-
-                      <Link
-                        to="/profile"
-                        className="block w-full text-left px-4 py-3 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-lg uppercase tracking-wider transition-colors"
-                      >
-                        My Profile
-                      </Link>
-
-                      <Link
-                        to="/my-orders"
-                        className="block w-full text-left px-4 py-3 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-lg uppercase tracking-wider transition-colors"
-                      >
-                        My Orders
-                      </Link>
-
-                      {isMerchant && (
-                        <Link
-                          to="/merchant/dashboard"
-                          className="block w-full text-left px-4 py-3 text-xs font-medium text-lime-700 hover:bg-lime-50 rounded-lg uppercase tracking-wider transition-colors"
-                        >
-                          Merchant Console
-                        </Link>
-                      )}
-
-                      <button
-                        onClick={handleSignOut}
-                        className="w-full text-left px-4 py-3 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg uppercase tracking-wider transition-colors"
-                      >
-                        Logout
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                </>
               ) : (
                 <Link
                   to="/auth"
@@ -418,6 +410,14 @@ const Header = () => {
                             <Tag className="h-5 w-5" />
                             My Vouchers
                           </Link>
+                          <Link
+                            to="/my-points"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="text-xl font-heading font-bold uppercase text-gray-900 hover:text-lime-600 transition-colors py-3 border-b border-gray-100 flex items-center gap-2"
+                          >
+                            <Coins className="h-5 w-5" />
+                            My Points
+                          </Link>
 
                         </>
                       )}
@@ -436,17 +436,9 @@ const Header = () => {
 
                       {user ? (
                         <div className="space-y-2">
-                          <Link
-                            to="/profile"
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="flex items-center w-full px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                          >
-                            <User className="h-5 w-5 mr-2" />
-                            Profile
-                          </Link>
                           {isMerchant && (
                             <Link
-                              to="/merchant/dashboard"
+                              to="/merchant-console"
                               onClick={() => setMobileMenuOpen(false)}
                               className="flex items-center w-full px-4 py-3 text-lime-700 hover:bg-lime-50 rounded-lg transition-colors"
                             >
@@ -454,8 +446,16 @@ const Header = () => {
                               Merchant Console
                             </Link>
                           )}
+                          <Link
+                            to="/settings"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="flex items-center w-full px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                          >
+                            <Settings className="h-5 w-5 mr-2" />
+                            Settings
+                          </Link>
                           <Button
-                            className="w-full border border-gray-200 text-gray-900 font-bold uppercase tracking-widest hover:bg-gray-900 hover:text-white"
+                            className="w-full border border-gray-200 text-gray-900 font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white hover:border-red-600"
                             variant="outline"
                             size="lg"
                             onClick={() => {
@@ -516,12 +516,12 @@ const Header = () => {
                   {subscriptionStatus.type === 'expired' ? (
                     <span>
                       <strong>Subscription Expired:</strong> Your shop is no longer visible on Find Shops.
-                      <Link to="/premium-partner" className="underline ml-1 font-semibold">Renew now</Link>
+                      <Link to="/merchant-console" className="underline ml-1 font-semibold">Renew now</Link>
                     </span>
                   ) : (
                     <span>
                       <strong>Expiring Soon:</strong> Your subscription expires in {subscriptionStatus.daysUntilExpiry} day{subscriptionStatus.daysUntilExpiry !== 1 ? 's' : ''}.
-                      <Link to="/premium-partner" className="underline ml-1 font-semibold">Renew now</Link>
+                      <Link to="/merchant-console" className="underline ml-1 font-semibold">Renew now</Link>
                     </span>
                   )}
                 </div>

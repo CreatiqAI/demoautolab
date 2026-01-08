@@ -81,25 +81,28 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Get unique component SKUs to fetch images
         const componentSkus = [...new Set(data.map((item: any) => item.component_sku))];
 
-        // Fetch component images from component_library
+        // Fetch ALL component images to avoid special character issues with .in() operator
         console.log('🔍 Fetching component images for:', componentSkus);
-        const { data: componentsData, error: componentsError } = await supabase
+        const { data: allComponentsData, error: componentsError } = await supabase
           .from('component_library')
-          .select('component_sku, default_image_url')
-          .in('component_sku', componentSkus);
+          .select('component_sku, default_image_url');
 
         if (componentsError) {
           console.error('⚠️ Error fetching component images:', componentsError);
         }
 
         // Create a map of component_sku to image URL
+        // Filter to only components we need (to avoid memory issues with large datasets)
+        const componentSkusSet = new Set(componentSkus);
         const imageMap = new Map<string, string>();
-        if (componentsData) {
-          componentsData.forEach((comp: any) => {
-            if (comp.default_image_url) {
-              imageMap.set(comp.component_sku, comp.default_image_url);
-            }
-          });
+        if (allComponentsData) {
+          allComponentsData
+            .filter((comp: any) => componentSkusSet.has(comp.component_sku))
+            .forEach((comp: any) => {
+              if (comp.default_image_url) {
+                imageMap.set(comp.component_sku, comp.default_image_url);
+              }
+            });
         }
         console.log('🖼️ Image map created:', imageMap);
 

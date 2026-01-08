@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '@/hooks/useCartDB';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,9 +15,11 @@ import CheckoutModal from '@/components/CheckoutModal';
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart, getTotalPrice, getTotalItems, clearCart } = useCart();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Redirect unauthenticated users
   useEffect(() => {
@@ -24,6 +27,19 @@ export default function Cart() {
       navigate('/auth');
     }
   }, [user, navigate]);
+
+  // Handle cart clearing after successful payment
+  useEffect(() => {
+    const shouldClearCart = localStorage.getItem('clearCartAfterPayment');
+    if (shouldClearCart === 'true') {
+      clearCart();
+      localStorage.removeItem('clearCartAfterPayment');
+      toast({
+        title: "Payment Successful!",
+        description: "Your order has been placed. Your cart has been cleared.",
+      });
+    }
+  }, [clearCart, toast]);
 
   // Don't render cart if user is not authenticated
   if (!user) {
@@ -98,7 +114,7 @@ export default function Cart() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>

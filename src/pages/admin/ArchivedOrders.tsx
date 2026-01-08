@@ -62,11 +62,11 @@ export default function ArchivedOrders() {
       setLoading(true);
       console.log('🔄 Fetching archived orders...');
 
-      // Use direct query for completed orders only
       let ordersData: any[] = [];
 
-      // Direct query with order items for completed orders
-      const { data: archivedOrdersWithItems, error: archivedError } = await supabase
+      // Fetch orders with COMPLETED status (uppercase - confirmed to work)
+      console.log(`🔍 Fetching orders with status: "COMPLETED"`);
+      const { data, error } = await supabase
         .from('orders' as any)
         .select(`
           *,
@@ -83,29 +83,15 @@ export default function ArchivedOrders() {
         .eq('status', 'COMPLETED')
         .order('updated_at', { ascending: false });
 
-      if (archivedError) {
-        console.warn('Direct archived orders query failed:', archivedError);
-
-        // Fallback: Basic completed orders query without items
-        const { data: basicData, error: basicError } = await supabase
-          .from('orders' as any)
-          .select('*')
-          .eq('status', 'COMPLETED')
-          .order('updated_at', { ascending: false });
-
-        if (!basicError && basicData) {
-          console.log('📦 Using basic archived orders data (no items):', basicData.length, 'orders');
-          ordersData = basicData.map(order => ({
-            ...order,
-            order_items: [] // No items in fallback
-          }));
-        } else {
-          console.error('❌ All archived order queries failed:', basicError);
-          throw new Error('Failed to fetch archived orders');
-        }
+      if (!error && data) {
+        console.log(`✅ Found ${data.length} completed orders`);
+        ordersData = data;
+      } else if (error) {
+        console.error(`❌ Failed to fetch completed orders:`, error);
+        ordersData = [];
       } else {
-        console.log('📦 Successfully fetched archived orders with items:', archivedOrdersWithItems.length, 'orders');
-        ordersData = archivedOrdersWithItems;
+        console.log(`⚠️ No completed orders found`);
+        ordersData = [];
       }
 
       // Transform the data to match the expected interface
@@ -144,29 +130,70 @@ export default function ArchivedOrders() {
   };
 
   const handleReactivateOrder = async (order: ArchivedOrder) => {
-    if (!confirm(`Reactivate order #${order.order_no}? This will move it back to active orders with DELIVERED status.`)) {
+    if (!confirm(`Reactivate order #${order.order_no}? This will move it back to active orders with delivered status.`)) {
       return;
     }
 
     try {
       setLoading(true);
 
-      // Update order status to DISPATCHED (active status)
-      const { error } = await supabase
+      // Update order status to DELIVERED (active status)
+      // Note: Database enum uses UPPERCASE values (COMPLETED works, so DELIVERED should too)
+      console.log('🔄 Attempting to reactivate order with status: DELIVERED (uppercase)');
+      const updateData = {
+        status: 'DELIVERED',
+        updated_at: new Date().toISOString()
+      };
+      console.log('📝 Update data:', JSON.stringify(updateData));
+
+      // Try the update
+      const { error, data: updatedData } = await supabase
         .from('orders' as any)
-        .update({
-          status: 'DISPATCHED',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', order.id);
+        .update(updateData)
+        .eq('id', order.id)
+        .select();
+
+      console.log('📊 Supabase response:', { error, updatedData });
 
       if (error) {
+        console.error('❌ Update error details:', error);
+        console.error('❌ Error code:', error.code);
+        console.error('❌ Error hint:', error.hint);
+        console.error('❌ Error details:', error.details);
+
+        // Try alternative status values
+        console.log('🔄 Trying alternative status values...');
+
+        // Try each status value from the enum that might work for "active" orders
+        const alternativeStatuses = ['PROCESSING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY'];
+
+        for (const altStatus of alternativeStatuses) {
+          console.log(`🔍 Trying status: ${altStatus}`);
+          const { error: altError, data: altData } = await supabase
+            .from('orders' as any)
+            .update({ status: altStatus, updated_at: new Date().toISOString() })
+            .eq('id', order.id)
+            .select();
+
+          if (!altError) {
+            console.log(`✅ Success with status: ${altStatus}`);
+            toast({
+              title: "Order Reactivated",
+              description: `Order #${order.order_no} has been moved back to active orders with ${altStatus} status.`
+            });
+            fetchArchivedOrders();
+            return; // Success, exit early
+          } else {
+            console.warn(`❌ ${altStatus} failed:`, altError.message);
+          }
+        }
+
         throw new Error(`Failed to reactivate order: ${error.message}`);
       }
 
       toast({
         title: "Order Reactivated",
-        description: `Order #${order.order_no} has been moved back to active orders.`
+        description: `Order #${order.order_no} has been moved back to active orders with delivered status.`
       });
 
       // Refresh the archived orders list

@@ -27,19 +27,35 @@ interface OrderData {
   customerEmail: string;
 }
 
+interface LocationState {
+  orderData?: OrderData;
+  isHistoryAccessPurchase?: boolean;
+  isSubscriptionRenewal?: boolean;
+  subscriptionPlan?: 'professional' | 'panel';
+  partnershipId?: string;
+}
+
 export default function PaymentGateway() {
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [isHistoryAccessPurchase, setIsHistoryAccessPurchase] = useState(false);
+  const [isSubscriptionRenewal, setIsSubscriptionRenewal] = useState(false);
+  const [subscriptionPlan, setSubscriptionPlan] = useState<'professional' | 'panel' | null>(null);
+  const [partnershipId, setPartnershipId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
 
   useEffect(() => {
     // Get order data from navigation state
-    const state = location.state as { orderData?: OrderData };
+    const state = location.state as LocationState;
     if (state?.orderData) {
       setOrderData(state.orderData);
+      setIsHistoryAccessPurchase(state.isHistoryAccessPurchase || false);
+      setIsSubscriptionRenewal(state.isSubscriptionRenewal || false);
+      setSubscriptionPlan(state.subscriptionPlan || null);
+      setPartnershipId(state.partnershipId || null);
       setLoading(false);
     } else {
       // Redirect back if no order data
@@ -96,67 +112,246 @@ export default function PaymentGateway() {
       // Simulate payment processing delay
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Try to call payment processing function
-      const { error } = await (supabase.rpc as any)('process_payment_response', {
-        p_order_id: orderData.orderId,
-        p_payment_success: success,
-        p_gateway_response: {
-          timestamp: new Date().toISOString(),
-          method: orderData.paymentMethod,
-          amount: orderData.total,
-          reference: `PAY-${Date.now()}`,
-          success: success,
-          message: success ? 'Payment processed successfully' : 'Payment processing failed'
-        }
-      });
+      // Skip order processing for subscription renewals
+      if (!isSubscriptionRenewal) {
+        // Try to call payment processing function with new payment states
+        console.log('🔄 Calling process_payment_response RPC function...', {
+          orderId: orderData.orderId,
+          status: success ? 'SUCCESS' : 'FAILED'
+        });
 
-      // If function doesn't exist, fall back to direct order update
-      if (error?.code === '42883') { // Function does not exist
-        console.warn('Payment processing function not found, updating order directly');
-        
-        const { error: updateError } = await supabase
-          .from('orders')
-          .update({
-            payment_state: success ? 'SUBMITTED' : 'REJECTED',
-            status: success ? 'PENDING_VERIFICATION' : 'PLACED',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', orderData.orderId);
-          
-        if (updateError && success) {
-          throw updateError;
+        const { data: rpcData, error } = await (supabase.rpc as any)('process_payment_response', {
+          p_order_id: orderData.orderId,
+          p_status: success ? 'SUCCESS' : 'FAILED',
+          p_payment_details: {
+            timestamp: new Date().toISOString(),
+            method: orderData.paymentMethod,
+            amount: orderData.total,
+            reference: `PAY-${Date.now()}`,
+            success: success,
+            message: success ? 'Payment processed successfully' : 'Payment processing failed'
+          }
+        });
+
+        console.log('📦 RPC function response:', { data: rpcData, error });
+
+        // If function doesn't exist, fall back to direct order update
+        if (error?.code === '42883') { // Function does not exist
+          console.warn('⚠️ Payment processing function not found, updating order directly');
+
+          if (success) {
+            // For successful payment, update to SUCCESS and PROCESSING status
+            const { data: updateData, error: updateError } = await supabase
+              .from('orders')
+              .update({
+                payment_state: 'SUCCESS',
+                status: 'PROCESSING', // Order moves to processing after successful payment
+                payment_gateway_response: {
+                  timestamp: new Date().toISOString(),
+                  method: orderData.paymentMethod,
+                  amount: orderData.total,
+                  reference: `PAY-${Date.now()}`,
+                  success: true,
+                  message: 'Payment processed successfully'
+                },
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', orderData.orderId)
+              .select();
+
+            if (updateError) {
+              console.error('❌ Order update error:', updateError);
+              throw updateError;
+            }
+
+            console.log('✅ Order payment state updated to SUCCESS, status updated to PROCESSING', updateData);
+          } else {
+            // For failed payment, update to FAILED
+            const { data: updateData, error: updateError } = await supabase
+              .from('orders')
+              .update({
+                payment_state: 'FAILED',
+                payment_gateway_response: {
+                  timestamp: new Date().toISOString(),
+                  method: orderData.paymentMethod,
+                  amount: orderData.total,
+                  reference: `PAY-${Date.now()}`,
+                  success: false
+                },
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', orderData.orderId)
+              .select();
+
+            if (updateError) {
+              console.error('Order update error:', updateError);
+            }
+
+            console.log('⚠️ Order payment state updated to FAILED', updateData);
+          }
+        } else if (error && success) {
+          console.error('❌ Payment processing error:', error);
+          throw error;
+        } else if (!error && success) {
+          console.log('✅ Payment processed successfully via RPC function');
         }
-      } else if (error && success) {
-        throw error;
+
+        // Verify the update was successful before proceeding
+        if (success) {
+          console.log('🔍 Verifying payment update in database...');
+          const { data: verifyData, error: verifyError } = await supabase
+            .from('orders')
+            .select('payment_state, status, payment_gateway_response')
+            .eq('id', orderData.orderId)
+            .single();
+
+          console.log('✅ Database verification result:', verifyData);
+
+          if (verifyError) {
+            console.error('❌ Error verifying payment update:', verifyError);
+            throw new Error('Failed to verify payment update');
+          }
+
+          // Check if payment_state was actually updated to SUCCESS
+          if (verifyData.payment_state !== 'SUCCESS') {
+            console.error('❌ Payment state not updated! Current state:', verifyData.payment_state);
+            throw new Error(`Payment update failed - payment state is still ${verifyData.payment_state}`);
+          }
+
+          console.log('✅ Payment verification successful - payment_state is SUCCESS');
+        }
       }
 
       if (success) {
-        toast({
-          title: "Payment Successful!",
-          description: `Your payment for order ${orderData.orderNumber} has been processed successfully and is pending verification.`,
-        });
-        
-        // Redirect to My Orders page
-        navigate('/my-orders', { 
-          state: { 
-            expandOrderId: orderData.orderId,
-            paymentSuccess: true 
-          } 
-        });
+        // Handle success based on purchase type
+        if (isSubscriptionRenewal) {
+          // Handle subscription renewal
+          if (!partnershipId || !subscriptionPlan) {
+            throw new Error('Missing subscription renewal data');
+          }
+
+          // Calculate new end date
+          const startDate = new Date();
+          const endDate = new Date(startDate);
+
+          if (subscriptionPlan === 'professional') {
+            // Add 1 year for professional plan
+            endDate.setFullYear(endDate.getFullYear() + 1);
+          } else {
+            // Add 1 month for panel plan
+            endDate.setMonth(endDate.getMonth() + 1);
+          }
+
+          // Update premium_partnerships with new subscription dates
+          const { error: renewalError } = await supabase
+            .from('premium_partnerships')
+            .update({
+              subscription_status: 'ACTIVE',
+              subscription_start_date: startDate.toISOString(),
+              subscription_end_date: endDate.toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', partnershipId);
+
+          if (renewalError) {
+            console.error('Error renewing subscription:', renewalError);
+            throw renewalError;
+          }
+
+          toast({
+            title: "Subscription Renewed!",
+            description: `Your ${subscriptionPlan} subscription has been renewed successfully!`,
+          });
+
+          // Redirect to Merchant Console
+          navigate('/merchant-console', {
+            state: {
+              renewalSuccess: true
+            }
+          });
+        } else if (isHistoryAccessPurchase) {
+          // Confirm history access payment
+          const { error: confirmError } = await (supabase.rpc as any)('confirm_order_history_access_payment', {
+            p_access_id: orderData.orderId,
+            p_payment_success: true,
+            p_payment_reference: `PAY-${Date.now()}`
+          });
+
+          if (confirmError) {
+            console.error('Error confirming history access:', confirmError);
+          }
+
+          toast({
+            title: "Payment Successful!",
+            description: "Your extended order history access has been activated!",
+          });
+
+          // Redirect to My Orders page
+          navigate('/my-orders', {
+            state: {
+              paymentSuccess: true,
+              historyAccessActivated: true
+            }
+          });
+        } else {
+          // Regular order payment - mark cart for clearing using localStorage
+          localStorage.setItem('clearCartAfterPayment', 'true');
+
+          toast({
+            title: "Payment Successful!",
+            description: `Your payment for order ${orderData.orderNumber} has been processed successfully.`,
+          });
+
+          // Redirect to My Orders page
+          navigate('/my-orders', {
+            state: {
+              expandOrderId: orderData.orderId,
+              paymentSuccess: true
+            }
+          });
+        }
       } else {
-        toast({
-          title: "Payment Failed",
-          description: "Your payment could not be processed. Please try again or use a different payment method.",
-          variant: "destructive"
-        });
-        
-        // Redirect back to cart with error state
-        navigate('/cart', { 
-          state: { 
-            paymentFailed: true,
-            orderNumber: orderData.orderNumber 
-          } 
-        });
+        // Handle failure based on purchase type
+        if (isSubscriptionRenewal) {
+          // Subscription renewal payment failed
+          toast({
+            title: "Payment Failed",
+            description: "Your subscription renewal payment could not be processed. Please try again.",
+            variant: "destructive"
+          });
+
+          navigate('/merchant-console');
+        } else if (isHistoryAccessPurchase) {
+          // Confirm history access payment failure
+          await (supabase.rpc as any)('confirm_order_history_access_payment', {
+            p_access_id: orderData.orderId,
+            p_payment_success: false,
+            p_payment_reference: `PAY-${Date.now()}`
+          });
+
+          toast({
+            title: "Payment Failed",
+            description: "Your payment could not be processed. Please try again from My Orders page.",
+            variant: "destructive"
+          });
+
+          navigate('/my-orders');
+        } else {
+          // Regular order - redirect to My Orders to retry payment
+          toast({
+            title: "Payment Failed",
+            description: "Your payment could not be processed. Please try again from My Orders page.",
+            variant: "destructive"
+          });
+
+          // Redirect to My Orders page with the failed order expanded
+          navigate('/my-orders', {
+            state: {
+              expandOrderId: orderData.orderId,
+              paymentFailed: true
+            }
+          });
+        }
       }
 
     } catch (error: any) {
@@ -214,15 +409,19 @@ export default function PaymentGateway() {
           
           <div className="grid md:grid-cols-2 gap-8">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Complete Your Payment</h1>
+              <h1 className="text-3xl font-bold mb-2">
+                {isSubscriptionRenewal ? 'Renew Your Subscription' : 'Complete Your Payment'}
+              </h1>
               <p className="text-blue-100">
-                You're just one step away from completing your order
+                {isSubscriptionRenewal
+                  ? 'Continue enjoying premium merchant benefits'
+                  : "You're just one step away from completing your order"}
               </p>
             </div>
-            
+
             <div className="bg-white/10 backdrop-blur rounded-lg p-4">
               <div className="flex items-center justify-between text-sm mb-2">
-                <span>Order Number:</span>
+                <span>{isSubscriptionRenewal ? 'Reference Number:' : 'Order Number:'}</span>
                 <Badge variant="secondary" className="bg-white/20 text-white">
                   {orderData.orderNumber}
                 </Badge>
@@ -261,27 +460,52 @@ export default function PaymentGateway() {
             </CardContent>
           </Card>
 
-          {/* Order Summary */}
+          {/* Order/Subscription Summary */}
           <Card>
             <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
+              <CardTitle>{isSubscriptionRenewal ? 'Subscription Summary' : 'Order Summary'}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex justify-between">
-                <span>Customer:</span>
-                <span className="font-medium">{orderData.customerName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Email:</span>
-                <span className="font-medium">{orderData.customerEmail}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Order Number:</span>
-                <span className="font-medium">{orderData.orderNumber}</span>
-              </div>
-              
+              {isSubscriptionRenewal ? (
+                <>
+                  <div className="flex justify-between">
+                    <span>Business Name:</span>
+                    <span className="font-medium">{orderData.customerName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Email:</span>
+                    <span className="font-medium">{orderData.customerEmail}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Plan:</span>
+                    <span className="font-medium capitalize">{subscriptionPlan}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Duration:</span>
+                    <span className="font-medium">
+                      {subscriptionPlan === 'professional' ? '1 Year' : '1 Month'}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between">
+                    <span>Customer:</span>
+                    <span className="font-medium">{orderData.customerName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Email:</span>
+                    <span className="font-medium">{orderData.customerEmail}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Order Number:</span>
+                    <span className="font-medium">{orderData.orderNumber}</span>
+                  </div>
+                </>
+              )}
+
               <Separator />
-              
+
               <div className="flex justify-between text-lg font-bold">
                 <span>Total Amount:</span>
                 <span className="text-primary">{formatPrice(orderData.total)}</span>

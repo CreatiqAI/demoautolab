@@ -58,35 +58,25 @@ interface Order {
 
 // Active order statuses only (COMPLETED orders are shown in Archived Orders page)
 const ORDER_STATUS_OPTIONS = [
-  // Payment-related statuses
-  { value: 'PENDING_PAYMENT', label: 'Pending Payment' },
-  { value: 'PAYMENT_PROCESSING', label: 'Payment Processing' },
-  { value: 'PAYMENT_FAILED', label: 'Payment Failed' },
-  { value: 'PENDING_PAYMENT_VERIFICATION', label: 'Pending Payment Verification' },
-  { value: 'PAYMENT_VERIFIED', label: 'Payment Verified' },
-  { value: 'PAYMENT_REJECTED', label: 'Payment Rejected' },
-
-  // Order processing statuses
-  { value: 'PLACED', label: 'Placed' },
+  // Fulfillment statuses (linear flow)
   { value: 'PROCESSING', label: 'Processing' },
-  { value: 'PENDING_VERIFICATION', label: 'Pending Verification' },
-  { value: 'VERIFIED', label: 'Verified' },
+  { value: 'PICKING', label: 'Picking' },
   { value: 'PACKING', label: 'Packing' },
-  { value: 'DISPATCHED', label: 'Dispatched' },
+  { value: 'READY_FOR_DELIVERY', label: 'Ready for Delivery' },
+  { value: 'OUT_FOR_DELIVERY', label: 'Out for Delivery' },
   { value: 'DELIVERED', label: 'Delivered' },
 
-  // Final statuses
+  // Special statuses
+  { value: 'PAYMENT_FAILED', label: 'Payment Failed' },
   { value: 'CANCELLED', label: 'Cancelled' },
-  { value: 'REJECTED', label: 'Rejected' },
 ];
 
 
 const PAYMENT_STATE_OPTIONS = [
-  { value: 'UNPAID', label: 'Unpaid' },
-  { value: 'SUBMITTED', label: 'Submitted' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'REJECTED', label: 'Rejected' },
-  { value: 'ON_CREDIT', label: 'On Credit' },
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'PROCESSING', label: 'Processing' },
+  { value: 'SUCCESS', label: 'Success' },
+  { value: 'FAILED', label: 'Failed' },
 ];
 
 export default function Orders() {
@@ -343,10 +333,20 @@ export default function Orders() {
     try {
       setLoading(true);
 
-      // Direct deletion approach - delete order items first, then order
+      // Direct deletion approach - delete voucher usage, order items, then order
       console.log('Deleting order:', order.order_no, 'with ID:', order.id);
 
-      // First delete order items
+      // First delete voucher usage records if any
+      const { error: voucherUsageError } = await supabase
+        .from('voucher_usage' as any)
+        .delete()
+        .eq('order_id', order.id);
+
+      if (voucherUsageError) {
+        console.warn('Could not delete voucher usage:', voucherUsageError);
+      }
+
+      // Then delete order items
       const { error: itemsError } = await supabase
         .from('order_items' as any)
         .delete()
@@ -356,7 +356,7 @@ export default function Orders() {
         console.warn('Could not delete order items:', itemsError);
       }
 
-      // Then delete the order
+      // Finally delete the order
       const { error: orderError } = await supabase
         .from('orders' as any)
         .delete()

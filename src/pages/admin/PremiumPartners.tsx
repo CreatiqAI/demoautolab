@@ -57,8 +57,8 @@ interface Partnership {
 
 const STATUS_OPTIONS = ['ALL', 'PENDING', 'ACTIVE', 'SUSPENDED', 'CANCELLED', 'EXPIRED'];
 const PLAN_OPTIONS = [
-  { value: 'professional', label: 'Professional', price: 99, duration: 12 },
-  { value: 'enterprise', label: 'Enterprise', price: 388, duration: 12 }
+  { value: 'professional', label: 'Professional (Merchant)', price: 99, duration: 12, billingCycle: 'year' },
+  { value: 'panel', label: 'Panel (Premium Merchant)', price: 350, duration: 1, billingCycle: 'month' }
 ];
 
 export default function PremiumPartners() {
@@ -161,6 +161,7 @@ export default function PremiumPartners() {
         updates.subscription_status = 'ACTIVE';
         updates.subscription_plan = selectedPlan;
         updates.yearly_fee = selectedPlanData?.price || 99;
+        updates.billing_cycle = selectedPlanData?.billingCycle || 'year';
         updates.subscription_start_date = startDate.toISOString();
         updates.subscription_end_date = endDate.toISOString();
         updates.next_billing_date = endDate.toISOString();
@@ -176,6 +177,22 @@ export default function PremiumPartners() {
         .eq('id', selectedPartnership.id);
 
       if (error) throw error;
+
+      // CRITICAL: Update customer profile to set customer_type = 'merchant' on approval
+      if (reviewAction === 'approve') {
+        const { error: profileError } = await supabase
+          .from('customer_profiles')
+          .update({
+            customer_type: 'merchant',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', selectedPartnership.merchant_id);
+
+        if (profileError) {
+          console.error('Error updating customer profile:', profileError);
+          // Don't fail the whole operation, but log it
+        }
+      }
 
       toast({
         title: reviewAction === 'approve' ? 'Partnership Approved' : 'Partnership Rejected',
@@ -312,7 +329,7 @@ export default function PremiumPartners() {
     setExtensionMonths('12'); // Default to 1 year
     setExtensionNotes('');
     setSelectedPlan(partnership.subscription_plan || 'professional');
-    const planPrice = partnership.subscription_plan?.toLowerCase() === 'enterprise' ? 388 : 99;
+    const planPrice = partnership.subscription_plan?.toLowerCase() === 'panel' ? 350 : 99;
     setPaymentAmount(planPrice.toString());
     setPaymentMethod('');
     setPaymentReference('');
@@ -336,7 +353,7 @@ export default function PremiumPartners() {
       newEndDate.setMonth(newEndDate.getMonth() + months);
 
       // Get plan price
-      const planPrice = selectedPlan?.toLowerCase() === 'enterprise' ? 388 : 99;
+      const planPrice = selectedPlan?.toLowerCase() === 'panel' ? 350 : 99;
 
       // Update partnership
       const { error: updateError } = await supabase
@@ -433,10 +450,10 @@ export default function PremiumPartners() {
 
   const getPlanBadge = (plan: string) => {
     switch (plan?.toLowerCase()) {
-      case 'enterprise':
+      case 'panel':
         return <Badge className="bg-purple-100 text-purple-800">
           <Crown className="h-3 w-3 mr-1" />
-          Enterprise
+          Panel
         </Badge>;
       case 'professional':
       default:
@@ -452,7 +469,7 @@ export default function PremiumPartners() {
     pending: partnerships.filter(p => p.subscription_status === 'PENDING' || !p.admin_approved).length,
     active: partnerships.filter(p => p.subscription_status === 'ACTIVE' && p.admin_approved).length,
     revenue: partnerships.filter(p => p.subscription_status === 'ACTIVE').reduce((sum, p) => {
-      const planPrice = p.subscription_plan?.toLowerCase() === 'enterprise' ? 388 : 99;
+      const planPrice = p.subscription_plan?.toLowerCase() === 'panel' ? 350 : 99;
       return sum + planPrice;
     }, 0)
   };
@@ -623,7 +640,7 @@ export default function PremiumPartners() {
                     </TableCell>
                     <TableCell>
                       <div className="font-medium">
-                        RM {partnership.subscription_plan?.toLowerCase() === 'enterprise' ? '388' : '99'}/yr
+                        RM {partnership.subscription_plan?.toLowerCase() === 'panel' ? '350/mo' : '99/yr'}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
@@ -757,18 +774,22 @@ export default function PremiumPartners() {
 
                 {/* Plan Features Preview */}
                 <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
-                  <h4 className="font-semibold">{selectedPlan === 'enterprise' ? 'Enterprise' : 'Professional'} Plan Features:</h4>
+                  <h4 className="font-semibold">{selectedPlan === 'panel' ? 'Panel (Premium Merchant)' : 'Professional (Merchant)'} Plan Features:</h4>
                   <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                     <li>Shop listing on Find Shops page</li>
                     <li>Basic analytics dashboard</li>
                     <li>B2B wholesale pricing access</li>
                     <li>RM50 Welcome Voucher (min spend RM100)</li>
-                    {selectedPlan === 'enterprise' && (
-                      <li className="text-purple-600 font-medium">Installation Guides Library Access</li>
+                    <li>2nd Hand Marketplace access for selling used parts</li>
+                    {selectedPlan === 'panel' && (
+                      <>
+                        <li className="text-purple-600 font-medium">Installation Guides Library Access</li>
+                        <li className="text-purple-600 font-medium">Priority support and dedicated slot</li>
+                      </>
                     )}
                   </ul>
                   <div className="pt-2 border-t mt-2">
-                    <span className="font-semibold">Total: RM {selectedPlan === 'enterprise' ? '388' : '99'}/year</span>
+                    <span className="font-semibold">Total: RM {selectedPlan === 'panel' ? '350/month' : '99/year'}</span>
                   </div>
                 </div>
 
@@ -863,7 +884,7 @@ export default function PremiumPartners() {
                   <label className="text-sm font-medium mb-1 block">Subscription Plan</label>
                   <Select value={selectedPlan} onValueChange={(val) => {
                     setSelectedPlan(val);
-                    setPaymentAmount(val === 'enterprise' ? '388' : '99');
+                    setPaymentAmount(val === 'panel' ? '350' : '99');
                   }}>
                     <SelectTrigger>
                       <SelectValue />
@@ -900,7 +921,7 @@ export default function PremiumPartners() {
                     step="0.01"
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(e.target.value)}
-                    placeholder={selectedPlan === 'enterprise' ? '388' : '99'}
+                    placeholder={selectedPlan === 'panel' ? '350' : '99'}
                   />
                 </div>
 
@@ -944,7 +965,7 @@ export default function PremiumPartners() {
             {/* Preview */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
               <p className="text-sm text-blue-900">
-                <strong>Plan:</strong> {selectedPlan === 'enterprise' ? 'Enterprise' : 'Professional'} - RM {selectedPlan === 'enterprise' ? '388' : '99'}/year
+                <strong>Plan:</strong> {selectedPlan === 'panel' ? 'Panel (Premium Merchant)' : 'Professional (Merchant)'} - RM {selectedPlan === 'panel' ? '350/month' : '99/year'}
               </p>
               <p className="text-sm text-blue-900">
                 <strong>New Expiration Date:</strong>{' '}

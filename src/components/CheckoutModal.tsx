@@ -65,34 +65,25 @@ interface CheckoutModalProps {
 
 const deliveryMethods: DeliveryMethod[] = [
   {
-    id: 'local-driver',
-    name: 'Local Driver',
-    description: 'Professional delivery within Selangor/KL area',
+    id: 'self-pickup',
+    name: 'Self Pickup',
+    description: 'Collect within 1 day from our store location',
     price: 0,
-    icon: Truck,
-    areas: 'Selangor/KL Area'
+    icon: MapPin,
   },
   {
-    id: 'overstate-driver',
-    name: 'OverState Driver',
-    description: 'Delivery to other states in Malaysia',
-    price: 15,
-    icon: Car,
-    areas: 'Other States'
+    id: 'jnt-express',
+    name: 'J&T Express',
+    description: 'Standard delivery - Estimated 5 days delivery time',
+    price: 0,
+    icon: Truck,
   },
   {
     id: 'lalamove',
     name: 'Lalamove',
-    description: 'Fast same-day delivery service',
+    description: 'Urgent delivery - Collect within 1-2 days (Extra RM10 charge)',
     price: 10,
     icon: Package,
-  },
-  {
-    id: 'self-pickup',
-    name: 'Self Pickup',
-    description: 'Collect from our store location',
-    price: 0,
-    icon: MapPin,
   }
 ];
 
@@ -136,7 +127,7 @@ const paymentMethods: PaymentMethod[] = [
 ];
 
 const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: CheckoutModalProps) => {
-  const [selectedDelivery, setSelectedDelivery] = useState('local-driver');
+  const [selectedDelivery, setSelectedDelivery] = useState('self-pickup');
   const [selectedPayment, setSelectedPayment] = useState('fpx');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [customerProfile, setCustomerProfile] = useState<any>(null);
@@ -378,13 +369,13 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         } : null,
         delivery_fee: deliveryFee,
         payment_method: selectedPayment,
-        payment_state: 'UNPAID', // Will be updated after payment gateway
+        payment_state: 'PENDING', // Will be updated to SUCCESS after payment gateway verification
         subtotal: subtotal,
         tax: tax,
         discount: 0,
         shipping_fee: deliveryFee,
         total: total,
-        status: 'PENDING_PAYMENT',
+        status: 'PROCESSING', // Automated order flow - will auto-approve when payment succeeds
         voucher_id: appliedVoucherId,
         voucher_code: voucherCode || null,
         voucher_discount: voucherDiscount
@@ -442,13 +433,11 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         description: `Your order ${orderNumber} has been created. Please complete payment to confirm your order.`
       });
 
-      // Clear cart items and close modal
-      if (onOrderSuccess) {
-        onOrderSuccess(orderId); // Pass order ID to callback
-      }
+      // Close modal (but DON'T clear cart yet - only clear after successful payment)
       onClose();
 
-      // Redirect to payment gateway
+      // Redirect to payment gateway with order data
+      // Cart will be cleared via localStorage flag when payment succeeds
       navigate('/payment-gateway', {
         state: {
           orderData: {

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/hooks/useCartDB';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,9 +18,23 @@ interface CartDrawerProps {
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const { cartItems, updateQuantity, removeFromCart, getTotalPrice, getTotalItems, clearCart } = useCart();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const navigate = useNavigate();
+
+  // Handle cart clearing after successful payment
+  useEffect(() => {
+    const shouldClearCart = localStorage.getItem('clearCartAfterPayment');
+    if (shouldClearCart === 'true') {
+      clearCart();
+      localStorage.removeItem('clearCartAfterPayment');
+      toast({
+        title: "Payment Successful!",
+        description: "Your order has been placed. Your cart has been cleared.",
+      });
+    }
+  }, [clearCart, toast]);
 
   // Select all items by default when cart opens
   useEffect(() => {

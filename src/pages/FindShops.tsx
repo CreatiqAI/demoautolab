@@ -107,7 +107,17 @@ export default function FindShops() {
   const fetchShops = async () => {
     try {
       setLoading(true);
-      const { data, error } = await (supabase.rpc as any)('get_active_partnerships');
+      // CRITICAL CHANGE: Only show Panel tier shops (not Professional tier)
+      // Panel tier is RM350/month, invitation-only, top 100 authorized shops
+      const { data, error } = await supabase
+        .from('premium_partnerships' as any)
+        .select('*')
+        .eq('subscription_plan', 'panel') // ONLY Panel tier
+        .eq('subscription_status', 'ACTIVE')
+        .eq('admin_approved', true)
+        .gt('subscription_end_date', new Date().toISOString()) // Only active, non-expired subscriptions
+        .order('is_featured', { ascending: false })
+        .order('total_views', { ascending: false });
 
       if (error) throw error;
 
@@ -116,7 +126,7 @@ export default function FindShops() {
       console.error('Error fetching shops:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load authorized shops',
+        description: 'Failed to load authorized Panel shops',
         variant: 'destructive'
       });
     } finally {
@@ -168,8 +178,11 @@ export default function FindShops() {
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
         {/* Page Header */}
         <div className="mb-6 border-b border-gray-200 pb-4">
-          <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic mb-2">Find Shops</h1>
-          <p className="text-sm text-gray-500 uppercase tracking-wider font-medium">Discover Auto Lab authorized resellers near you.</p>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic">Find Authorized Shops</h1>
+            <Badge className="bg-purple-600 text-white text-[10px] uppercase font-bold">Panel Members Only</Badge>
+          </div>
+          <p className="text-sm text-gray-500 uppercase tracking-wider font-medium">Our top 100 authorized Panel shops across Malaysia - invitation only</p>
         </div>
 
         {/* Search & Filters */}

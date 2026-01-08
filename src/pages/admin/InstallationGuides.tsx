@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import ImageUpload from '@/components/ui/image-upload';
 import {
   Edit,
   Trash2,
@@ -16,7 +17,10 @@ import {
   Save,
   Eye,
   EyeOff,
-  Video
+  Video,
+  Clock,
+  Users,
+  DollarSign
 } from 'lucide-react';
 
 interface InstallationGuide {
@@ -29,21 +33,15 @@ interface InstallationGuide {
   car_model: string;
   video_url: string;
   thumbnail_url: string;
+  recommended_time: string; // e.g., "30-45 minutes"
+  workman_power: number; // Number of workers needed
+  installation_price: number; // Price in RM
   is_published: boolean;
   created_at: string;
 }
 
-const CATEGORIES = [
-  'Head Unit',
-  'Camera',
-  'Dashcam',
-  'Audio',
-  'Sensors',
-  'Lighting',
-  'Security',
-  'Performance',
-  'Other'
-];
+// Existing categories will be fetched from database
+// Users can also create new categories on the fly
 
 const DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard'];
 
@@ -55,23 +53,30 @@ const CAR_BRANDS = [
 export default function InstallationGuides() {
   const { toast } = useToast();
   const [guides, setGuides] = useState<InstallationGuide[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingGuide, setEditingGuide] = useState<InstallationGuide | null>(null);
+  const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [formData, setFormData] = useState<Partial<InstallationGuide>>({
     title: '',
     description: '',
-    category: 'Head Unit',
+    category: '',
     difficulty_level: 'Medium',
     car_brand: '',
     car_model: '',
     video_url: '',
     thumbnail_url: '',
+    recommended_time: '',
+    workman_power: 1,
+    installation_price: 0,
     is_published: false
   });
 
   useEffect(() => {
     fetchGuides();
+    fetchCategories();
   }, []);
 
   const fetchGuides = async () => {
@@ -79,7 +84,7 @@ export default function InstallationGuides() {
       setLoading(true);
       const { data, error } = await supabase
         .from('installation_guides')
-        .select('id, title, description, category, difficulty_level, car_brand, car_model, video_url, thumbnail_url, is_published, created_at')
+        .select('id, title, description, category, difficulty_level, car_brand, car_model, video_url, thumbnail_url, recommended_time, workman_power, installation_price, is_published, created_at')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -96,17 +101,40 @@ export default function InstallationGuides() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      // Get unique categories from existing guides
+      const { data, error } = await supabase
+        .from('installation_guides')
+        .select('category')
+        .not('category', 'is', null);
+
+      if (error) throw error;
+
+      // Extract unique categories
+      const uniqueCategories = [...new Set((data || []).map(item => item.category))].sort();
+      setCategories(uniqueCategories);
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
   const handleCreate = () => {
     setEditingGuide(null);
+    setIsCreatingNewCategory(false);
+    setNewCategoryName('');
     setFormData({
       title: '',
       description: '',
-      category: 'Head Unit',
+      category: '',
       difficulty_level: 'Medium',
       car_brand: '',
       car_model: '',
       video_url: '',
       thumbnail_url: '',
+      recommended_time: '',
+      workman_power: 1,
+      installation_price: 0,
       is_published: false
     });
     setIsEditModalOpen(true);
@@ -114,6 +142,8 @@ export default function InstallationGuides() {
 
   const handleEdit = (guide: InstallationGuide) => {
     setEditingGuide(guide);
+    setIsCreatingNewCategory(false);
+    setNewCategoryName('');
     setFormData(guide);
     setIsEditModalOpen(true);
   };
@@ -129,15 +159,32 @@ export default function InstallationGuides() {
         return;
       }
 
+      // Use new category name if creating new, otherwise use selected category
+      const categoryToSave = isCreatingNewCategory
+        ? newCategoryName.trim()
+        : formData.category;
+
+      if (!categoryToSave) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please select a category or create a new one',
+          variant: 'destructive'
+        });
+        return;
+      }
+
       const guideData = {
         title: formData.title,
         description: formData.description || '',
-        category: formData.category || 'Other',
+        category: categoryToSave,
         difficulty_level: formData.difficulty_level || 'Medium',
         car_brand: formData.car_brand || '',
         car_model: formData.car_model || '',
         video_url: formData.video_url,
         thumbnail_url: formData.thumbnail_url || '',
+        recommended_time: formData.recommended_time || '',
+        workman_power: formData.workman_power || 1,
+        installation_price: formData.installation_price || 0,
         is_published: formData.is_published || false
       };
 
@@ -168,6 +215,7 @@ export default function InstallationGuides() {
 
       setIsEditModalOpen(false);
       fetchGuides();
+      fetchCategories(); // Refresh categories list
     } catch (error: any) {
       console.error('Error saving guide:', error);
       toast({
@@ -399,20 +447,46 @@ export default function InstallationGuides() {
             {/* Category & Difficulty */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium mb-1 block">Category</label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(value) => setFormData({ ...formData, category: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map(cat => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium">Category</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingNewCategory(!isCreatingNewCategory);
+                      if (!isCreatingNewCategory) {
+                        setFormData({ ...formData, category: '' });
+                      }
+                    }}
+                    className="text-xs text-lime-600 hover:text-lime-700 font-medium"
+                  >
+                    {isCreatingNewCategory ? 'Select Existing' : '+ Create New'}
+                  </button>
+                </div>
+                {isCreatingNewCategory ? (
+                  <Input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Enter new category name"
+                  />
+                ) : (
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) => setFormData({ ...formData, category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.length > 0 ? (
+                        categories.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="General" disabled>No categories yet</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Difficulty</label>
@@ -460,9 +534,54 @@ export default function InstallationGuides() {
               </div>
             </div>
 
+            {/* Installation Details */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-1 flex items-center gap-1 block">
+                  <Clock className="h-4 w-4" />
+                  Recommended Time
+                </label>
+                <Input
+                  value={formData.recommended_time}
+                  onChange={(e) => setFormData({ ...formData, recommended_time: e.target.value })}
+                  placeholder="e.g., 30-45 minutes"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 flex items-center gap-1 block">
+                  <Users className="h-4 w-4" />
+                  Workman Power
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={formData.workman_power}
+                  onChange={(e) => setFormData({ ...formData, workman_power: parseInt(e.target.value) || 1 })}
+                  placeholder="Number of workers"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 flex items-center gap-1 block">
+                  <DollarSign className="h-4 w-4" />
+                  Installation Price (RM)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.installation_price}
+                  onChange={(e) => setFormData({ ...formData, installation_price: parseFloat(e.target.value) || 0 })}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
             {/* Video URL */}
             <div>
-              <label className="text-sm font-medium mb-1 block">Video URL *</label>
+              <label className="text-sm font-medium mb-1 flex items-center gap-1 block">
+                <Video className="h-4 w-4" />
+                Installation Video Guide URL *
+              </label>
               <Input
                 value={formData.video_url}
                 onChange={(e) => setFormData({ ...formData, video_url: e.target.value })}
@@ -470,21 +589,14 @@ export default function InstallationGuides() {
               />
             </div>
 
-            {/* Thumbnail URL */}
+            {/* Thumbnail Image */}
             <div>
-              <label className="text-sm font-medium mb-1 block">Thumbnail Image URL</label>
-              <Input
+              <label className="text-sm font-medium mb-1 block">Thumbnail Image</label>
+              <ImageUpload
                 value={formData.thumbnail_url}
-                onChange={(e) => setFormData({ ...formData, thumbnail_url: e.target.value })}
-                placeholder="https://images.unsplash.com/..."
+                onChange={(url) => setFormData({ ...formData, thumbnail_url: url })}
+                placeholder="Upload thumbnail or paste image URL..."
               />
-              {formData.thumbnail_url && (
-                <img
-                  src={formData.thumbnail_url}
-                  alt="Preview"
-                  className="mt-2 w-40 h-24 object-cover rounded border"
-                />
-              )}
             </div>
 
             {/* Published Status */}

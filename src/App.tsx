@@ -29,6 +29,7 @@ import ShopDetails from './pages/ShopDetails';
 import CreateAdmin from './pages/CreateAdmin';
 import CreateFirstAdmin from './pages/CreateFirstAdmin';
 import DirectAdminSetup from './pages/DirectAdminSetup';
+import UserSettings from './pages/Settings';
 
 // Admin Components
 import AdminLayout from './components/admin/AdminLayout';
@@ -43,7 +44,6 @@ import ArchivedOrders from './pages/admin/ArchivedOrders';
 import Customers from './pages/admin/Customers';
 import Settings from './pages/admin/Settings';
 import UserManagement from './pages/admin/UserManagement';
-import OrderVerification from './pages/admin/OrderVerification';
 import WarehouseOperations from './pages/admin/WarehouseOperations';
 import KnowledgeBase from './pages/admin/KnowledgeBase';
 import InventoryAlerts from './pages/admin/InventoryAlerts';
@@ -54,6 +54,15 @@ import DebugShops from './pages/admin/DebugShops';
 import PremiumPartners from './pages/admin/PremiumPartners';
 import CustomerTiers from './pages/admin/CustomerTiers';
 import InstallationGuides from './pages/admin/InstallationGuides';
+import SecondhandModeration from './pages/admin/SecondhandModeration';
+import Analytics from './pages/admin/Analytics';
+
+// New Phase 2 Pages
+import SecondhandMarketplace from './pages/SecondhandMarketplace';
+import My2ndHandListings from './pages/My2ndHandListings';
+import NotificationSettings from './pages/NotificationSettings';
+import MyPoints from './pages/MyPoints';
+import PointsRewards from './pages/admin/PointsRewards';
 
 const queryClient = new QueryClient();
 
@@ -78,16 +87,24 @@ const App = () => (
                   <Route path="/my-orders" element={<MyOrders />} />
                   <Route path="/my-vouchers" element={<MyVouchers />} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/settings" element={<UserSettings />} />
                   <Route path="/payment-gateway" element={<PaymentGateway />} />
                   <Route path="/admin-register" element={<AdminRegister />} />
                   <Route path="/merchant-register" element={<MerchantRegister />} />
                   <Route path="/premium-partner" element={<PremiumPartner />} />
                   <Route path="/merchant/dashboard" element={<MerchantConsole />} />
+                  <Route path="/merchant-console" element={<MerchantConsole />} />
                   <Route path="/find-shops" element={<FindShops />} />
                   <Route path="/shop/:shopId" element={<ShopDetails />} />
                   <Route path="/create-admin" element={<CreateAdmin />} />
                   <Route path="/create-first-admin" element={<CreateFirstAdmin />} />
                   <Route path="/direct-admin-setup" element={<DirectAdminSetup />} />
+
+                  {/* Phase 2 - New Routes */}
+                  <Route path="/secondhand-marketplace" element={<SecondhandMarketplace />} />
+                  <Route path="/my-2ndhand-listings" element={<My2ndHandListings />} />
+                  <Route path="/notification-settings" element={<NotificationSettings />} />
+                  <Route path="/my-points" element={<MyPoints />} />
 
                   {/* Admin Routes */}
                   <Route path="/admin/*" element={
@@ -96,13 +113,13 @@ const App = () => (
                     </ProtectedAdminRoute>
                   }>
                     <Route index element={<Dashboard />} />
+                    <Route path="analytics" element={<Analytics />} />
                     <Route path="products" element={<Products />} />
                     <Route path="products-advanced" element={<ProductsAdvanced />} />
                     <Route path="products-enhanced" element={<ProductsPro />} />
                     <Route path="component-library" element={<ComponentLibraryPro />} />
                     <Route path="orders" element={<Orders />} />
                     <Route path="archived-orders" element={<ArchivedOrders />} />
-                    <Route path="order-verification" element={<OrderVerification />} />
                     <Route path="warehouse-operations" element={<WarehouseOperations />} />
                     <Route path="inventory-alerts" element={<InventoryAlerts />} />
                     <Route path="customers" element={<Customers />} />
@@ -113,6 +130,8 @@ const App = () => (
                     <Route path="premium-partners" element={<PremiumPartners />} />
                     <Route path="customer-tiers" element={<CustomerTiers />} />
                     <Route path="installation-guides" element={<InstallationGuides />} />
+                    <Route path="points-rewards" element={<PointsRewards />} />
+                    <Route path="secondhand-moderation" element={<SecondhandModeration />} />
                     <Route path="knowledge-base" element={<KnowledgeBase />} />
                     <Route path="users" element={<UserManagement />} />
                     <Route path="settings" element={<Settings />} />

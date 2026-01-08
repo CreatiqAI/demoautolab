@@ -24,6 +24,8 @@ export default function Products() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -42,7 +44,6 @@ export default function Products() {
     dimensions_cm: '',
     year_from: null as number | null,
     year_to: null as number | null,
-    keywords: [] as string[],
     reorder_level: 0
   });
 
@@ -95,14 +96,37 @@ export default function Products() {
     setLoading(true);
 
     try {
+      let categoryIdToUse = formData.category_id;
+
+      // If creating a new category, insert it first
+      if (isCreatingNewCategory && newCategoryName.trim()) {
+        const { data: newCategory, error: categoryError } = await supabase
+          .from('categories' as any)
+          .insert([{
+            name: newCategoryName.trim(),
+            slug: newCategoryName.trim().toLowerCase().replace(/\s+/g, '-'),
+            active: true
+          }])
+          .select()
+          .single();
+
+        if (categoryError) throw categoryError;
+        categoryIdToUse = newCategory.id;
+      }
+
+      const productData = {
+        ...formData,
+        category_id: categoryIdToUse || null
+      };
+
       if (editingProduct) {
         const { error } = await supabase
           .from('products')
-          .update(formData)
+          .update(productData)
           .eq('id', editingProduct.id);
 
         if (error) throw error;
-        
+
         toast({
           title: "Success",
           description: "Product updated successfully"
@@ -110,10 +134,10 @@ export default function Products() {
       } else {
         const { error } = await supabase
           .from('products')
-          .insert([formData]);
+          .insert([productData]);
 
         if (error) throw error;
-        
+
         toast({
           title: "Success",
           description: "Product created successfully"
@@ -123,6 +147,7 @@ export default function Products() {
       setIsDialogOpen(false);
       resetForm();
       fetchProducts();
+      fetchCategories(); // Refresh categories list
     } catch (error: any) {
       console.error('Error saving product:', error);
       toast({
@@ -137,6 +162,8 @@ export default function Products() {
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    setIsCreatingNewCategory(false);
+    setNewCategoryName('');
     setFormData({
       name: product.name,
       description: product.description || '',
@@ -153,7 +180,6 @@ export default function Products() {
       dimensions_cm: product.dimensions_cm || '',
       year_from: product.year_from,
       year_to: product.year_to,
-      keywords: product.keywords || [],
       reorder_level: product.reorder_level || 0
     });
     setIsDialogOpen(true);
@@ -206,10 +232,11 @@ export default function Products() {
       dimensions_cm: '',
       year_from: null,
       year_to: null,
-      keywords: [],
       reorder_level: 0
     });
     setEditingProduct(null);
+    setIsCreatingNewCategory(false);
+    setNewCategoryName('');
   };
 
   const filteredProducts = products.filter(product =>
@@ -356,22 +383,48 @@ export default function Products() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category_id">Category</Label>
-                <Select
-                  value={formData.category_id}
-                  onValueChange={(value) => setFormData({...formData, category_id: value})}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="category_id">Category</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingNewCategory(!isCreatingNewCategory);
+                      if (!isCreatingNewCategory) {
+                        setFormData({ ...formData, category_id: '' });
+                      }
+                    }}
+                    className="text-xs text-lime-600 hover:text-lime-700 font-medium"
+                  >
+                    {isCreatingNewCategory ? 'Select Existing' : '+ Create New'}
+                  </button>
+                </div>
+                {isCreatingNewCategory ? (
+                  <Input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Enter new category name"
+                  />
+                ) : (
+                  <Select
+                    value={formData.category_id}
+                    onValueChange={(value) => setFormData({...formData, category_id: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.length > 0 ? (
+                        categories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="none" disabled>No categories yet</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="space-y-2">

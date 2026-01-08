@@ -23,28 +23,95 @@ import {
   Crown,
   Star,
   Award,
-  Video
+  Video,
+  ShoppingCart,
+  TrendingUp,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const navigation = [
+interface NavigationItem {
+  name: string;
+  href: string;
+  icon: any;
+  exact?: boolean;
+}
+
+interface NavigationGroup {
+  name: string;
+  icon: any;
+  items: NavigationItem[];
+}
+
+type NavigationElement = NavigationItem | NavigationGroup;
+
+function isGroup(item: NavigationElement): item is NavigationGroup {
+  return 'items' in item;
+}
+
+const navigation: NavigationElement[] = [
+  // Standalone items
   { name: 'Dashboard', href: '/admin', icon: BarChart3, exact: true },
-  { name: 'Products', href: '/admin/products-enhanced', icon: Package },
-  { name: 'Component Library', href: '/admin/component-library', icon: Layers },
-  { name: 'Inventory Alerts', href: '/admin/inventory-alerts', icon: Bell },
-  { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
-  { name: 'Order Verification', href: '/admin/order-verification', icon: CheckCircle },
-  { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
-  { name: 'Archived Orders', href: '/admin/archived-orders', icon: Archive },
-  { name: 'Customers', href: '/admin/customers', icon: Users },
-  { name: 'Customer Tiers', href: '/admin/customer-tiers', icon: Award },
-  { name: 'Review Moderation', href: '/admin/review-moderation', icon: Star },
-  { name: 'Vouchers', href: '/admin/vouchers', icon: Tag },
-  { name: 'Premium Partners', href: '/admin/premium-partners', icon: Crown },
-  { name: 'Installation Guides', href: '/admin/installation-guides', icon: Video },
-  { name: 'Staff Management', href: '/admin/users', icon: UserCog },
-  { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
-  { name: 'Settings', href: '/admin/settings', icon: Settings },
+  { name: 'Analytics', href: '/admin/analytics', icon: TrendingUp },
+
+  // Orders group
+  {
+    name: 'Orders',
+    icon: ShoppingBag,
+    items: [
+      { name: 'All Orders', href: '/admin/orders', icon: ShoppingBag },
+      { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
+      { name: 'Archived Orders', href: '/admin/archived-orders', icon: Archive },
+    ]
+  },
+
+  // Products group
+  {
+    name: 'Products',
+    icon: Package,
+    items: [
+      { name: 'Products', href: '/admin/products-enhanced', icon: Package },
+      { name: 'Component Library', href: '/admin/component-library', icon: Layers },
+      { name: 'Installation Guides', href: '/admin/installation-guides', icon: Video },
+      { name: 'Review Moderation', href: '/admin/review-moderation', icon: Star },
+      { name: 'Inventory Alerts', href: '/admin/inventory-alerts', icon: Bell },
+    ]
+  },
+
+  // Customers group
+  {
+    name: 'Customers',
+    icon: Users,
+    items: [
+      { name: 'Customers', href: '/admin/customers', icon: Users },
+      { name: 'Panel Partners', href: '/admin/premium-partners', icon: Crown },
+    ]
+  },
+
+  // Rewards & Loyalty group
+  {
+    name: 'Rewards & Loyalty',
+    icon: Award,
+    items: [
+      { name: 'Vouchers', href: '/admin/vouchers', icon: Tag },
+      { name: 'Points & Rewards', href: '/admin/points-rewards', icon: TrendingUp },
+    ]
+  },
+
+  // Secondhand Marketplace (standalone)
+  { name: 'Secondhand Marketplace', href: '/admin/secondhand-moderation', icon: ShoppingCart },
+
+  // System group
+  {
+    name: 'System',
+    icon: Settings,
+    items: [
+      { name: 'Staff Management', href: '/admin/users', icon: UserCog },
+      { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
+      { name: 'Settings', href: '/admin/settings', icon: Settings },
+    ]
+  },
 ];
 
 export default function AdminLayout() {
@@ -52,10 +119,24 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({
+    'Orders': false,
+    'Products': false,
+    'Customers': false,
+    'Rewards & Loyalty': false,
+    'System': false,
+  });
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
+  };
+
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
   };
 
   const isCurrentPath = (href: string, exact = false) => {
@@ -63,6 +144,10 @@ export default function AdminLayout() {
       return location.pathname === href;
     }
     return location.pathname.startsWith(href);
+  };
+
+  const isGroupActive = (group: NavigationGroup) => {
+    return group.items.some(item => isCurrentPath(item.href, item.exact));
   };
 
   const SidebarContent = () => (
@@ -74,27 +159,85 @@ export default function AdminLayout() {
         </Link>
       </div>
       
-      <nav className="flex-1 space-y-1 px-4 py-4">
+      <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
         {navigation.map((item) => {
-          const Icon = item.icon;
-          const isActive = isCurrentPath(item.href, item.exact);
-          
-          return (
-            <Link
-              key={item.name}
-              to={item.href}
-              className={cn(
-                'group flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              )}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
-              {item.name}
-            </Link>
-          );
+          if (isGroup(item)) {
+            // Render group with collapsible sub-items
+            const Icon = item.icon;
+            const isExpanded = expandedGroups[item.name];
+            const groupActive = isGroupActive(item);
+
+            return (
+              <div key={item.name} className="space-y-1">
+                <button
+                  onClick={() => toggleGroup(item.name)}
+                  className={cn(
+                    'group flex w-full items-center justify-between rounded-md px-2 py-2 text-sm font-medium transition-colors',
+                    groupActive
+                      ? 'bg-gray-100 text-gray-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  )}
+                >
+                  <div className="flex items-center">
+                    <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                    {item.name}
+                  </div>
+                  {isExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </button>
+
+                {isExpanded && (
+                  <div className="ml-4 space-y-1 border-l-2 border-gray-200 pl-2">
+                    {item.items.map((subItem) => {
+                      const SubIcon = subItem.icon;
+                      const isActive = isCurrentPath(subItem.href, subItem.exact);
+
+                      return (
+                        <Link
+                          key={subItem.name}
+                          to={subItem.href}
+                          className={cn(
+                            'group flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors',
+                            isActive
+                              ? 'bg-gray-100 text-gray-900'
+                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                          )}
+                          onClick={() => setSidebarOpen(false)}
+                        >
+                          <SubIcon className="mr-3 h-4 w-4 flex-shrink-0" />
+                          {subItem.name}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          } else {
+            // Render standalone item
+            const Icon = item.icon;
+            const isActive = isCurrentPath(item.href, item.exact);
+
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={cn(
+                  'group flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-gray-100 text-gray-900'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                )}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                {item.name}
+              </Link>
+            );
+          }
         })}
       </nav>
 

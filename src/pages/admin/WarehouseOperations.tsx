@@ -93,12 +93,12 @@ type OrderStatus =
   | 'COMPLETED';
 
 const STATUS_WORKFLOW: { status: OrderStatus; label: string; description: string; icon: any; color: string }[] = [
-  { status: 'PROCESSING', label: 'Processing', description: 'Order approved, ready for warehouse', icon: Clock, color: 'bg-blue-100 text-blue-800 border-blue-200' },
+  { status: 'PROCESSING', label: 'Processing', description: 'Payment approved, ready for warehouse', icon: Clock, color: 'bg-blue-100 text-blue-800 border-blue-200' },
   { status: 'PICKING', label: 'Picking', description: 'Items being picked from inventory', icon: Package, color: 'bg-orange-100 text-orange-800 border-orange-200' },
   { status: 'PACKING', label: 'Packing', description: 'Items being packed for delivery', icon: PackageCheck, color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
   { status: 'READY_FOR_DELIVERY', label: 'Ready', description: 'Ready for pickup/delivery', icon: CheckCircle, color: 'bg-green-100 text-green-800 border-green-200' },
-  { status: 'OUT_FOR_DELIVERY', label: 'Dispatched', description: 'Out for delivery', icon: Truck, color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
-  { status: 'DELIVERED', label: 'Delivered', description: 'Successfully delivered to customer', icon: CheckCircle, color: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+  { status: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', description: 'With courier, in transit', icon: Truck, color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
+  { status: 'DELIVERED', label: 'Delivered', description: 'Delivered to customer, awaiting completion', icon: CheckCircle, color: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
 ];
 
 export default function WarehouseOperations() {
@@ -146,8 +146,8 @@ export default function WarehouseOperations() {
       setLoading(true);
       console.log('🏭 Fetching warehouse orders...');
 
-      // Include WAREHOUSE_ASSIGNED for backwards compatibility (will be shown in PROCESSING tab)
-      const warehouseStatuses = ['PROCESSING', 'WAREHOUSE_ASSIGNED', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+      // Warehouse operation statuses (PROCESSING = auto-approved orders)
+      const warehouseStatuses = ['PROCESSING', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED'];
 
       // Get orders with warehouse statuses and their items
       const { data: ordersWithItems, error: ordersError } = await supabase
