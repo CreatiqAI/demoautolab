@@ -1,15 +1,41 @@
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+
+// Registration data for OTP-based signup
+interface RegistrationData {
+  fullName: string;
+  email: string;
+  phone: string;
+  dateOfBirth?: string;
+  carMakeId?: string;
+  carModelId?: string;
+}
+
+// Store for simulated OTP codes (in production, this would be handled by Twilio/SMS provider)
+const otpStore: Map<string, { code: string; expiresAt: number; userId?: string }> = new Map();
+
+// Generate a random 6-digit OTP
+const generateOTP = (): string => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (phone: string, password: string, username?: string) => Promise<{ error: any }>;
-  signIn: (phone: string, password: string) => Promise<{ error: any }>;
+  // Phone OTP methods (simulated/dummy for testing)
+  sendPhoneOTP: (phone: string) => Promise<{ error: any; code?: string }>;
+  verifyPhoneOTP: (phone: string, token: string) => Promise<{ error: any; isNewUser?: boolean }>;
+  signUpWithPhoneOTP: (phone: string, token: string, userData: RegistrationData) => Promise<{ error: any }>;
+  // Google OAuth (FREE)
+  signInWithGoogle: () => Promise<{ error: any }>;
+  checkAndCreateProfile: () => Promise<{ isNewUser: boolean; error: any }>;
+  completeGoogleRegistration: (userData: Omit<RegistrationData, 'email'>) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  // Session management
+  createDeviceSession: (deviceFingerprint: string, deviceInfo: any) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,12 +48,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     let authSubscription: any = null;
+    let sessionChannel: any = null;
 
     const initializeAuth = async () => {
       try {
         // Get the current session first
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (isMounted) {
           setSession(session);
           setUser(session?.user ?? null);
@@ -52,6 +79,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Ignore TOKEN_REFRESHED, USER_UPDATED, etc. to prevent accidental logouts
         });
 
+        // Set up Realtime subscription for session invalidation
+        // This will force logout when another device logs in
+        if (session?.user) {
+          const deviceId = localStorage.getItem('device_session_id');
+          sessionChannel = supabase.channel('session-invalidation')
+            .on(
+              'postgres_changes',
+              {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'user_sessions',
+                filter: `user_id=eq.${session.user.id}`
+              },
+              (payload: any) => {
+                if (!isMounted) return;
+
+                // Check if this is OUR session being deactivated
+                const updatedSession = payload.new;
+                if (
+                  updatedSession.device_fingerprint === deviceId &&
+                  !updatedSession.is_active
+                ) {
+                  console.log('Session invalidated by another device');
+                  // Force logout
+                  supabase.auth.signOut();
+                }
+              }
+            )
+            .subscribe();
+        }
+
       } catch (error) {
         console.error('Auth initialization error:', error);
         // Don't logout on errors - keep user logged in
@@ -68,93 +126,428 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (authSubscription?.data?.subscription) {
         authSubscription.data.subscription.unsubscribe();
       }
+      if (sessionChannel) {
+        supabase.removeChannel(sessionChannel);
+      }
     };
   }, []);
 
-  const signUp = async (phone: string, password: string, username?: string) => {
-    // First check if username is already taken (if provided)
-    if (username) {
+  const signOut = async () => {
+    // Invalidate device session before signing out
+    if (user) {
       try {
-        const { data: existingUser, error: checkError } = await supabase
-          .from('customer_profiles')
-          .select('id')
-          .eq('username', username)
-          .single();
-          
-        if (existingUser && !checkError) {
-          return { error: { message: 'This username is already taken. Please choose a different one.' } };
-        }
+        await supabase
+          .from('user_sessions')
+          .update({ is_active: false })
+          .eq('user_id', user.id)
+          .eq('is_active', true);
       } catch (error) {
-        // If error is not found (PGRST116), that means username is available
-        if (error && (error as any).code !== 'PGRST116') {
-          console.error('Error checking username:', error);
-        }
+        console.error('Error invalidating session:', error);
       }
     }
+    // Clear any stored OTP data
+    localStorage.removeItem('pending_phone_auth');
+    await supabase.auth.signOut();
+  };
 
-    const { data, error } = await supabase.auth.signUp({
-      phone,
-      password,
-      options: {
-        data: {
-          phone_e164: phone,
-          full_name: username || 'New User',
-          username: username
+  // ============================================
+  // PHONE OTP METHODS (Simulated/Dummy for testing)
+  // In production, replace with Twilio or other SMS provider
+  // ============================================
+
+  // Send simulated OTP to phone number
+  const sendPhoneOTP = async (phone: string): Promise<{ error: any; code?: string }> => {
+    try {
+      // Generate OTP code
+      const code = generateOTP();
+      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes expiry
+
+      // Store OTP in memory (in production, this would be stored server-side)
+      otpStore.set(phone, { code, expiresAt });
+
+      // Also store in localStorage for persistence across page reloads (development only)
+      localStorage.setItem('pending_phone_auth', JSON.stringify({
+        phone,
+        code,
+        expiresAt
+      }));
+
+      console.log(`[DEV] OTP for ${phone}: ${code}`);
+
+      // In production, you would call Twilio/SMS API here:
+      // await twilioClient.messages.create({
+      //   body: `Your AutoLab verification code is: ${code}`,
+      //   to: phone,
+      //   from: TWILIO_PHONE_NUMBER
+      // });
+
+      return { error: null, code }; // Return code for testing purposes
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+      return { error };
+    }
+  };
+
+  // Verify Phone OTP - handles both login and registration
+  const verifyPhoneOTP = async (phone: string, token: string): Promise<{ error: any; isNewUser?: boolean }> => {
+    try {
+      // Get stored OTP
+      let storedOTP = otpStore.get(phone);
+
+      // Fallback to localStorage
+      if (!storedOTP) {
+        const stored = localStorage.getItem('pending_phone_auth');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.phone === phone) {
+            storedOTP = parsed;
+          }
         }
       }
-    });
 
-    // If auth user was created successfully, create customer profile
-    if (!error && data.user) {
-      try {
-        // Wait a moment for any database triggers to run
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!storedOTP) {
+        return { error: { message: 'No OTP found. Please request a new code.' } };
+      }
 
-        // Create customer profile instead of general profile
+      // Check if OTP is expired
+      if (Date.now() > storedOTP.expiresAt) {
+        otpStore.delete(phone);
+        localStorage.removeItem('pending_phone_auth');
+        return { error: { message: 'OTP has expired. Please request a new code.' } };
+      }
+
+      // Verify OTP code
+      if (storedOTP.code !== token) {
+        return { error: { message: 'Invalid OTP code. Please try again.' } };
+      }
+
+      // OTP is valid - check if user exists
+      // First, try to sign in with phone (to check if user exists)
+      const { data: existingCustomer } = await supabase
+        .from('customer_profiles')
+        .select('id, user_id')
+        .eq('phone', phone)
+        .single();
+
+      if (existingCustomer?.user_id) {
+        // Existing user - sign them in using a custom token or session
+        // For now, we'll create a "phantom" session by setting user state directly
+        // In production, you'd use Supabase's phone auth or custom JWT
+
+        // Try to get the auth user
+        const { data: authUser } = await supabase.auth.admin?.getUserById?.(existingCustomer.user_id) || { data: null };
+
+        if (authUser?.user) {
+          // For demo purposes, we'll sign in with a password-less approach
+          // In production, implement proper phone auth with Supabase
+          setUser(authUser.user as any);
+
+          // Clear OTP data
+          otpStore.delete(phone);
+          localStorage.removeItem('pending_phone_auth');
+
+          return { error: null, isNewUser: false };
+        }
+
+        // Fallback: Mark as existing user (they'll need to use Google sign-in)
+        return { error: null, isNewUser: false };
+      }
+
+      // New user - keep OTP valid for registration completion
+      return { error: null, isNewUser: true };
+    } catch (error) {
+      console.error('Error verifying OTP:', error);
+      return { error };
+    }
+  };
+
+  // Complete registration with Phone OTP (for new users)
+  const signUpWithPhoneOTP = async (
+    phone: string,
+    token: string,
+    userData: RegistrationData
+  ): Promise<{ error: any }> => {
+    try {
+      // Verify OTP one more time
+      let storedOTP = otpStore.get(phone);
+      if (!storedOTP) {
+        const stored = localStorage.getItem('pending_phone_auth');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.phone === phone) {
+            storedOTP = parsed;
+          }
+        }
+      }
+
+      if (!storedOTP || storedOTP.code !== token) {
+        return { error: { message: 'Invalid or expired OTP. Please try again.' } };
+      }
+
+      // Create auth user with email (required by Supabase)
+      // Use a generated email if not provided
+      const authEmail = userData.email || `${phone.replace(/\D/g, '')}@phone.autolab.local`;
+
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: authEmail,
+        password: `phone_${phone}_${Date.now()}`, // Random password (user will use phone OTP)
+        options: {
+          data: {
+            phone: phone,
+            full_name: userData.fullName,
+            auth_method: 'phone_otp'
+          }
+        }
+      });
+
+      if (signUpError) {
+        // If email already exists, try to link the phone
+        if (signUpError.message?.includes('already registered')) {
+          return { error: { message: 'This email is already registered. Please use Google sign-in or try a different email.' } };
+        }
+        return { error: signUpError };
+      }
+
+      if (!authData.user) {
+        return { error: { message: 'Failed to create user account' } };
+      }
+
+      // Wait a moment for database triggers
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Create customer profile
+      const { error: profileError } = await supabase
+        .from('customer_profiles')
+        .insert({
+          user_id: authData.user.id,
+          username: `user_${authData.user.id.slice(0, 8)}`,
+          full_name: userData.fullName,
+          phone: phone,
+          email: userData.email,
+          date_of_birth: userData.dateOfBirth || null,
+          car_make_id: userData.carMakeId || null,
+          car_model_id: userData.carModelId || null,
+          customer_type: 'normal',
+          is_phone_verified: true
+        });
+
+      if (profileError) {
+        console.error('Error creating customer profile:', profileError);
+        // Profile might already exist from trigger, try update instead
+        const { error: updateError } = await supabase
+          .from('customer_profiles')
+          .update({
+            full_name: userData.fullName,
+            phone: phone,
+            email: userData.email,
+            date_of_birth: userData.dateOfBirth || null,
+            car_make_id: userData.carMakeId || null,
+            car_model_id: userData.carModelId || null,
+            is_phone_verified: true
+          })
+          .eq('user_id', authData.user.id);
+
+        if (updateError) {
+          console.error('Error updating customer profile:', updateError);
+        }
+      }
+
+      // Clear OTP data
+      otpStore.delete(phone);
+      localStorage.removeItem('pending_phone_auth');
+
+      // Update user state
+      setUser(authData.user);
+      setSession(authData.session);
+
+      return { error: null };
+    } catch (error) {
+      console.error('Error completing phone registration:', error);
+      return { error };
+    }
+  };
+
+  // ============================================
+  // GOOGLE OAUTH METHODS (FREE via Supabase)
+  // ============================================
+
+  // Sign in with Google OAuth
+  const signInWithGoogle = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+      return { error };
+    } catch (error) {
+      return { error };
+    }
+  };
+
+  // Check if user has a profile, create one if new
+  const checkAndCreateProfile = async () => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+      if (!currentUser) {
+        return { isNewUser: false, error: { message: 'No user logged in' } };
+      }
+
+      // Check if profile exists
+      const { data: profile, error: profileError } = await supabase
+        .from('customer_profiles')
+        .select('id, full_name, phone')
+        .eq('user_id', currentUser.id)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        // Error other than "not found"
+        return { isNewUser: false, error: profileError };
+      }
+
+      // If no profile exists, user is new
+      if (!profile) {
+        return { isNewUser: true, error: null };
+      }
+
+      // Profile exists - check if it has required fields (phone)
+      // If phone is missing, user needs to complete registration
+      if (!profile.phone || profile.phone === '') {
+        return { isNewUser: true, error: null };
+      }
+
+      return { isNewUser: false, error: null };
+    } catch (error) {
+      return { isNewUser: false, error };
+    }
+  };
+
+  // Complete registration after Google sign-in (collect additional details)
+  const completeGoogleRegistration = async (userData: Omit<RegistrationData, 'email'>) => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+      if (!currentUser) {
+        return { error: { message: 'No user logged in' } };
+      }
+
+      // Get user's email from auth
+      const userEmail = currentUser.email || '';
+      const userName = currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || 'User';
+
+      // Normalize phone
+      const normalizedPhone = userData.phone ?
+        (userData.phone.startsWith('+60') ? userData.phone : `+60${userData.phone.replace(/\D/g, '')}`)
+        : '';
+
+      // Check if profile already exists
+      const { data: existingProfile } = await supabase
+        .from('customer_profiles')
+        .select('id')
+        .eq('user_id', currentUser.id)
+        .single();
+
+      if (existingProfile) {
+        // Update existing profile
+        const { error: updateError } = await supabase
+          .from('customer_profiles')
+          .update({
+            full_name: userData.fullName || userName,
+            phone: normalizedPhone,
+            date_of_birth: userData.dateOfBirth || null,
+            car_make_id: userData.carMakeId || null,
+            car_model_id: userData.carModelId || null
+          })
+          .eq('user_id', currentUser.id);
+
+        if (updateError) {
+          console.error('Error updating profile:', updateError);
+          return { error: updateError };
+        }
+      } else {
+        // Create new profile
         const { error: profileError } = await supabase
           .from('customer_profiles')
           .insert({
-            user_id: data.user.id,
-            username: username || `user_${data.user.id.slice(0, 8)}`,
-            full_name: username || 'New User',
-            phone: phone,
-            phone_e164: phone,
-            email: '', // Will be filled later by user
+            user_id: currentUser.id,
+            username: `user_${currentUser.id.slice(0, 8)}`,
+            full_name: userData.fullName || userName,
+            phone: normalizedPhone,
+            email: userEmail,
+            date_of_birth: userData.dateOfBirth || null,
+            car_make_id: userData.carMakeId || null,
+            car_model_id: userData.carModelId || null,
             customer_type: 'normal',
             is_phone_verified: false
           });
 
         if (profileError) {
-          console.error('Error creating customer profile:', profileError);
-          // Don't fail the signup if profile creation fails, just log it
+          console.error('Error creating profile:', profileError);
+          return { error: profileError };
         }
-      } catch (profileError) {
-        console.error('Error handling customer profile creation:', profileError);
       }
+
+      return { error: null };
+    } catch (error) {
+      return { error };
     }
-
-    return { error };
   };
 
-  const signIn = async (phone: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      phone,
-      password
-    });
-    return { error };
-  };
+  // Create device session for single-device enforcement
+  const createDeviceSession = useCallback(async (
+    deviceFingerprint: string,
+    deviceInfo: any
+  ): Promise<boolean> => {
+    if (!user) return false;
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
+    try {
+      // Deactivate any existing active sessions for this user
+      await supabase
+        .from('user_sessions')
+        .update({ is_active: false })
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      // Create new session
+      const { error } = await supabase
+        .from('user_sessions')
+        .insert({
+          user_id: user.id,
+          device_fingerprint: deviceFingerprint,
+          device_info: deviceInfo,
+          is_active: true
+        });
+
+      if (error) {
+        console.error('Error creating session:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error creating device session:', error);
+      return false;
+    }
+  }, [user]);
 
   const value = {
     user,
     session,
     loading,
-    signUp,
-    signIn,
-    signOut
+    sendPhoneOTP,
+    verifyPhoneOTP,
+    signUpWithPhoneOTP,
+    signInWithGoogle,
+    checkAndCreateProfile,
+    completeGoogleRegistration,
+    signOut,
+    createDeviceSession
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
