@@ -24,11 +24,6 @@ export default function AuthCallback() {
         if (errorParam) {
           console.error('OAuth error:', { errorParam, errorDescription });
           let errorMessage = errorDescription?.replace(/\+/g, ' ') || errorParam;
-
-          if (errorDescription?.includes('Database error saving new user')) {
-            errorMessage = 'Database error: Unable to create user. Please check Supabase configuration.';
-          }
-
           setError(errorMessage);
           setStatus('Authentication failed');
           return;
@@ -36,69 +31,54 @@ export default function AuthCallback() {
 
         setStatus('Completing authentication...');
 
-        // Wait for Supabase to process the OAuth callback and establish session
-        // The tokens are in the URL hash, Supabase needs to exchange them
-        let session = null;
-        let attempts = 0;
-        const maxAttempts = 10;
+        // Check if there's a hash fragment with tokens (implicit grant flow)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
 
-        while (!session && attempts < maxAttempts) {
-          attempts++;
-          console.log(`Checking for session... attempt ${attempts}`);
+        if (accessToken) {
+          console.log('Found access token in URL hash, setting session...');
 
-          // Try to get the session
-          const { data, error: sessionError } = await supabase.auth.getSession();
+          // Set the session manually using the tokens from the hash
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || ''
+          });
 
           if (sessionError) {
-            console.error('Session error:', sessionError);
+            console.error('Error setting session:', sessionError);
+            setError('Failed to establish session. Please try again.');
+            setStatus('Authentication failed');
+            return;
           }
 
-          if (data?.session) {
-            session = data.session;
-            console.log('Session found:', session.user.email);
-            break;
-          }
+          if (data.session) {
+            console.log('Session established successfully:', data.session.user.email);
 
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 500));
+            // Clear the hash from URL for cleaner look
+            window.history.replaceState(null, '', window.location.pathname);
+
+            // Continue with profile check
+            await handleProfileCheck();
+            return;
+          }
         }
 
-        if (!session) {
-          console.error('No session established after OAuth callback');
-          setError('Login failed. Could not establish session. Please try again.');
-          setStatus('Authentication failed');
+        // Fallback: Try to get existing session
+        console.log('No hash tokens, checking for existing session...');
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session) {
+          console.log('Found existing session:', session.user.email);
+          await handleProfileCheck();
           return;
         }
 
-        setStatus('Checking your profile...');
+        // No session found
+        console.error('No session could be established');
+        setError('Login failed. Could not establish session. Please try again.');
+        setStatus('Authentication failed');
 
-        // Now check if user has a complete profile
-        const { isNewUser, error: profileError } = await checkAndCreateProfile();
-
-        if (profileError && profileError.message !== 'No user logged in') {
-          console.error('Error checking profile:', profileError);
-          setError(profileError.message || 'Error processing login');
-          setStatus('Error processing login');
-          return;
-        }
-
-        if (isNewUser) {
-          // User needs to complete registration
-          setStatus('Redirecting to complete registration...');
-          navigate('/auth?step=complete-profile');
-        } else {
-          // Existing user with complete profile
-          setStatus('Login successful! Redirecting...');
-
-          // Create device session
-          try {
-            await createDeviceSession(deviceFingerprint, deviceInfo);
-          } catch (e) {
-            console.log('Device session creation skipped:', e);
-          }
-
-          navigate('/');
-        }
       } catch (err) {
         console.error('Auth callback error:', err);
         setError('An unexpected error occurred during login. Please try again.');
@@ -106,10 +86,37 @@ export default function AuthCallback() {
       }
     };
 
+    const handleProfileCheck = async () => {
+      setStatus('Checking your profile...');
+
+      const { isNewUser, error: profileError } = await checkAndCreateProfile();
+
+      if (profileError && profileError.message !== 'No user logged in') {
+        console.error('Error checking profile:', profileError);
+        setError(profileError.message || 'Error processing login');
+        setStatus('Error processing login');
+        return;
+      }
+
+      if (isNewUser) {
+        setStatus('Redirecting to complete registration...');
+        navigate('/auth?step=complete-profile');
+      } else {
+        setStatus('Login successful! Redirecting...');
+
+        try {
+          await createDeviceSession(deviceFingerprint, deviceInfo);
+        } catch (e) {
+          console.log('Device session creation skipped:', e);
+        }
+
+        navigate('/');
+      }
+    };
+
     handleCallback();
   }, [navigate, searchParams, checkAndCreateProfile, createDeviceSession, deviceFingerprint, deviceInfo]);
 
-  // Error state UI
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -134,7 +141,6 @@ export default function AuthCallback() {
     );
   }
 
-  // Loading state UI
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
