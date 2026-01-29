@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ShoppingCart, Package, Minus, Plus, ArrowLeft, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShoppingCart, Package, Minus, Plus, ArrowLeft, Eye, ChevronDown, ChevronUp, Clock, Users, DollarSign, Wrench, Video } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/hooks/useCartDB';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +14,7 @@ import LoginPromptButton from '@/components/LoginPromptButton';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 import { ReviewForm } from '@/components/reviews/ReviewForm';
+import { ProductInstallationGuide } from '@/types/product-types';
 
 interface ComponentData {
   id: string;
@@ -64,6 +65,7 @@ const ProductDetails = () => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [currentLightboxIndex, setCurrentLightboxIndex] = useState(0);
+  const [installationGuide, setInstallationGuide] = useState<ProductInstallationGuide | null>(null);
   const { toast } = useToast();
   const { addToCart, loading: cartLoading } = useCart();
   const { user } = useAuth();
@@ -73,8 +75,70 @@ const ProductDetails = () => {
     if (id) {
       fetchProduct();
       fetchProductComponents();
+      fetchInstallationGuide();
     }
   }, [id]);
+
+  const fetchInstallationGuide = async () => {
+    if (!id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('product_installation_guides' as any)
+        .select('*')
+        .eq('product_id', id)
+        .single();
+
+      if (!error && data) {
+        setInstallationGuide(data as ProductInstallationGuide);
+      }
+    } catch (error) {
+      // No installation guide for this product - that's fine
+      console.log('No installation guide for this product');
+    }
+  };
+
+  // Helper function to get video embed
+  const getVideoEmbed = (url: string) => {
+    // YouTube
+    const youtubeMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+    if (youtubeMatch) {
+      return (
+        <iframe
+          src={`https://www.youtube.com/embed/${youtubeMatch[1]}`}
+          className="w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      );
+    }
+
+    // Vimeo
+    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+    if (vimeoMatch) {
+      return (
+        <iframe
+          src={`https://player.vimeo.com/video/${vimeoMatch[1]}`}
+          className="w-full h-full"
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowFullScreen
+        />
+      );
+    }
+
+    // Fallback: Show link button
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-100">
+        <Button
+          onClick={() => window.open(url, '_blank')}
+          className="bg-lime-600 hover:bg-lime-700"
+        >
+          <Video className="h-4 w-4 mr-2" />
+          Watch Video
+        </Button>
+      </div>
+    );
+  };
 
   const fetchProduct = async () => {
     if (!id) return;
@@ -665,6 +729,119 @@ const ProductDetails = () => {
             )}
           </div>
         </div>
+
+        {/* Installation Guide Section - Only show if product has installation data */}
+        {installationGuide && (
+          <div className="mt-8 border-t pt-8">
+            <div className="max-w-5xl mx-auto">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Wrench className="h-6 w-6 text-lime-600" />
+                Installation Guide
+              </h2>
+
+              {/* Installation Info Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {installationGuide.recommended_time && (
+                  <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <Clock className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Recommended Time</p>
+                        <p className="font-semibold">{installationGuide.recommended_time}</p>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {installationGuide.workman_power && (
+                  <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-100 rounded-lg">
+                        <Users className="h-5 w-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Workers Needed</p>
+                        <p className="font-semibold">
+                          {installationGuide.workman_power} {installationGuide.workman_power === 1 ? 'person' : 'people'}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {installationGuide.installation_price && installationGuide.installation_price > 0 && (
+                  <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-lime-100 rounded-lg">
+                        <DollarSign className="h-5 w-5 text-lime-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Installation Price</p>
+                        <p className="font-semibold text-lime-600">
+                          {formatPrice(installationGuide.installation_price)}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </div>
+
+              {/* Difficulty Badge */}
+              {installationGuide.difficulty_level && (
+                <div className="mb-4">
+                  <Badge
+                    className={
+                      installationGuide.difficulty_level === 'easy' ? 'bg-green-100 text-green-800 hover:bg-green-100' :
+                      installationGuide.difficulty_level === 'medium' ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100' :
+                      installationGuide.difficulty_level === 'hard' ? 'bg-orange-100 text-orange-800 hover:bg-orange-100' :
+                      'bg-red-100 text-red-800 hover:bg-red-100'
+                    }
+                  >
+                    {installationGuide.difficulty_level.charAt(0).toUpperCase() +
+                     installationGuide.difficulty_level.slice(1)} Difficulty
+                  </Badge>
+                </div>
+              )}
+
+              {/* Installation Videos */}
+              {installationGuide.installation_videos && installationGuide.installation_videos.length > 0 && (
+                <div className="space-y-4 mb-6">
+                  <h3 className="font-medium text-gray-900">Installation Videos</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {installationGuide.installation_videos.map((video, index) => (
+                      <Card key={index} className="overflow-hidden">
+                        <div className="aspect-video bg-gray-100 relative">
+                          {getVideoEmbed(video.url)}
+                        </div>
+                        {(video.title || video.duration) && (
+                          <div className="p-3">
+                            {video.title && <p className="font-medium">{video.title}</p>}
+                            {video.duration && (
+                              <p className="text-sm text-gray-500 flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {video.duration}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              {installationGuide.notes && (
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-medium mb-2">Installation Notes</h4>
+                  <p className="text-gray-700">{installationGuide.notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Reviews Section */}
         <div className="mt-12 border-t pt-8">

@@ -27,7 +27,8 @@ import {
   ShoppingCart,
   TrendingUp,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Briefcase
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -86,6 +87,7 @@ const navigation: NavigationElement[] = [
     items: [
       { name: 'Customers', href: '/admin/customers', icon: Users },
       { name: 'Panel Partners', href: '/admin/premium-partners', icon: Crown },
+      { name: 'Salesmen', href: '/admin/salesmen', icon: Briefcase },
     ]
   },
 

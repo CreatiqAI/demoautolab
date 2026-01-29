@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase, Package } from 'lucide-react';
+import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase, Package, FileText, Image, Link2, ExternalLink, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CustomerTypeManager } from '@/components/admin/CustomerTypeManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,6 +27,17 @@ interface CustomerProfile {
   updated_at: string | null;
 }
 
+interface SocialMediaLink {
+  platform: string;
+  url: string;
+}
+
+interface Salesman {
+  id: string;
+  name: string;
+  referral_code: string;
+}
+
 interface MerchantApplication {
   id: string;
   customer_id: string;
@@ -39,6 +50,14 @@ interface MerchantApplication {
   status: string;
   created_at: string;
   rejection_reason: string | null;
+  // New fields
+  company_profile_url: string | null;
+  social_media_links: SocialMediaLink[] | null;
+  ssm_document_url: string | null;
+  bank_proof_url: string | null;
+  workshop_photos: string[] | null;
+  referral_code: string | null;
+  referred_by_salesman_id: string | null;
   customer_profiles: {
     full_name: string;
     phone: string | null;
@@ -48,6 +67,7 @@ interface MerchantApplication {
     code: string;
     description: string | null;
   };
+  salesman?: Salesman | null;
 }
 
 export default function Customers() {
@@ -153,6 +173,23 @@ export default function Customers() {
         console.error('Error fetching codes:', codeError);
       }
 
+      // Fetch salesmen data for referrals
+      const salesmanIds = (registrations as any[])
+        .filter((r: any) => r.referred_by_salesman_id)
+        .map((r: any) => r.referred_by_salesman_id);
+
+      let salesmenData: any[] = [];
+      if (salesmanIds.length > 0) {
+        const { data: salesmen, error: salesmenError } = await supabase
+          .from('salesmen' as any)
+          .select('id, name, referral_code')
+          .in('id', salesmanIds);
+
+        if (!salesmenError && salesmen) {
+          salesmenData = salesmen;
+        }
+      }
+
       // Manually join the data
       const enrichedApplications = (registrations as any[]).map((reg: any) => ({
         ...reg,
@@ -164,7 +201,8 @@ export default function Customers() {
         merchant_codes: (codes as any)?.find((mc: any) => mc.id === (reg as any).code_id) || {
           code: 'Unknown',
           description: null
-        }
+        },
+        salesman: salesmenData.find((s: any) => s.id === reg.referred_by_salesman_id) || null
       }));
 
       console.log('✨ Enriched applications:', enrichedApplications);
@@ -806,6 +844,150 @@ export default function Customers() {
                   </h4>
                   <div className="text-sm bg-gray-50 p-3 rounded-lg">
                     {selectedApplication.address}
+                  </div>
+                </div>
+              )}
+
+              {/* Company Profile & Social Media */}
+              {(selectedApplication.company_profile_url || (selectedApplication.social_media_links && selectedApplication.social_media_links.length > 0)) && (
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Link2 className="h-4 w-4" />
+                    Online Presence
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {selectedApplication.company_profile_url && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Company Profile:</span>
+                        <a
+                          href={selectedApplication.company_profile_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          {selectedApplication.company_profile_url.slice(0, 40)}...
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    )}
+                    {selectedApplication.social_media_links && selectedApplication.social_media_links.length > 0 && (
+                      <div>
+                        <span className="font-medium">Social Media:</span>
+                        <div className="mt-1 space-y-1">
+                          {selectedApplication.social_media_links.map((link, idx) => (
+                            <a
+                              key={idx}
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-blue-600 hover:underline ml-2"
+                            >
+                              <Badge variant="outline" className="text-xs">{link.platform}</Badge>
+                              {link.url.slice(0, 35)}...
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Documents */}
+              {(selectedApplication.ssm_document_url || selectedApplication.bank_proof_url) && (
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Uploaded Documents
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {selectedApplication.ssm_document_url && (
+                      <div className="p-3 border rounded-lg">
+                        <div className="text-sm font-medium mb-2">SSM Document</div>
+                        <a
+                          href={selectedApplication.ssm_document_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 text-sm"
+                        >
+                          <FileText className="h-4 w-4" />
+                          View Document
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    )}
+                    {selectedApplication.bank_proof_url && (
+                      <div className="p-3 border rounded-lg">
+                        <div className="text-sm font-medium mb-2">Bank Proof</div>
+                        <a
+                          href={selectedApplication.bank_proof_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 text-sm"
+                        >
+                          <FileText className="h-4 w-4" />
+                          View Document
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Workshop Photos */}
+              {selectedApplication.workshop_photos && selectedApplication.workshop_photos.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Image className="h-4 w-4" />
+                    Workshop Photos ({selectedApplication.workshop_photos.length})
+                  </h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {selectedApplication.workshop_photos.map((photo, idx) => (
+                      <a
+                        key={idx}
+                        href={photo}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative aspect-video rounded-lg overflow-hidden border hover:ring-2 ring-blue-500 transition-all"
+                      >
+                        <img
+                          src={photo}
+                          alt={`Workshop photo ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <ExternalLink className="h-6 w-6 text-white opacity-0 hover:opacity-100" />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Referral Information */}
+              {(selectedApplication.referral_code || selectedApplication.salesman) && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <h4 className="font-semibold mb-3 flex items-center gap-2 text-green-900">
+                    <UserCheck className="h-4 w-4" />
+                    Referral Information
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {selectedApplication.referral_code && (
+                      <div>
+                        <span className="font-medium text-green-800">Referral Code Used:</span>
+                        <Badge variant="outline" className="ml-2 bg-white">
+                          {selectedApplication.referral_code}
+                        </Badge>
+                      </div>
+                    )}
+                    {selectedApplication.salesman && (
+                      <div>
+                        <span className="font-medium text-green-800">Referred By:</span>
+                        <span className="ml-2">{selectedApplication.salesman.name}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

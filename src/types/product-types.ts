@@ -198,12 +198,32 @@ export interface CartItemNew {
 export interface OrderItemNew {
   id: string;
   order_id: string;
-  product_id?: string; // For old products  
+  product_id?: string; // For old products
   product_variant_combination_id?: string; // For new products
   component_variant_ids?: string[]; // Array of selected components
   quantity: number;
   unit_price: number;
   total_price: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Installation Guide Types
+export interface InstallationVideo {
+  url: string;
+  title?: string;
+  duration?: string;
+}
+
+export interface ProductInstallationGuide {
+  id: string;
+  product_id: string;
+  recommended_time?: string;
+  workman_power?: number;
+  installation_price?: number;
+  installation_videos: InstallationVideo[];
+  difficulty_level?: 'easy' | 'medium' | 'hard' | 'expert';
+  notes?: string;
   created_at: string;
   updated_at: string;
 }

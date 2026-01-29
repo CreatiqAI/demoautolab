@@ -7,13 +7,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Store, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Store, ArrowLeft, CheckCircle2, Upload, X, Plus, Globe, FileText, Building, Image, Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+interface SocialMediaLink {
+  platform: string;
+  url: string;
+}
 
 const MerchantRegister = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [step, setStep] = useState(1); // 1: Code validation, 2: Registration form
   const [codeValidated, setCodeValidated] = useState(false);
   const [codeData, setCodeData] = useState<any>(null);
@@ -31,8 +37,19 @@ const MerchantRegister = () => {
     businessRegistrationNo: '',
     taxId: '',
     businessType: '',
-    address: ''
+    address: '',
+    // New fields
+    companyProfileUrl: '',
+    socialMediaLinks: [] as SocialMediaLink[],
+    ssmDocumentUrl: '',
+    bankProofUrl: '',
+    workshopPhotos: [] as string[],
+    referralCode: ''
   });
+
+  // Track validated referral
+  const [referralValidated, setReferralValidated] = useState(false);
+  const [referralSalesman, setReferralSalesman] = useState<any>(null);
 
   const normalizePhone = (phone: string) => {
     const digits = phone.replace(/\D/g, '');
@@ -82,6 +99,170 @@ const MerchantRegister = () => {
     setLoading(false);
   };
 
+  // Validate referral code
+  const handleValidateReferral = async () => {
+    if (!merchantForm.referralCode.trim()) {
+      setReferralValidated(false);
+      setReferralSalesman(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await (supabase.rpc as any)('validate_referral_code', {
+        p_code: merchantForm.referralCode.toUpperCase()
+      });
+
+      if (error || !data?.[0]?.valid) {
+        toast.error('Invalid referral code');
+        setReferralValidated(false);
+        setReferralSalesman(null);
+        return;
+      }
+
+      setReferralValidated(true);
+      setReferralSalesman({
+        id: data[0].salesman_id,
+        name: data[0].salesman_name
+      });
+      toast.success(`Referral code valid - referred by ${data[0].salesman_name}`);
+    } catch (error) {
+      console.error('Referral validation error:', error);
+    }
+  };
+
+  // Upload file to Supabase Storage
+  const uploadFile = async (file: File, folder: string): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+      const { error } = await supabase.storage
+        .from('merchant-documents')
+        .upload(fileName, file, { upsert: true });
+
+      if (error) {
+        console.error('Upload error:', error);
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('merchant-documents')
+        .getPublicUrl(fileName);
+
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error('File upload error:', error);
+      return null;
+    }
+  };
+
+  // Handle SSM document upload
+  const handleSSMUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB');
+      return;
+    }
+
+    setUploading(true);
+    const url = await uploadFile(file, 'ssm');
+    if (url) {
+      setMerchantForm({ ...merchantForm, ssmDocumentUrl: url });
+      toast.success('SSM document uploaded');
+    } else {
+      toast.error('Failed to upload SSM document');
+    }
+    setUploading(false);
+  };
+
+  // Handle bank proof upload
+  const handleBankProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB');
+      return;
+    }
+
+    setUploading(true);
+    const url = await uploadFile(file, 'bank-proof');
+    if (url) {
+      setMerchantForm({ ...merchantForm, bankProofUrl: url });
+      toast.success('Bank proof uploaded');
+    } else {
+      toast.error('Failed to upload bank proof');
+    }
+    setUploading(false);
+  };
+
+  // Handle workshop photos upload
+  const handleWorkshopPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (merchantForm.workshopPhotos.length + files.length > 5) {
+      toast.error('Maximum 5 workshop photos allowed');
+      return;
+    }
+
+    setUploading(true);
+    const newPhotos: string[] = [];
+
+    for (const file of Array.from(files)) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} is too large (max 5MB)`);
+        continue;
+      }
+
+      const url = await uploadFile(file, 'workshop-photos');
+      if (url) {
+        newPhotos.push(url);
+      }
+    }
+
+    if (newPhotos.length > 0) {
+      setMerchantForm({
+        ...merchantForm,
+        workshopPhotos: [...merchantForm.workshopPhotos, ...newPhotos]
+      });
+      toast.success(`${newPhotos.length} photo(s) uploaded`);
+    }
+    setUploading(false);
+  };
+
+  // Remove workshop photo
+  const removeWorkshopPhoto = (index: number) => {
+    const newPhotos = merchantForm.workshopPhotos.filter((_, i) => i !== index);
+    setMerchantForm({ ...merchantForm, workshopPhotos: newPhotos });
+  };
+
+  // Add social media link
+  const addSocialMediaLink = () => {
+    setMerchantForm({
+      ...merchantForm,
+      socialMediaLinks: [
+        ...merchantForm.socialMediaLinks,
+        { platform: 'facebook', url: '' }
+      ]
+    });
+  };
+
+  // Remove social media link
+  const removeSocialMediaLink = (index: number) => {
+    const newLinks = merchantForm.socialMediaLinks.filter((_, i) => i !== index);
+    setMerchantForm({ ...merchantForm, socialMediaLinks: newLinks });
+  };
+
+  // Update social media link
+  const updateSocialMediaLink = (index: number, field: 'platform' | 'url', value: string) => {
+    const newLinks = [...merchantForm.socialMediaLinks];
+    newLinks[index] = { ...newLinks[index], [field]: value };
+    setMerchantForm({ ...merchantForm, socialMediaLinks: newLinks });
+  };
+
   const handleMerchantSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -113,6 +294,31 @@ const MerchantRegister = () => {
 
     if (!merchantForm.businessType) {
       toast.error('Please select a business type');
+      return;
+    }
+
+    if (!merchantForm.businessRegistrationNo.trim()) {
+      toast.error('Business registration number is required');
+      return;
+    }
+
+    if (!merchantForm.address.trim()) {
+      toast.error('Business address is required');
+      return;
+    }
+
+    if (!merchantForm.ssmDocumentUrl) {
+      toast.error('SSM document is required');
+      return;
+    }
+
+    if (!merchantForm.bankProofUrl) {
+      toast.error('Bank proof is required');
+      return;
+    }
+
+    if (merchantForm.workshopPhotos.length < 2) {
+      toast.error('Please upload at least 2 workshop photos');
       return;
     }
 
@@ -158,38 +364,34 @@ const MerchantRegister = () => {
         .eq('user_id', user.id)
         .single();
 
-      if (profileFetchError) {
+      if (profileFetchError || !customerProfile) {
         console.error('Profile fetch error:', profileFetchError);
-        toast.error(`Failed to get customer profile: ${profileFetchError.message}`);
+        toast.error('Failed to get customer profile');
         setLoading(false);
         return;
       }
-
-      if (!customerProfile) {
-        console.error('Customer profile not found for user:', user.id);
-        toast.error('Customer profile was not created. Please contact support.');
-        setLoading(false);
-        return;
-      }
-
-      console.log('Customer profile found:', (customerProfile as any).id);
-      console.log('Code ID:', codeData.code_id);
 
       // Create merchant registration application
-      const { data: registrationData, error: registrationError } = await supabase
+      const { error: registrationError } = await supabase
         .from('merchant_registrations' as any)
         .insert({
           customer_id: (customerProfile as any).id,
           code_id: codeData.code_id,
           company_name: merchantForm.companyName,
-          business_registration_no: merchantForm.businessRegistrationNo || null,
+          business_registration_no: merchantForm.businessRegistrationNo,
           tax_id: merchantForm.taxId || null,
           business_type: merchantForm.businessType,
-          address: merchantForm.address || null,
-          status: 'PENDING'
-        } as any)
-        .select()
-        .single();
+          address: merchantForm.address,
+          status: 'PENDING',
+          // New fields
+          company_profile_url: merchantForm.companyProfileUrl || null,
+          social_media_links: merchantForm.socialMediaLinks.filter(l => l.url),
+          ssm_document_url: merchantForm.ssmDocumentUrl,
+          bank_proof_url: merchantForm.bankProofUrl,
+          workshop_photos: merchantForm.workshopPhotos,
+          referral_code: merchantForm.referralCode || null,
+          referred_by_salesman_id: referralSalesman?.id || null
+        } as any);
 
       if (registrationError) {
         console.error('Registration error:', registrationError);
@@ -198,11 +400,8 @@ const MerchantRegister = () => {
         return;
       }
 
-      console.log('Merchant registration created:', registrationData);
-
       toast.success('Merchant application submitted successfully! Please wait for admin approval.');
 
-      // Redirect to homepage or pending approval page
       setTimeout(() => {
         navigate('/');
       }, 2000);
@@ -296,10 +495,11 @@ const MerchantRegister = () => {
                   </div>
                 </div>
 
-                <form onSubmit={handleMerchantSignup} className="space-y-4">
+                <form onSubmit={handleMerchantSignup} className="space-y-6">
                   {/* Account Information */}
                   <div className="space-y-4">
-                    <h3 className="font-semibold text-sm text-muted-foreground uppercase">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase flex items-center gap-2">
+                      <Building className="h-4 w-4" />
                       Account Information
                     </h3>
 
@@ -334,89 +534,95 @@ const MerchantRegister = () => {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Password *</Label>
-                      <div className="relative">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="password">Password *</Label>
+                        <div className="relative">
+                          <Input
+                            id="password"
+                            type={showPassword ? 'text' : 'password'}
+                            value={merchantForm.password}
+                            onChange={(e) => setMerchantForm({...merchantForm, password: e.target.value})}
+                            required
+                            minLength={8}
+                            className="pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="confirm-password">Confirm Password *</Label>
                         <Input
-                          id="password"
+                          id="confirm-password"
                           type={showPassword ? 'text' : 'password'}
-                          value={merchantForm.password}
-                          onChange={(e) => setMerchantForm({...merchantForm, password: e.target.value})}
+                          value={merchantForm.confirmPassword}
+                          onChange={(e) => setMerchantForm({...merchantForm, confirmPassword: e.target.value})}
                           required
                           minLength={8}
-                          className="pr-10"
                         />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
                       </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="confirm-password">Confirm Password *</Label>
-                      <Input
-                        id="confirm-password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={merchantForm.confirmPassword}
-                        onChange={(e) => setMerchantForm({...merchantForm, confirmPassword: e.target.value})}
-                        required
-                        minLength={8}
-                      />
                     </div>
                   </div>
 
                   {/* Business Information */}
                   <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold text-sm text-muted-foreground uppercase">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase flex items-center gap-2">
+                      <Store className="h-4 w-4" />
                       Business Information
                     </h3>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="company-name">Company Name *</Label>
-                      <Input
-                        id="company-name"
-                        type="text"
-                        placeholder="Your company name"
-                        value={merchantForm.companyName}
-                        onChange={(e) => setMerchantForm({...merchantForm, companyName: e.target.value})}
-                        required
-                      />
-                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="company-name">Business Name *</Label>
+                        <Input
+                          id="company-name"
+                          type="text"
+                          placeholder="Your business name"
+                          value={merchantForm.companyName}
+                          onChange={(e) => setMerchantForm({...merchantForm, companyName: e.target.value})}
+                          required
+                        />
+                      </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="business-type">Business Type *</Label>
-                      <Select
-                        value={merchantForm.businessType}
-                        onValueChange={(value) => setMerchantForm({...merchantForm, businessType: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select business type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Wholesaler">Wholesaler</SelectItem>
-                          <SelectItem value="Retailer">Retailer</SelectItem>
-                          <SelectItem value="Workshop">Workshop</SelectItem>
-                          <SelectItem value="Dealer">Dealer</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="space-y-2">
+                        <Label htmlFor="business-type">Business Type *</Label>
+                        <Select
+                          value={merchantForm.businessType}
+                          onValueChange={(value) => setMerchantForm({...merchantForm, businessType: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Wholesaler">Wholesaler</SelectItem>
+                            <SelectItem value="Retailer">Retailer</SelectItem>
+                            <SelectItem value="Workshop">Workshop</SelectItem>
+                            <SelectItem value="Dealer">Dealer</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="business-reg">Business Registration No.</Label>
+                        <Label htmlFor="business-reg">Business Registration No. *</Label>
                         <Input
                           id="business-reg"
                           type="text"
-                          placeholder="Optional"
+                          placeholder="e.g., 123456-X"
                           value={merchantForm.businessRegistrationNo}
                           onChange={(e) => setMerchantForm({...merchantForm, businessRegistrationNo: e.target.value})}
+                          required
                         />
                       </div>
 
@@ -433,19 +639,247 @@ const MerchantRegister = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="address">Business Address</Label>
+                      <Label htmlFor="address">Business Address *</Label>
                       <Textarea
                         id="address"
-                        placeholder="Enter your business address (optional)"
+                        placeholder="Enter your full business address"
                         value={merchantForm.address}
                         onChange={(e) => setMerchantForm({...merchantForm, address: e.target.value})}
-                        rows={3}
+                        rows={2}
+                        required
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="company-profile" className="flex items-center gap-1">
+                        <Globe className="h-4 w-4" />
+                        Company Website / Profile URL
+                      </Label>
+                      <Input
+                        id="company-profile"
+                        type="url"
+                        placeholder="https://www.yourcompany.com or Facebook page"
+                        value={merchantForm.companyProfileUrl}
+                        onChange={(e) => setMerchantForm({...merchantForm, companyProfileUrl: e.target.value})}
+                      />
+                    </div>
+
+                    {/* Social Media Links */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center justify-between">
+                        <span>Social Media Links</span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addSocialMediaLink}
+                          disabled={merchantForm.socialMediaLinks.length >= 4}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add
+                        </Button>
+                      </Label>
+                      {merchantForm.socialMediaLinks.map((link, index) => (
+                        <div key={index} className="flex gap-2">
+                          <Select
+                            value={link.platform}
+                            onValueChange={(value) => updateSocialMediaLink(index, 'platform', value)}
+                          >
+                            <SelectTrigger className="w-[140px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="facebook">Facebook</SelectItem>
+                              <SelectItem value="instagram">Instagram</SelectItem>
+                              <SelectItem value="tiktok">TikTok</SelectItem>
+                              <SelectItem value="youtube">YouTube</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            placeholder="URL"
+                            value={link.url}
+                            onChange={(e) => updateSocialMediaLink(index, 'url', e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeSocialMediaLink(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? 'Submitting Application...' : 'Submit Merchant Application'}
+                  {/* Documents Section */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Required Documents
+                    </h3>
+
+                    {/* SSM Document */}
+                    <div className="space-y-2">
+                      <Label>SSM Document *</Label>
+                      <div className="border-2 border-dashed rounded-lg p-4">
+                        {merchantForm.ssmDocumentUrl ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="h-5 w-5 text-green-500" />
+                              <span className="text-sm">SSM document uploaded</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setMerchantForm({...merchantForm, ssmDocumentUrl: ''})}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center cursor-pointer">
+                            <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                            <span className="text-sm text-muted-foreground">Upload SSM Document</span>
+                            <span className="text-xs text-muted-foreground">(PDF or Image, max 10MB)</span>
+                            <input
+                              type="file"
+                              accept=".pdf,image/*"
+                              onChange={handleSSMUpload}
+                              className="hidden"
+                              disabled={uploading}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bank Proof */}
+                    <div className="space-y-2">
+                      <Label>Business Bank Proof *</Label>
+                      <div className="border-2 border-dashed rounded-lg p-4">
+                        {merchantForm.bankProofUrl ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="h-5 w-5 text-green-500" />
+                              <span className="text-sm">Bank proof uploaded</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setMerchantForm({...merchantForm, bankProofUrl: ''})}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center cursor-pointer">
+                            <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                            <span className="text-sm text-muted-foreground">Upload Bank Statement/Proof</span>
+                            <span className="text-xs text-muted-foreground">(PDF or Image, max 10MB)</span>
+                            <input
+                              type="file"
+                              accept=".pdf,image/*"
+                              onChange={handleBankProofUpload}
+                              className="hidden"
+                              disabled={uploading}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Workshop Photos */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-1">
+                        <Image className="h-4 w-4" />
+                        Workshop Photos * (min 2, max 5)
+                      </Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {merchantForm.workshopPhotos.map((photo, index) => (
+                          <div key={index} className="relative aspect-video bg-muted rounded-lg overflow-hidden">
+                            <img src={photo} alt={`Workshop ${index + 1}`} className="w-full h-full object-cover" />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-1 right-1 h-6 w-6 p-0"
+                              onClick={() => removeWorkshopPhoto(index)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                        {merchantForm.workshopPhotos.length < 5 && (
+                          <label className="aspect-video border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-muted/50">
+                            <Plus className="h-6 w-6 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">Add Photo</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={handleWorkshopPhotoUpload}
+                              className="hidden"
+                              disabled={uploading}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Referral Section */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase">
+                      Referral Code (Optional)
+                    </h3>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="referral-code">Salesman Referral Code</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="referral-code"
+                          type="text"
+                          placeholder="Enter referral code"
+                          value={merchantForm.referralCode}
+                          onChange={(e) => {
+                            setMerchantForm({...merchantForm, referralCode: e.target.value.toUpperCase()});
+                            setReferralValidated(false);
+                            setReferralSalesman(null);
+                          }}
+                          className="font-mono uppercase"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleValidateReferral}
+                          disabled={!merchantForm.referralCode}
+                        >
+                          Verify
+                        </Button>
+                      </div>
+                      {referralValidated && referralSalesman && (
+                        <p className="text-sm text-green-600 flex items-center gap-1">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Referred by: {referralSalesman.name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={loading || uploading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Submitting Application...
+                      </>
+                    ) : (
+                      'Submit Merchant Application'
+                    )}
                   </Button>
 
                   <p className="text-xs text-center text-muted-foreground">

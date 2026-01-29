@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 
@@ -32,6 +32,22 @@ interface SelectedComponent extends ComponentSearchResult {
   selected: boolean;
 }
 
+interface InstallationVideoForm {
+  url: string;
+  title: string;
+  duration: string;
+}
+
+interface InstallationFormData {
+  has_installation_guide: boolean;
+  recommended_time: string;
+  workman_power: number;
+  installation_price: number;
+  installation_videos: InstallationVideoForm[];
+  difficulty_level: 'easy' | 'medium' | 'hard' | 'expert';
+  notes: string;
+}
+
 interface ProductFormData {
   name: string;
   description: string;
@@ -47,6 +63,7 @@ interface ProductFormData {
   keywords: string[];
   images: Array<{ url: string; is_primary: boolean; alt_text?: string }>;
   selectedComponents: SelectedComponent[];
+  installation: InstallationFormData;
 }
 
 interface Category {
@@ -98,7 +115,16 @@ export default function ProductsPro() {
     featured: false,
     keywords: [],
     images: [],
-    selectedComponents: []
+    selectedComponents: [],
+    installation: {
+      has_installation_guide: false,
+      recommended_time: '',
+      workman_power: 1,
+      installation_price: 0,
+      installation_videos: [],
+      difficulty_level: 'medium',
+      notes: ''
+    }
   });
 
   useEffect(() => {
@@ -444,7 +470,7 @@ export default function ProductsPro() {
       // Link components to product (SIMPLIFIED)
       for (let i = 0; i < formData.selectedComponents.length; i++) {
         const comp = formData.selectedComponents[i];
-        
+
         // Direct link between product and component (no variants needed)
         const { error: linkError } = await supabase
           .from('product_components' as any)
@@ -459,6 +485,33 @@ export default function ProductsPro() {
         if (linkError) {
           console.warn('Component already linked to product or other linking error:', linkError);
         }
+      }
+
+      // 4. Handle product installation guide
+      if (formData.installation.has_installation_guide) {
+        const installationData = {
+          product_id: product.id,
+          recommended_time: formData.installation.recommended_time || null,
+          workman_power: formData.installation.workman_power || 1,
+          installation_price: formData.installation.installation_price || null,
+          installation_videos: formData.installation.installation_videos.filter(v => v.url),
+          difficulty_level: formData.installation.difficulty_level || 'medium',
+          notes: formData.installation.notes || null
+        };
+
+        const { error: installError } = await supabase
+          .from('product_installation_guides' as any)
+          .upsert(installationData, { onConflict: 'product_id' });
+
+        if (installError) {
+          console.warn('Error saving installation guide:', installError);
+        }
+      } else {
+        // Remove installation guide if unchecked
+        await supabase
+          .from('product_installation_guides' as any)
+          .delete()
+          .eq('product_id', product.id);
       }
 
       toast({
@@ -494,7 +547,16 @@ export default function ProductsPro() {
       featured: false,
       keywords: [],
       images: [],
-      selectedComponents: []
+      selectedComponents: [],
+      installation: {
+        has_installation_guide: false,
+        recommended_time: '',
+        workman_power: 1,
+        installation_price: 0,
+        installation_videos: [],
+        difficulty_level: 'medium',
+        notes: ''
+      }
     });
     setEditingProduct(null);
     setActiveTab('basic');
@@ -522,8 +584,16 @@ export default function ProductsPro() {
         .eq('product_id', product.id)
         .order('sort_order');
 
+      // Fetch installation guide
+      const { data: installationData, error: installError } = await supabase
+        .from('product_installation_guides' as any)
+        .select('*')
+        .eq('product_id', product.id)
+        .single();
+
       if (compError) console.error('Error loading components:', compError);
       if (imgError) console.error('Error loading images:', imgError);
+      if (installError && installError.code !== 'PGRST116') console.error('Error loading installation guide:', installError);
 
       const components = (productComponents as any)?.map((pc: any) => ({
         ...pc.component_library,
@@ -536,6 +606,25 @@ export default function ProductsPro() {
         is_primary: img.is_primary || false,
         alt_text: img.alt_text || ''
       })) || [];
+
+      // Format installation data
+      const installationFormData: InstallationFormData = installationData ? {
+        has_installation_guide: true,
+        recommended_time: installationData.recommended_time || '',
+        workman_power: installationData.workman_power || 1,
+        installation_price: installationData.installation_price || 0,
+        installation_videos: installationData.installation_videos || [],
+        difficulty_level: installationData.difficulty_level || 'medium',
+        notes: installationData.notes || ''
+      } : {
+        has_installation_guide: false,
+        recommended_time: '',
+        workman_power: 1,
+        installation_price: 0,
+        installation_videos: [],
+        difficulty_level: 'medium',
+        notes: ''
+      };
 
       setFormData({
         name: product.name || '',
@@ -551,9 +640,10 @@ export default function ProductsPro() {
         featured: product.featured ?? false,
         keywords: product.keywords || [],
         images: formattedImages,
-        selectedComponents: components
+        selectedComponents: components,
+        installation: installationFormData
       });
-      
+
       setEditingProduct(product);
       setIsDialogOpen(true);
     } catch (error: any) {
@@ -654,12 +744,16 @@ export default function ProductsPro() {
 
               <form onSubmit={handleSubmit}>
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-3">
+                  <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="basic">Product Details</TabsTrigger>
                     <TabsTrigger value="components">
                       Components ({formData.selectedComponents.length})
                     </TabsTrigger>
                     <TabsTrigger value="images">Product Images</TabsTrigger>
+                    <TabsTrigger value="installation">
+                      <Wrench className="h-4 w-4 mr-1" />
+                      Installation
+                    </TabsTrigger>
                   </TabsList>
 
                   {/* Basic Product Info */}
@@ -1006,6 +1100,217 @@ export default function ProductsPro() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  </TabsContent>
+
+                  {/* Installation Guide */}
+                  <TabsContent value="installation" className="space-y-6">
+                    <div className="space-y-4">
+                      {/* Enable/Disable Toggle */}
+                      <div className="flex items-center space-x-3 pb-4 border-b">
+                        <Switch
+                          checked={formData.installation.has_installation_guide}
+                          onCheckedChange={(checked) => setFormData(prev => ({
+                            ...prev,
+                            installation: { ...prev.installation, has_installation_guide: checked }
+                          }))}
+                        />
+                        <div>
+                          <Label className="text-base font-medium">Include Installation Guide</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Add installation information and videos for this product
+                          </p>
+                        </div>
+                      </div>
+
+                      {formData.installation.has_installation_guide && (
+                        <>
+                          {/* Installation Details Grid */}
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                Recommended Time
+                              </Label>
+                              <Input
+                                value={formData.installation.recommended_time}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  installation: { ...prev.installation, recommended_time: e.target.value }
+                                }))}
+                                placeholder="e.g., 30-45 minutes"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <Users className="h-4 w-4" />
+                                Workman Power
+                              </Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={formData.installation.workman_power}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  installation: { ...prev.installation, workman_power: parseInt(e.target.value) || 1 }
+                                }))}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <DollarSign className="h-4 w-4" />
+                                Installation Price (RM)
+                              </Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={formData.installation.installation_price}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  installation: { ...prev.installation, installation_price: parseFloat(e.target.value) || 0 }
+                                }))}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Difficulty Level */}
+                          <div className="space-y-2">
+                            <Label>Difficulty Level</Label>
+                            <Select
+                              value={formData.installation.difficulty_level}
+                              onValueChange={(value: 'easy' | 'medium' | 'hard' | 'expert') => setFormData(prev => ({
+                                ...prev,
+                                installation: { ...prev.installation, difficulty_level: value }
+                              }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="easy">Easy</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="hard">Hard</SelectItem>
+                                <SelectItem value="expert">Expert</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Installation Videos */}
+                          <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                              <Label className="flex items-center gap-1">
+                                <Video className="h-4 w-4" />
+                                Installation Videos
+                              </Label>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setFormData(prev => ({
+                                  ...prev,
+                                  installation: {
+                                    ...prev.installation,
+                                    installation_videos: [
+                                      ...prev.installation.installation_videos,
+                                      { url: '', title: '', duration: '' }
+                                    ]
+                                  }
+                                }))}
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Add Video
+                              </Button>
+                            </div>
+
+                            {formData.installation.installation_videos.length === 0 && (
+                              <p className="text-sm text-muted-foreground">No videos added yet. Click "Add Video" to include installation videos.</p>
+                            )}
+
+                            {formData.installation.installation_videos.map((video, index) => (
+                              <Card key={index} className="p-4">
+                                <div className="grid grid-cols-12 gap-3">
+                                  <div className="col-span-6">
+                                    <Label className="text-xs text-muted-foreground">Video URL</Label>
+                                    <Input
+                                      value={video.url}
+                                      onChange={(e) => {
+                                        const videos = [...formData.installation.installation_videos];
+                                        videos[index] = { ...videos[index], url: e.target.value };
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          installation: { ...prev.installation, installation_videos: videos }
+                                        }));
+                                      }}
+                                      placeholder="https://youtube.com/watch?v=..."
+                                    />
+                                  </div>
+                                  <div className="col-span-3">
+                                    <Label className="text-xs text-muted-foreground">Title</Label>
+                                    <Input
+                                      value={video.title}
+                                      onChange={(e) => {
+                                        const videos = [...formData.installation.installation_videos];
+                                        videos[index] = { ...videos[index], title: e.target.value };
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          installation: { ...prev.installation, installation_videos: videos }
+                                        }));
+                                      }}
+                                      placeholder="Video title"
+                                    />
+                                  </div>
+                                  <div className="col-span-2">
+                                    <Label className="text-xs text-muted-foreground">Duration</Label>
+                                    <Input
+                                      value={video.duration}
+                                      onChange={(e) => {
+                                        const videos = [...formData.installation.installation_videos];
+                                        videos[index] = { ...videos[index], duration: e.target.value };
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          installation: { ...prev.installation, installation_videos: videos }
+                                        }));
+                                      }}
+                                      placeholder="15:30"
+                                    />
+                                  </div>
+                                  <div className="col-span-1 flex items-end justify-center">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        const videos = formData.installation.installation_videos.filter((_, i) => i !== index);
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          installation: { ...prev.installation, installation_videos: videos }
+                                        }));
+                                      }}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </Card>
+                            ))}
+                          </div>
+
+                          {/* Notes */}
+                          <div className="space-y-2">
+                            <Label>Additional Notes</Label>
+                            <Textarea
+                              value={formData.installation.notes}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                installation: { ...prev.installation, notes: e.target.value }
+                              }))}
+                              placeholder="Any additional notes for customers about installation..."
+                              rows={3}
+                            />
+                          </div>
+                        </>
+                      )}
                     </div>
                   </TabsContent>
                 </Tabs>
