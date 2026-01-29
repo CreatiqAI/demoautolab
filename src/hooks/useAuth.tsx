@@ -278,8 +278,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           date_of_birth: userData.dateOfBirth || null,
           car_make_id: userData.carMakeId || null,
           car_model_id: userData.carModelId || null,
-          customer_type: 'normal',
-          is_phone_verified: true
+          customer_type: 'normal'
         });
 
       if (profileError) {
@@ -293,8 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: userData.email,
             date_of_birth: userData.dateOfBirth || null,
             car_make_id: userData.carMakeId || null,
-            car_model_id: userData.carModelId || null,
-            is_phone_verified: true
+            car_model_id: userData.carModelId || null
           })
           .eq('user_id', authData.user.id);
 
@@ -439,8 +437,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             date_of_birth: userData.dateOfBirth || null,
             car_make_id: userData.carMakeId || null,
             car_model_id: userData.carModelId || null,
-            customer_type: 'normal',
-            is_phone_verified: false
+            customer_type: 'normal'
           });
 
         if (profileError) {
