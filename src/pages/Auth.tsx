@@ -9,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Eye, EyeOff, ArrowLeft, Shield, Phone, User, Calendar, Loader2, ArrowRight } from 'lucide-react';
 import OTPInput from '@/components/OTPInput';
-import CarSelector from '@/components/CarSelector';
 
 type AuthStep = 'contact' | 'otp' | 'details' | 'google-complete';
 
@@ -54,11 +53,7 @@ const Auth = () => {
     fullName: '',
     email: '',
     phone: '',
-    dateOfBirth: '',
-    carMakeId: '',
-    carMakeName: '',
-    carModelId: '',
-    carModelName: ''
+    dateOfBirth: ''
   });
 
   // Admin form
@@ -176,9 +171,7 @@ const Auth = () => {
       fullName: registrationForm.fullName,
       email: registrationForm.email,
       phone: normalizedPhone,
-      dateOfBirth: registrationForm.dateOfBirth || undefined,
-      carMakeId: registrationForm.carMakeId || undefined,
-      carModelId: registrationForm.carModelId || undefined
+      dateOfBirth: registrationForm.dateOfBirth || undefined
     });
 
     if (error) {
@@ -277,9 +270,7 @@ const Auth = () => {
     const { error } = await completeGoogleRegistration({
       fullName: registrationForm.fullName,
       phone: registrationForm.phone,
-      dateOfBirth: registrationForm.dateOfBirth || undefined,
-      carMakeId: registrationForm.carMakeId || undefined,
-      carModelId: registrationForm.carModelId || undefined
+      dateOfBirth: registrationForm.dateOfBirth || undefined
     });
 
     if (error) {
@@ -429,29 +420,6 @@ const Auth = () => {
                 <p className="text-xs text-gray-500">For birthday promotions</p>
               </div>
 
-              {/* Car Selection */}
-              <div className="space-y-2">
-                <Label className="text-gray-700 text-sm font-medium">Your Vehicle (Optional)</Label>
-                <CarSelector
-                  selectedMakeId={registrationForm.carMakeId}
-                  selectedModelId={registrationForm.carModelId}
-                  onMakeChange={(id, name) => setRegistrationForm({
-                    ...registrationForm,
-                    carMakeId: id,
-                    carMakeName: name,
-                    carModelId: '',
-                    carModelName: ''
-                  })}
-                  onModelChange={(id, name) => setRegistrationForm({
-                    ...registrationForm,
-                    carModelId: id,
-                    carModelName: name
-                  })}
-                  showLabels={false}
-                />
-                <p className="text-xs text-gray-500">Help us recommend products for your vehicle</p>
-              </div>
-
               <Button
                 type="submit"
                 className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors mt-4"
@@ -574,29 +542,6 @@ const Auth = () => {
                   className="border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                 />
                 <p className="text-xs text-gray-500">For birthday promotions</p>
-              </div>
-
-              {/* Car Selection */}
-              <div className="space-y-2">
-                <Label className="text-gray-700 text-sm font-medium">Your Vehicle (Optional)</Label>
-                <CarSelector
-                  selectedMakeId={registrationForm.carMakeId}
-                  selectedModelId={registrationForm.carModelId}
-                  onMakeChange={(id, name) => setRegistrationForm({
-                    ...registrationForm,
-                    carMakeId: id,
-                    carMakeName: name,
-                    carModelId: '',
-                    carModelName: ''
-                  })}
-                  onModelChange={(id, name) => setRegistrationForm({
-                    ...registrationForm,
-                    carModelId: id,
-                    carModelName: name
-                  })}
-                  showLabels={false}
-                />
-                <p className="text-xs text-gray-500">Help us recommend products for your vehicle</p>
               </div>
 
               <Button

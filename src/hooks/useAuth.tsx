@@ -9,8 +9,6 @@ interface RegistrationData {
   email: string;
   phone: string;
   dateOfBirth?: string;
-  carMakeId?: string;
-  carModelId?: string;
 }
 
 // Store for simulated OTP codes (in production, this would be handled by Twilio/SMS provider)
@@ -266,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Wait a moment for database triggers
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Create customer profile
+      // Create customer profile - only use basic columns
       const { error: profileError } = await supabase
         .from('customer_profiles')
         .insert({
@@ -275,9 +273,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           full_name: userData.fullName,
           phone: phone,
           email: userData.email,
-          date_of_birth: userData.dateOfBirth || null,
-          car_make_id: userData.carMakeId || null,
-          car_model_id: userData.carModelId || null,
           customer_type: 'normal'
         });
 
@@ -289,10 +284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .update({
             full_name: userData.fullName,
             phone: phone,
-            email: userData.email,
-            date_of_birth: userData.dateOfBirth || null,
-            car_make_id: userData.carMakeId || null,
-            car_model_id: userData.carModelId || null
+            email: userData.email
           })
           .eq('user_id', authData.user.id);
 
@@ -413,10 +405,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .from('customer_profiles')
           .update({
             full_name: userData.fullName || userName,
-            phone: normalizedPhone,
-            date_of_birth: userData.dateOfBirth || null,
-            car_make_id: userData.carMakeId || null,
-            car_model_id: userData.carModelId || null
+            phone: normalizedPhone
           })
           .eq('user_id', currentUser.id);
 
@@ -425,7 +414,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return { error: updateError };
         }
       } else {
-        // Create new profile
+        // Create new profile - only use basic columns
         const { error: profileError } = await supabase
           .from('customer_profiles')
           .insert({
@@ -434,9 +423,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             full_name: userData.fullName || userName,
             phone: normalizedPhone,
             email: userEmail,
-            date_of_birth: userData.dateOfBirth || null,
-            car_make_id: userData.carMakeId || null,
-            car_model_id: userData.carModelId || null,
             customer_type: 'normal'
           });
 
