@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useDeviceSession } from '@/hooks/useDeviceSession';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,10 +28,8 @@ const Auth = () => {
     signUpWithPhoneOTP,
     signInWithGoogle,
     completeGoogleRegistration,
-    createDeviceSession,
     user
   } = useAuth();
-  const { deviceFingerprint, deviceInfo } = useDeviceSession();
   const navigate = useNavigate();
 
   // Check if user needs to complete profile (came from Google OAuth)
@@ -150,8 +147,7 @@ const Auth = () => {
       setRegistrationForm(prev => ({ ...prev, phone: otpForm.phone }));
       toast.info('Please complete your registration');
     } else {
-      // Existing user - create session and redirect
-      await createDeviceSession(deviceFingerprint, deviceInfo);
+      // Existing user - redirect
       toast.success('Welcome back!');
       navigate('/');
     }
@@ -191,7 +187,6 @@ const Auth = () => {
       return;
     }
 
-    await createDeviceSession(deviceFingerprint, deviceInfo);
     toast.success('Account created successfully!');
     navigate('/');
     setLoading(false);
@@ -293,8 +288,6 @@ const Auth = () => {
       return;
     }
 
-    // Create device session
-    await createDeviceSession(deviceFingerprint, deviceInfo);
     toast.success('Account setup complete!');
     navigate('/');
     setLoading(false);

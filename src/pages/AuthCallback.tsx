@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useDeviceSession } from '@/hooks/useDeviceSession';
 import { supabase } from '@/lib/supabase';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,8 +8,7 @@ import { Button } from '@/components/ui/button';
 export default function AuthCallback() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { checkAndCreateProfile, createDeviceSession } = useAuth();
-  const { deviceFingerprint, deviceInfo } = useDeviceSession();
+  const { checkAndCreateProfile } = useAuth();
   const [status, setStatus] = useState('Processing login...');
   const [error, setError] = useState<string | null>(null);
 
@@ -103,19 +101,12 @@ export default function AuthCallback() {
         navigate('/auth?step=complete-profile');
       } else {
         setStatus('Login successful! Redirecting...');
-
-        try {
-          await createDeviceSession(deviceFingerprint, deviceInfo);
-        } catch (e) {
-          console.log('Device session creation skipped:', e);
-        }
-
         navigate('/');
       }
     };
 
     handleCallback();
-  }, [navigate, searchParams, checkAndCreateProfile, createDeviceSession, deviceFingerprint, deviceInfo]);
+  }, [navigate, searchParams, checkAndCreateProfile]);
 
   if (error) {
     return (

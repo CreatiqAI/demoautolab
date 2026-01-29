@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
@@ -34,8 +34,6 @@ interface AuthContextType {
   checkAndCreateProfile: () => Promise<{ isNewUser: boolean; error: any }>;
   completeGoogleRegistration: (userData: Omit<RegistrationData, 'email'>) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  // Session management
-  createDeviceSession: (deviceFingerprint: string, deviceInfo: any) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,7 +46,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     let authSubscription: any = null;
-    let sessionChannel: any = null;
 
     const initializeAuth = async () => {
       try {
@@ -79,37 +76,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Ignore TOKEN_REFRESHED, USER_UPDATED, etc. to prevent accidental logouts
         });
 
-        // Set up Realtime subscription for session invalidation
-        // This will force logout when another device logs in
-        if (session?.user) {
-          const deviceId = localStorage.getItem('device_session_id');
-          sessionChannel = supabase.channel('session-invalidation')
-            .on(
-              'postgres_changes',
-              {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'user_sessions',
-                filter: `user_id=eq.${session.user.id}`
-              },
-              (payload: any) => {
-                if (!isMounted) return;
-
-                // Check if this is OUR session being deactivated
-                const updatedSession = payload.new;
-                if (
-                  updatedSession.device_fingerprint === deviceId &&
-                  !updatedSession.is_active
-                ) {
-                  console.log('Session invalidated by another device');
-                  // Force logout
-                  supabase.auth.signOut();
-                }
-              }
-            )
-            .subscribe();
-        }
-
       } catch (error) {
         console.error('Auth initialization error:', error);
         // Don't logout on errors - keep user logged in
@@ -126,25 +92,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (authSubscription?.data?.subscription) {
         authSubscription.data.subscription.unsubscribe();
       }
-      if (sessionChannel) {
-        supabase.removeChannel(sessionChannel);
-      }
     };
   }, []);
 
   const signOut = async () => {
-    // Invalidate device session before signing out
-    if (user) {
-      try {
-        await supabase
-          .from('user_sessions')
-          .update({ is_active: false })
-          .eq('user_id', user.id)
-          .eq('is_active', true);
-      } catch (error) {
-        console.error('Error invalidating session:', error);
-      }
-    }
     // Clear any stored OTP data
     localStorage.removeItem('pending_phone_auth');
     await supabase.auth.signOut();
@@ -406,9 +357,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', currentUser.id)
         .single();
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        // Error other than "not found"
-        return { isNewUser: false, error: profileError };
+      // Handle errors - treat 406 or any error as "new user" to allow registration
+      if (profileError) {
+        // PGRST116 = not found, which is expected for new users
+        // 406 or other errors = assume new user to allow registration flow
+        console.log('Profile check result:', profileError.code, profileError.message);
+        return { isNewUser: true, error: null };
       }
 
       // If no profile exists, user is new
@@ -424,7 +378,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { isNewUser: false, error: null };
     } catch (error) {
-      return { isNewUser: false, error };
+      // On any error, treat as new user to allow registration
+      console.log('Profile check exception:', error);
+      return { isNewUser: true, error: null };
     }
   };
 
@@ -499,43 +455,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Create device session for single-device enforcement
-  const createDeviceSession = useCallback(async (
-    deviceFingerprint: string,
-    deviceInfo: any
-  ): Promise<boolean> => {
-    if (!user) return false;
-
-    try {
-      // Deactivate any existing active sessions for this user
-      await supabase
-        .from('user_sessions')
-        .update({ is_active: false })
-        .eq('user_id', user.id)
-        .eq('is_active', true);
-
-      // Create new session
-      const { error } = await supabase
-        .from('user_sessions')
-        .insert({
-          user_id: user.id,
-          device_fingerprint: deviceFingerprint,
-          device_info: deviceInfo,
-          is_active: true
-        });
-
-      if (error) {
-        console.error('Error creating session:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error creating device session:', error);
-      return false;
-    }
-  }, [user]);
-
   const value = {
     user,
     session,
@@ -546,8 +465,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithGoogle,
     checkAndCreateProfile,
     completeGoogleRegistration,
-    signOut,
-    createDeviceSession
+    signOut
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
