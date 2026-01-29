@@ -12,6 +12,7 @@ import ScrollToTop from './components/ScrollToTop';
 import Home from './pages/Home';
 import About from './pages/About';
 import Auth from './pages/Auth';
+import AuthCallback from './pages/AuthCallback';
 import Catalog from './pages/Catalog';
 import ProductDetails from './pages/ProductDetails';
 import Profile from './pages/Profile';
@@ -63,6 +64,7 @@ import My2ndHandListings from './pages/My2ndHandListings';
 import NotificationSettings from './pages/NotificationSettings';
 import MyPoints from './pages/MyPoints';
 import PointsRewards from './pages/admin/PointsRewards';
+import Salesmen from './pages/admin/Salesmen';
 
 const queryClient = new QueryClient();
 
@@ -81,6 +83,7 @@ const App = () => (
                   <Route path="/" element={<Home />} />
                   <Route path="/about" element={<About />} />
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route path="/catalog" element={<Catalog />} />
                   <Route path="/product/:id" element={<ProductDetails />} />
                   <Route path="/cart" element={<Cart />} />
@@ -132,6 +135,7 @@ const App = () => (
                     <Route path="installation-guides" element={<InstallationGuides />} />
                     <Route path="points-rewards" element={<PointsRewards />} />
                     <Route path="secondhand-moderation" element={<SecondhandModeration />} />
+                    <Route path="salesmen" element={<Salesmen />} />
                     <Route path="knowledge-base" element={<KnowledgeBase />} />
                     <Route path="users" element={<UserManagement />} />
                     <Route path="settings" element={<Settings />} />
