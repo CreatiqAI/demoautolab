@@ -74,10 +74,16 @@ export default function CarSelector({
         .select('*')
         .order('sort_order', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching car makes:', error);
+        // Set empty array on error - user can skip vehicle selection
+        setMakes([]);
+        return;
+      }
       setMakes(data || []);
     } catch (error) {
       console.error('Error fetching car makes:', error);
+      setMakes([]);
     } finally {
       setLoadingMakes(false);
     }
@@ -92,10 +98,15 @@ export default function CarSelector({
         .eq('make_id', makeId)
         .order('sort_order', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching car models:', error);
+        setModels([]);
+        return;
+      }
       setModels(data || []);
     } catch (error) {
       console.error('Error fetching car models:', error);
+      setModels([]);
     } finally {
       setLoadingModels(false);
     }
@@ -116,6 +127,15 @@ export default function CarSelector({
   // Group makes by popular vs others
   const popularMakes = makes.filter(m => m.is_popular);
   const otherMakes = makes.filter(m => !m.is_popular);
+
+  // If no makes available after loading, show a message
+  if (!loadingMakes && makes.length === 0) {
+    return (
+      <div className={`text-sm text-gray-500 italic ${className}`}>
+        Vehicle selection temporarily unavailable. You can add this later in your profile.
+      </div>
+    );
+  }
 
   return (
     <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${className}`}>
