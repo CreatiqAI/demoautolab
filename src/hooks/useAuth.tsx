@@ -264,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Wait a moment for database triggers
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Create customer profile - only use basic columns
+      // Create customer profile
       const { error: profileError } = await supabase
         .from('customer_profiles')
         .insert({
@@ -273,6 +273,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           full_name: userData.fullName,
           phone: phone,
           email: userData.email,
+          date_of_birth: userData.dateOfBirth || null,
           customer_type: 'normal'
         });
 
@@ -284,7 +285,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .update({
             full_name: userData.fullName,
             phone: phone,
-            email: userData.email
+            email: userData.email,
+            date_of_birth: userData.dateOfBirth || null
           })
           .eq('user_id', authData.user.id);
 
@@ -405,7 +407,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .from('customer_profiles')
           .update({
             full_name: userData.fullName || userName,
-            phone: normalizedPhone
+            phone: normalizedPhone,
+            date_of_birth: userData.dateOfBirth || null
           })
           .eq('user_id', currentUser.id);
 
@@ -414,7 +417,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return { error: updateError };
         }
       } else {
-        // Create new profile - only use basic columns
+        // Create new profile
         const { error: profileError } = await supabase
           .from('customer_profiles')
           .insert({
@@ -423,6 +426,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             full_name: userData.fullName || userName,
             phone: normalizedPhone,
             email: userEmail,
+            date_of_birth: userData.dateOfBirth || null,
             customer_type: 'normal'
           });
 

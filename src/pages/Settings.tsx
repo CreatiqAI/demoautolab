@@ -20,7 +20,8 @@ import {
   ShoppingBag,
   Newspaper,
   Tag as TagIcon,
-  Package
+  Package,
+  Calendar
 } from 'lucide-react';
 
 type TabType = 'account' | 'notifications';
@@ -30,6 +31,7 @@ interface CustomerProfile {
   name: string;
   email: string;
   phone: string;
+  date_of_birth: string | null;
   customer_type: 'normal' | 'merchant';
   created_at: string;
 }
@@ -89,6 +91,7 @@ export default function Settings() {
         name: profileData.full_name || profileData.name || '',
         email: profileData.email,
         phone: profileData.phone,
+        date_of_birth: profileData.date_of_birth || null,
         customer_type: profileData.customer_type,
         created_at: profileData.created_at
       });
@@ -265,6 +268,18 @@ export default function Settings() {
                           Phone Number
                         </label>
                         <p className="text-gray-900 font-medium">{profile?.phone || 'Not set'}</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <Calendar className="w-4 h-4 inline mr-2" />
+                          Date of Birth
+                        </label>
+                        <p className="text-gray-900 font-medium">
+                          {profile?.date_of_birth
+                            ? new Date(profile.date_of_birth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+                            : 'Not set'}
+                        </p>
                       </div>
 
                       <div>
