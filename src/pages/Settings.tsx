@@ -86,7 +86,7 @@ export default function Settings() {
 
       setProfile({
         id: profileData.id,
-        name: profileData.name,
+        name: profileData.full_name || profileData.name || '',
         email: profileData.email,
         phone: profileData.phone,
         customer_type: profileData.customer_type,
