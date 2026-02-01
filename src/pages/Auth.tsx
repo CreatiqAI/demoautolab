@@ -452,18 +452,18 @@ const Auth = () => {
                 <CarSelector
                   selectedMakeId={registrationForm.carMakeId}
                   selectedModelId={registrationForm.carModelId}
-                  onMakeChange={(makeId, makeName) => setRegistrationForm({
-                    ...registrationForm,
+                  onMakeChange={(makeId, makeName) => setRegistrationForm(prev => ({
+                    ...prev,
                     carMakeId: makeId,
                     carMakeName: makeName,
                     carModelId: '',
                     carModelName: ''
-                  })}
-                  onModelChange={(modelId, modelName) => setRegistrationForm({
-                    ...registrationForm,
+                  }))}
+                  onModelChange={(modelId, modelName) => setRegistrationForm(prev => ({
+                    ...prev,
                     carModelId: modelId,
                     carModelName: modelName
-                  })}
+                  }))}
                   showLabels={false}
                   required={true}
                 />
@@ -603,18 +603,18 @@ const Auth = () => {
                 <CarSelector
                   selectedMakeId={registrationForm.carMakeId}
                   selectedModelId={registrationForm.carModelId}
-                  onMakeChange={(makeId, makeName) => setRegistrationForm({
-                    ...registrationForm,
+                  onMakeChange={(makeId, makeName) => setRegistrationForm(prev => ({
+                    ...prev,
                     carMakeId: makeId,
                     carMakeName: makeName,
                     carModelId: '',
                     carModelName: ''
-                  })}
-                  onModelChange={(modelId, modelName) => setRegistrationForm({
-                    ...registrationForm,
+                  }))}
+                  onModelChange={(modelId, modelName) => setRegistrationForm(prev => ({
+                    ...prev,
                     carModelId: modelId,
                     carModelName: modelName
-                  })}
+                  }))}
                   showLabels={false}
                   required={true}
                 />
