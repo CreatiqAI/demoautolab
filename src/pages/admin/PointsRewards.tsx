@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 
 export default function PointsRewards() {
-  const [activeTab, setActiveTab] = useState('items');
+  const [activeTab, setActiveTab] = useState('analytics');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -244,6 +244,10 @@ export default function PointsRewards() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="analytics" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Analytics
+          </TabsTrigger>
           <TabsTrigger value="items" className="gap-2">
             <Gift className="h-4 w-4" />
             Reward Items
@@ -256,13 +260,58 @@ export default function PointsRewards() {
             <Users className="h-4 w-4" />
             Customer Points
           </TabsTrigger>
-          <TabsTrigger value="analytics" className="gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Analytics
-          </TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Reward Items */}
+        {/* Tab 1: Analytics */}
+        <TabsContent value="analytics" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Points Issued</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.totalIssued?.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">All time</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Points Redeemed</CardTitle>
+                <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.totalRedeemed?.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">All time</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Point Balance</CardTitle>
+                <Award className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">{analytics.activeBalance?.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">Outstanding</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Redemption Rate</CardTitle>
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.redemptionRate || 0}%</div>
+                <p className="text-xs text-muted-foreground mt-1">Points redeemed</p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Tab 2: Reward Items */}
         <TabsContent value="items" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {rewardItems.length === 0 ? (
@@ -341,7 +390,7 @@ export default function PointsRewards() {
           </div>
         </TabsContent>
 
-        {/* Tab 2: Redemptions */}
+        {/* Tab 3: Redemptions */}
         <TabsContent value="redemptions" className="space-y-4">
           <Card>
             <CardHeader>
@@ -412,7 +461,7 @@ export default function PointsRewards() {
           </Card>
         </TabsContent>
 
-        {/* Tab 3: Customer Points */}
+        {/* Tab 4: Customer Points */}
         <TabsContent value="customers" className="space-y-4">
           <Card>
             <CardHeader>
@@ -451,54 +500,6 @@ export default function PointsRewards() {
           </Card>
         </TabsContent>
 
-        {/* Tab 4: Analytics */}
-        <TabsContent value="analytics" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Points Issued</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analytics.totalIssued?.toLocaleString() || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">All time</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Points Redeemed</CardTitle>
-                <ShoppingBag className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analytics.totalRedeemed?.toLocaleString() || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">All time</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Point Balance</CardTitle>
-                <Award className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-primary">{analytics.activeBalance?.toLocaleString() || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">Outstanding</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Redemption Rate</CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analytics.redemptionRate || 0}%</div>
-                <p className="text-xs text-muted-foreground mt-1">Points redeemed</p>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
       </Tabs>
 
       {/* Create/Edit Reward Item Dialog */}

@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase, Package, FileText, Image, Link2, ExternalLink, UserCheck, Car } from 'lucide-react';
+import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase, Package, FileText, Image, Link2, ExternalLink, UserCheck, Car, Trash2, Ban, RotateCcw, AlertTriangle } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { CustomerTypeManager } from '@/components/admin/CustomerTypeManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -89,6 +90,10 @@ export default function Customers() {
   const [customerOrders, setCustomerOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [orderStats, setOrderStats] = useState({ totalOrders: 0, totalSpent: 0 });
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSuspendDialogOpen, setIsSuspendDialogOpen] = useState(false);
+  const [customerToAction, setCustomerToAction] = useState<CustomerProfile | null>(null);
+  const [merchantDetails, setMerchantDetails] = useState<MerchantApplication | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -396,6 +401,137 @@ export default function Customers() {
     }
   };
 
+  // Fetch merchant details for a customer
+  const fetchMerchantDetails = async (customerId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('merchant_registrations' as any)
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!error && data) {
+        // Fetch salesman info if available
+        if (data.referred_by_salesman_id) {
+          const { data: salesmanData } = await supabase
+            .from('salesmen' as any)
+            .select('id, name, referral_code')
+            .eq('id', data.referred_by_salesman_id)
+            .single();
+          if (salesmanData) {
+            data.salesman = salesmanData;
+          }
+        }
+        setMerchantDetails(data);
+      } else {
+        setMerchantDetails(null);
+      }
+    } catch (error) {
+      console.error('Error fetching merchant details:', error);
+      setMerchantDetails(null);
+    }
+  };
+
+  // Suspend customer account
+  const handleSuspendCustomer = async () => {
+    if (!customerToAction) return;
+
+    try {
+      const { error } = await supabase
+        .from('customer_profiles' as any)
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', customerToAction.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Account Suspended',
+        description: `${customerToAction.full_name}'s account has been suspended.`
+      });
+
+      setIsSuspendDialogOpen(false);
+      setCustomerToAction(null);
+      fetchCustomers();
+    } catch (error: any) {
+      console.error('Error suspending customer:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to suspend account',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Reactivate customer account
+  const handleReactivateCustomer = async (customer: CustomerProfile) => {
+    try {
+      const { error } = await supabase
+        .from('customer_profiles' as any)
+        .update({ is_active: true, updated_at: new Date().toISOString() })
+        .eq('id', customer.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Account Reactivated',
+        description: `${customer.full_name}'s account has been reactivated.`
+      });
+
+      fetchCustomers();
+    } catch (error: any) {
+      console.error('Error reactivating customer:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to reactivate account',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Delete customer account
+  const handleDeleteCustomer = async () => {
+    if (!customerToAction) return;
+
+    try {
+      const { error } = await supabase
+        .from('customer_profiles' as any)
+        .delete()
+        .eq('id', customerToAction.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Customer Deleted',
+        description: `${customerToAction.full_name}'s account has been permanently deleted.`
+      });
+
+      setIsDeleteDialogOpen(false);
+      setCustomerToAction(null);
+      fetchCustomers();
+    } catch (error: any) {
+      console.error('Error deleting customer:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete customer',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Open view dialog with merchant details fetch
+  const handleOpenViewDialog = async (customer: CustomerProfile) => {
+    setSelectedCustomer(customer);
+    setIsViewDialogOpen(true);
+    await fetchCustomerOrderStats(customer.id);
+    if (customer.customer_type === 'merchant') {
+      await fetchMerchantDetails(customer.id);
+    } else {
+      setMerchantDetails(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -450,7 +586,6 @@ export default function Customers() {
                     <TableRow>
                       <TableHead>Customer</TableHead>
                       <TableHead>Contact</TableHead>
-                      <TableHead>Vehicle</TableHead>
                       <TableHead>Customer Type</TableHead>
                       <TableHead>Last Updated</TableHead>
                       <TableHead>Status</TableHead>
@@ -460,17 +595,25 @@ export default function Customers() {
                   <TableBody>
                     {filteredCustomers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8">
+                        <TableCell colSpan={6} className="text-center py-8">
                           {searchTerm ? 'No customers found matching your search.' : 'No customers registered yet.'}
                         </TableCell>
                       </TableRow>
                     ) : (
                       filteredCustomers.map((customer) => (
-                        <TableRow key={customer.id}>
+                        <TableRow key={customer.id} className={!customer.is_active ? 'bg-red-50/50' : ''}>
                           <TableCell>
                             <div className="flex items-center gap-3">
-                              <div className="p-2 bg-blue-100 rounded-full">
-                                <User className="h-4 w-4 text-blue-600" />
+                              <div className={`p-2 rounded-full ${
+                                customer.customer_type === 'merchant'
+                                  ? 'bg-purple-100'
+                                  : 'bg-blue-100'
+                              }`}>
+                                {customer.customer_type === 'merchant' ? (
+                                  <Store className="h-4 w-4 text-purple-600" />
+                                ) : (
+                                  <User className="h-4 w-4 text-blue-600" />
+                                )}
                               </div>
                               <div>
                                 <div className="font-medium">{customer.full_name}</div>
@@ -497,23 +640,17 @@ export default function Customers() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            {customer.car_make_name ? (
-                              <div className="flex items-center gap-1 text-sm">
-                                <Car className="h-3 w-3 text-blue-600" />
-                                <span>
-                                  {customer.car_make_name}
-                                  {customer.car_model_name && ` ${customer.car_model_name}`}
-                                </span>
-                              </div>
+                            {customer.customer_type === 'merchant' ? (
+                              <Badge className="bg-purple-600 hover:bg-purple-700 text-white">
+                                <Store className="h-3 w-3 mr-1" />
+                                B2B Merchant
+                              </Badge>
                             ) : (
-                              <span className="text-sm text-muted-foreground">-</span>
+                              <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50">
+                                <User className="h-3 w-3 mr-1" />
+                                B2C Customer
+                              </Badge>
                             )}
-                          </TableCell>
-                          <TableCell>
-                            <CustomerTypeManager
-                              customer={customer as any}
-                              onCustomerTypeUpdate={fetchCustomers}
-                            />
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1 text-sm">
@@ -522,16 +659,24 @@ export default function Customers() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={customer.is_active ? "default" : "destructive"}>
-                              {customer.is_active ? 'Active' : 'Inactive'}
-                            </Badge>
+                            {customer.is_active ? (
+                              <Badge className="bg-green-100 text-green-700 border-green-300">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-300">
+                                <Ban className="h-3 w-3 mr-1" />
+                                Suspended
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-1">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => openViewDialog(customer)}
+                                onClick={() => handleOpenViewDialog(customer)}
                                 title="View Details"
                               >
                                 <Eye className="h-4 w-4" />
@@ -543,6 +688,42 @@ export default function Customers() {
                                 title="View Orders"
                               >
                                 <ShoppingCart className="h-4 w-4" />
+                              </Button>
+                              {customer.is_active ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setCustomerToAction(customer);
+                                    setIsSuspendDialogOpen(true);
+                                  }}
+                                  title="Suspend Account"
+                                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                >
+                                  <Ban className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleReactivateCustomer(customer)}
+                                  title="Reactivate Account"
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setCustomerToAction(customer);
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                                title="Delete Customer"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </TableCell>
@@ -653,67 +834,251 @@ export default function Customers() {
 
       {/* Customer Details Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Customer Details</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedCustomer?.customer_type === 'merchant' ? (
+                <>
+                  <Store className="h-5 w-5 text-purple-600" />
+                  B2B Merchant Details
+                </>
+              ) : (
+                <>
+                  <User className="h-5 w-5 text-blue-600" />
+                  B2C Customer Details
+                </>
+              )}
+            </DialogTitle>
             <DialogDescription>
-              Complete customer profile and information
+              Complete profile information
             </DialogDescription>
           </DialogHeader>
 
           {selectedCustomer && (
             <div className="space-y-6">
+              {/* Status Banner */}
+              <div className={`p-4 rounded-lg flex items-center justify-between ${
+                selectedCustomer.is_active
+                  ? 'bg-green-50 border border-green-200'
+                  : 'bg-red-50 border border-red-200'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-full ${
+                    selectedCustomer.customer_type === 'merchant'
+                      ? 'bg-purple-100'
+                      : 'bg-blue-100'
+                  }`}>
+                    {selectedCustomer.customer_type === 'merchant' ? (
+                      <Store className="h-6 w-6 text-purple-600" />
+                    ) : (
+                      <User className="h-6 w-6 text-blue-600" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">{selectedCustomer.full_name}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedCustomer.customer_type === 'merchant' ? 'B2B Merchant' : 'B2C Customer'}
+                    </p>
+                  </div>
+                </div>
+                {selectedCustomer.is_active ? (
+                  <Badge className="bg-green-100 text-green-700 border-green-300">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Active
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-300">
+                    <Ban className="h-3 w-3 mr-1" />
+                    Suspended
+                  </Badge>
+                )}
+              </div>
+
+              {/* Basic Information Grid */}
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <h4 className="font-semibold mb-3">Personal Information</h4>
-                  <div className="space-y-2 text-sm">
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Personal Information
+                  </h4>
+                  <div className="space-y-2 text-sm bg-gray-50 p-3 rounded-lg">
                     <div><span className="font-medium">Full Name:</span> {selectedCustomer.full_name}</div>
-                    <div><span className="font-medium">Gender:</span> {selectedCustomer.gender || 'Not specified'}</div>
                     <div><span className="font-medium">Date of Birth:</span> {
                       selectedCustomer.date_of_birth
-                        ? formatDate(selectedCustomer.date_of_birth)
+                        ? new Date(selectedCustomer.date_of_birth).toLocaleDateString('en-MY', { year: 'numeric', month: 'long', day: 'numeric' })
                         : 'Not provided'
                     }</div>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="font-semibold mb-3">Contact Information</h4>
-                  <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Email:</span> {
-                      selectedCustomer.email || 'Not provided'
-                    }</div>
-                    <div><span className="font-medium">Phone:</span> {
-                      selectedCustomer.phone || 'Not provided'
-                    }</div>
-                    <div><span className="font-medium">Customer Type:</span>
-                      <Badge variant="outline" className="ml-2">
-                        {selectedCustomer.customer_type || 'normal'}
-                      </Badge>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    Contact Information
+                  </h4>
+                  <div className="space-y-2 text-sm bg-gray-50 p-3 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-3 w-3 text-muted-foreground" />
+                      {selectedCustomer.email || 'Not provided'}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3 w-3 text-muted-foreground" />
+                      {selectedCustomer.phone || 'Not provided'}
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Vehicle Information */}
-              {(selectedCustomer.car_make_name || selectedCustomer.car_model_name) && (
-                <div>
-                  <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <Car className="h-4 w-4" />
-                    Vehicle Information
-                  </h4>
-                  <div className="text-sm bg-blue-50 p-3 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Current Car:</span>
-                      <span>
-                        {selectedCustomer.car_make_name || 'Unknown Make'}
-                        {selectedCustomer.car_model_name && ` ${selectedCustomer.car_model_name}`}
-                      </span>
+              <div>
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <Car className="h-4 w-4" />
+                  Vehicle Information
+                </h4>
+                {selectedCustomer.car_make_name ? (
+                  <div className="text-sm bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-3">
+                      <Car className="h-8 w-8 text-blue-600" />
+                      <div>
+                        <div className="font-semibold text-blue-900">
+                          {selectedCustomer.car_make_name} {selectedCustomer.car_model_name}
+                        </div>
+                        <div className="text-xs text-blue-700">Current registered vehicle</div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="text-sm bg-gray-50 p-4 rounded-lg text-muted-foreground italic">
+                    No vehicle information registered
+                  </div>
+                )}
+              </div>
+
+              {/* Merchant-specific Information */}
+              {selectedCustomer.customer_type === 'merchant' && merchantDetails && (
+                <>
+                  {/* Business Information */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-purple-700">
+                      <Building2 className="h-4 w-4" />
+                      Business Information
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="bg-purple-50 p-3 rounded-lg">
+                        <div className="font-medium text-purple-900">Company Name</div>
+                        <div>{merchantDetails.company_name}</div>
+                      </div>
+                      <div className="bg-purple-50 p-3 rounded-lg">
+                        <div className="font-medium text-purple-900">Business Type</div>
+                        <div>{merchantDetails.business_type}</div>
+                      </div>
+                      {merchantDetails.business_registration_no && (
+                        <div className="bg-purple-50 p-3 rounded-lg">
+                          <div className="font-medium text-purple-900">Business Reg No.</div>
+                          <div>{merchantDetails.business_registration_no}</div>
+                        </div>
+                      )}
+                      {merchantDetails.tax_id && (
+                        <div className="bg-purple-50 p-3 rounded-lg">
+                          <div className="font-medium text-purple-900">Tax ID</div>
+                          <div>{merchantDetails.tax_id}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Referral Information */}
+                  {(merchantDetails.referral_code || (merchantDetails as any).salesman) && (
+                    <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                      <h4 className="font-semibold mb-2 flex items-center gap-2 text-green-800">
+                        <UserCheck className="h-4 w-4" />
+                        Referral Information
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        {merchantDetails.referral_code && (
+                          <div>
+                            <div className="font-medium text-green-800">Referral Code Used</div>
+                            <Badge variant="outline" className="mt-1">{merchantDetails.referral_code}</Badge>
+                          </div>
+                        )}
+                        {(merchantDetails as any).salesman && (
+                          <div>
+                            <div className="font-medium text-green-800">Referred By</div>
+                            <div className="mt-1">{(merchantDetails as any).salesman.name}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Documents */}
+                  {(merchantDetails.ssm_document_url || merchantDetails.bank_proof_url) && (
+                    <div>
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Uploaded Documents
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        {merchantDetails.ssm_document_url && (
+                          <a
+                            href={merchantDetails.ssm_document_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            <FileText className="h-5 w-5 text-blue-600" />
+                            <div>
+                              <div className="font-medium text-sm">SSM Document</div>
+                              <div className="text-xs text-muted-foreground">Click to view</div>
+                            </div>
+                            <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
+                          </a>
+                        )}
+                        {merchantDetails.bank_proof_url && (
+                          <a
+                            href={merchantDetails.bank_proof_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            <FileText className="h-5 w-5 text-green-600" />
+                            <div>
+                              <div className="font-medium text-sm">Bank Proof</div>
+                              <div className="text-xs text-muted-foreground">Click to view</div>
+                            </div>
+                            <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Workshop Photos */}
+                  {merchantDetails.workshop_photos && merchantDetails.workshop_photos.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <Image className="h-4 w-4" />
+                        Workshop Photos ({merchantDetails.workshop_photos.length})
+                      </h4>
+                      <div className="grid grid-cols-4 gap-2">
+                        {merchantDetails.workshop_photos.map((photo: string, idx: number) => (
+                          <a
+                            key={idx}
+                            href={photo}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all"
+                          >
+                            <img src={photo} alt={`Workshop ${idx + 1}`} className="w-full h-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
+              {/* Address */}
               {selectedCustomer.address && (
                 <div>
                   <h4 className="font-semibold mb-3 flex items-center gap-2">
@@ -735,30 +1100,21 @@ export default function Customers() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-6">
+              {/* Account & Metrics */}
+              <div className="grid grid-cols-2 gap-6 border-t pt-4">
                 <div>
                   <h4 className="font-semibold mb-3">Account Information</h4>
                   <div className="space-y-2 text-sm">
                     <div><span className="font-medium">Last Updated:</span> {formatDate(selectedCustomer.updated_at)}</div>
-                    <div><span className="font-medium">User ID:</span> {selectedCustomer.user_id || 'Not linked'}</div>
-                    <div><span className="font-medium">Status:</span>
-                      <Badge variant={selectedCustomer.is_active ? "default" : "destructive"} className="ml-2">
-                        {selectedCustomer.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </div>
+                    <div><span className="font-medium">User ID:</span> <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">{selectedCustomer.user_id?.slice(0, 12) || 'Not linked'}...</code></div>
                   </div>
                 </div>
 
                 <div>
                   <h4 className="font-semibold mb-3">Customer Metrics</h4>
                   <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Total Orders:</span> {orderStats.totalOrders}</div>
-                    <div><span className="font-medium">Total Spent:</span> RM {orderStats.totalSpent.toFixed(2)}</div>
-                    <div><span className="font-medium">Profile Created:</span> {
-                      selectedCustomer.updated_at
-                        ? Math.ceil((Date.now() - new Date(selectedCustomer.updated_at).getTime()) / (1000 * 60 * 60 * 24))
-                        : 0
-                    } days ago</div>
+                    <div><span className="font-medium">Total Orders:</span> <span className="font-bold text-primary">{orderStats.totalOrders}</span></div>
+                    <div><span className="font-medium">Total Spent:</span> <span className="font-bold text-green-600">RM {orderStats.totalSpent.toFixed(2)}</span></div>
                   </div>
                   <Button
                     variant="outline"
@@ -1243,6 +1599,75 @@ export default function Customers() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Suspend Confirmation Dialog */}
+      <AlertDialog open={isSuspendDialogOpen} onOpenChange={setIsSuspendDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
+              <AlertTriangle className="h-5 w-5" />
+              Suspend Customer Account
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to suspend <strong>{customerToAction?.full_name}</strong>'s account?
+              <br /><br />
+              This will prevent the customer from:
+              <ul className="list-disc ml-6 mt-2 space-y-1">
+                <li>Logging into their account</li>
+                <li>Placing new orders</li>
+                <li>Accessing their profile</li>
+              </ul>
+              <br />
+              You can reactivate the account later if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCustomerToAction(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleSuspendCustomer}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              <Ban className="h-4 w-4 mr-2" />
+              Suspend Account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Customer Permanently
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete <strong>{customerToAction?.full_name}</strong>'s account?
+              <br /><br />
+              <span className="text-red-600 font-semibold">This action cannot be undone.</span> All customer data including:
+              <ul className="list-disc ml-6 mt-2 space-y-1">
+                <li>Profile information</li>
+                <li>Order history</li>
+                <li>Points and rewards</li>
+                <li>Saved vehicles and preferences</li>
+              </ul>
+              <br />
+              will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCustomerToAction(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCustomer}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
