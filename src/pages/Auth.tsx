@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Eye, EyeOff, ArrowLeft, Shield, Phone, User, Calendar, Loader2, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Shield, Phone, User, Calendar, Loader2, ArrowRight, Car } from 'lucide-react';
 import OTPInput from '@/components/OTPInput';
+import CarSelector from '@/components/CarSelector';
 
 type AuthStep = 'contact' | 'otp' | 'details' | 'google-complete';
 
@@ -53,7 +54,11 @@ const Auth = () => {
     fullName: '',
     email: '',
     phone: '',
-    dateOfBirth: ''
+    dateOfBirth: '',
+    carMakeId: '',
+    carMakeName: '',
+    carModelId: '',
+    carModelName: ''
   });
 
   // Admin form
@@ -164,6 +169,11 @@ const Auth = () => {
       return;
     }
 
+    if (!registrationForm.carMakeId || !registrationForm.carModelId) {
+      toast.error('Please select your current car');
+      return;
+    }
+
     setLoading(true);
     const normalizedPhone = normalizePhone(otpForm.phone);
 
@@ -171,7 +181,11 @@ const Auth = () => {
       fullName: registrationForm.fullName,
       email: registrationForm.email,
       phone: normalizedPhone,
-      dateOfBirth: registrationForm.dateOfBirth || undefined
+      dateOfBirth: registrationForm.dateOfBirth || undefined,
+      carMakeId: registrationForm.carMakeId || undefined,
+      carMakeName: registrationForm.carMakeName || undefined,
+      carModelId: registrationForm.carModelId || undefined,
+      carModelName: registrationForm.carModelName || undefined
     });
 
     if (error) {
@@ -265,12 +279,21 @@ const Auth = () => {
       return;
     }
 
+    if (!registrationForm.carMakeId || !registrationForm.carModelId) {
+      toast.error('Please select your current car');
+      return;
+    }
+
     setLoading(true);
 
     const { error } = await completeGoogleRegistration({
       fullName: registrationForm.fullName,
       phone: registrationForm.phone,
-      dateOfBirth: registrationForm.dateOfBirth || undefined
+      dateOfBirth: registrationForm.dateOfBirth || undefined,
+      carMakeId: registrationForm.carMakeId || undefined,
+      carMakeName: registrationForm.carMakeName || undefined,
+      carModelId: registrationForm.carModelId || undefined,
+      carModelName: registrationForm.carModelName || undefined
     });
 
     if (error) {
@@ -420,6 +443,33 @@ const Auth = () => {
                 <p className="text-xs text-gray-500">For birthday promotions</p>
               </div>
 
+              {/* Current Car */}
+              <div className="space-y-2">
+                <Label className="text-gray-700 text-sm font-medium flex items-center gap-1">
+                  <Car className="h-4 w-4" />
+                  Your Current Car <span className="text-red-500">*</span>
+                </Label>
+                <CarSelector
+                  selectedMakeId={registrationForm.carMakeId}
+                  selectedModelId={registrationForm.carModelId}
+                  onMakeChange={(makeId, makeName) => setRegistrationForm({
+                    ...registrationForm,
+                    carMakeId: makeId,
+                    carMakeName: makeName,
+                    carModelId: '',
+                    carModelName: ''
+                  })}
+                  onModelChange={(modelId, modelName) => setRegistrationForm({
+                    ...registrationForm,
+                    carModelId: modelId,
+                    carModelName: modelName
+                  })}
+                  showLabels={false}
+                  required={true}
+                />
+                <p className="text-xs text-gray-500">For personalized product recommendations</p>
+              </div>
+
               <Button
                 type="submit"
                 className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors mt-4"
@@ -542,6 +592,33 @@ const Auth = () => {
                   className="border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                 />
                 <p className="text-xs text-gray-500">For birthday promotions</p>
+              </div>
+
+              {/* Current Car */}
+              <div className="space-y-2">
+                <Label className="text-gray-700 text-sm font-medium flex items-center gap-1">
+                  <Car className="h-4 w-4" />
+                  Your Current Car <span className="text-red-500">*</span>
+                </Label>
+                <CarSelector
+                  selectedMakeId={registrationForm.carMakeId}
+                  selectedModelId={registrationForm.carModelId}
+                  onMakeChange={(makeId, makeName) => setRegistrationForm({
+                    ...registrationForm,
+                    carMakeId: makeId,
+                    carMakeName: makeName,
+                    carModelId: '',
+                    carModelName: ''
+                  })}
+                  onModelChange={(modelId, modelName) => setRegistrationForm({
+                    ...registrationForm,
+                    carModelId: modelId,
+                    carModelName: modelName
+                  })}
+                  showLabels={false}
+                  required={true}
+                />
+                <p className="text-xs text-gray-500">For personalized product recommendations</p>
               </div>
 
               <Button

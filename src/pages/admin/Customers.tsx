@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase, Package, FileText, Image, Link2, ExternalLink, UserCheck } from 'lucide-react';
+import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase, Package, FileText, Image, Link2, ExternalLink, UserCheck, Car } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CustomerTypeManager } from '@/components/admin/CustomerTypeManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,6 +25,11 @@ interface CustomerProfile {
   preferences: any;
   is_active: boolean | null;
   updated_at: string | null;
+  // Vehicle information
+  car_make_id: string | null;
+  car_make_name: string | null;
+  car_model_id: string | null;
+  car_model_name: string | null;
 }
 
 interface SocialMediaLink {
@@ -445,9 +450,9 @@ export default function Customers() {
                     <TableRow>
                       <TableHead>Customer</TableHead>
                       <TableHead>Contact</TableHead>
+                      <TableHead>Vehicle</TableHead>
                       <TableHead>Customer Type</TableHead>
                       <TableHead>Last Updated</TableHead>
-                      <TableHead>Type</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -492,6 +497,19 @@ export default function Customers() {
                             </div>
                           </TableCell>
                           <TableCell>
+                            {customer.car_make_name ? (
+                              <div className="flex items-center gap-1 text-sm">
+                                <Car className="h-3 w-3 text-blue-600" />
+                                <span>
+                                  {customer.car_make_name}
+                                  {customer.car_model_name && ` ${customer.car_model_name}`}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             <CustomerTypeManager
                               customer={customer as any}
                               onCustomerTypeUpdate={fetchCustomers}
@@ -501,11 +519,6 @@ export default function Customers() {
                             <div className="flex items-center gap-1 text-sm">
                               <Calendar className="h-3 w-3" />
                               {formatDate(customer.updated_at)}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {customer.customer_type || 'normal'}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -681,6 +694,25 @@ export default function Customers() {
                   </div>
                 </div>
               </div>
+
+              {/* Vehicle Information */}
+              {(selectedCustomer.car_make_name || selectedCustomer.car_model_name) && (
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Car className="h-4 w-4" />
+                    Vehicle Information
+                  </h4>
+                  <div className="text-sm bg-blue-50 p-3 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Current Car:</span>
+                      <span>
+                        {selectedCustomer.car_make_name || 'Unknown Make'}
+                        {selectedCustomer.car_model_name && ` ${selectedCustomer.car_model_name}`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {selectedCustomer.address && (
                 <div>

@@ -9,6 +9,10 @@ interface RegistrationData {
   email: string;
   phone: string;
   dateOfBirth?: string;
+  carMakeId?: string;
+  carMakeName?: string;
+  carModelId?: string;
+  carModelName?: string;
 }
 
 // Store for simulated OTP codes (in production, this would be handled by Twilio/SMS provider)
@@ -274,7 +278,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           phone: phone,
           email: userData.email,
           date_of_birth: userData.dateOfBirth || null,
-          customer_type: 'normal'
+          customer_type: 'normal',
+          car_make_id: userData.carMakeId || null,
+          car_make_name: userData.carMakeName || null,
+          car_model_id: userData.carModelId || null,
+          car_model_name: userData.carModelName || null
         });
 
       if (profileError) {
@@ -286,7 +294,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             full_name: userData.fullName,
             phone: phone,
             email: userData.email,
-            date_of_birth: userData.dateOfBirth || null
+            date_of_birth: userData.dateOfBirth || null,
+            car_make_id: userData.carMakeId || null,
+            car_make_name: userData.carMakeName || null,
+            car_model_id: userData.carModelId || null,
+            car_model_name: userData.carModelName || null
           })
           .eq('user_id', authData.user.id);
 
@@ -408,7 +420,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .update({
             full_name: userData.fullName || userName,
             phone: normalizedPhone,
-            date_of_birth: userData.dateOfBirth || null
+            date_of_birth: userData.dateOfBirth || null,
+            car_make_id: userData.carMakeId || null,
+            car_make_name: userData.carMakeName || null,
+            car_model_id: userData.carModelId || null,
+            car_model_name: userData.carModelName || null
           })
           .eq('user_id', currentUser.id);
 
@@ -427,7 +443,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             phone: normalizedPhone,
             email: userEmail,
             date_of_birth: userData.dateOfBirth || null,
-            customer_type: 'normal'
+            customer_type: 'normal',
+            car_make_id: userData.carMakeId || null,
+            car_make_name: userData.carMakeName || null,
+            car_model_id: userData.carModelId || null,
+            car_model_name: userData.carModelName || null
           });
 
         if (profileError) {

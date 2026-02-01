@@ -26,7 +26,8 @@ const MerchantRegister = () => {
   const { signUp } = useAuth();
   const navigate = useNavigate();
 
-  const [accessCode, setAccessCode] = useState('');
+  const [salesmanCode, setSalesmanCode] = useState('');
+  const [salesmanData, setSalesmanData] = useState<{ id: string; name: string } | null>(null);
 
   const [merchantForm, setMerchantForm] = useState({
     username: '',
@@ -38,18 +39,14 @@ const MerchantRegister = () => {
     taxId: '',
     businessType: '',
     address: '',
-    // New fields
+    // Additional fields
     companyProfileUrl: '',
     socialMediaLinks: [] as SocialMediaLink[],
     ssmDocumentUrl: '',
     bankProofUrl: '',
-    workshopPhotos: [] as string[],
-    referralCode: ''
+    workshopPhotos: [] as string[]
   });
 
-  // Track validated referral
-  const [referralValidated, setReferralValidated] = useState(false);
-  const [referralSalesman, setReferralSalesman] = useState<any>(null);
 
   const normalizePhone = (phone: string) => {
     const digits = phone.replace(/\D/g, '');
@@ -64,16 +61,16 @@ const MerchantRegister = () => {
   const handleValidateCode = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!accessCode.trim()) {
-      toast.error('Please enter an access code');
+    if (!salesmanCode.trim()) {
+      toast.error('Please enter a salesman code');
       return;
     }
 
     setLoading(true);
 
     try {
-      const { data, error } = await (supabase.rpc as any)('validate_merchant_code', {
-        p_code: accessCode.toUpperCase()
+      const { data, error } = await (supabase.rpc as any)('validate_referral_code', {
+        p_code: salesmanCode.toUpperCase()
       });
 
       if (error) {
@@ -83,13 +80,18 @@ const MerchantRegister = () => {
         return;
       }
 
-      if (data && (data as any).valid) {
-        toast.success('Access code validated successfully!');
+      // validate_referral_code returns an array with the result
+      if (data && data[0]?.valid) {
+        toast.success(`Code validated! Referred by ${data[0].salesman_name}`);
         setCodeValidated(true);
-        setCodeData(data);
+        setSalesmanData({
+          id: data[0].salesman_id,
+          name: data[0].salesman_name
+        });
+        setCodeData(data[0]);
         setStep(2);
       } else {
-        toast.error((data as any)?.message || 'Invalid or expired access code');
+        toast.error('Invalid salesman code. Please contact your sales representative.');
       }
     } catch (error: any) {
       console.error('Code validation error:', error);
@@ -97,37 +99,6 @@ const MerchantRegister = () => {
     }
 
     setLoading(false);
-  };
-
-  // Validate referral code
-  const handleValidateReferral = async () => {
-    if (!merchantForm.referralCode.trim()) {
-      setReferralValidated(false);
-      setReferralSalesman(null);
-      return;
-    }
-
-    try {
-      const { data, error } = await (supabase.rpc as any)('validate_referral_code', {
-        p_code: merchantForm.referralCode.toUpperCase()
-      });
-
-      if (error || !data?.[0]?.valid) {
-        toast.error('Invalid referral code');
-        setReferralValidated(false);
-        setReferralSalesman(null);
-        return;
-      }
-
-      setReferralValidated(true);
-      setReferralSalesman({
-        id: data[0].salesman_id,
-        name: data[0].salesman_name
-      });
-      toast.success(`Referral code valid - referred by ${data[0].salesman_name}`);
-    } catch (error) {
-      console.error('Referral validation error:', error);
-    }
   };
 
   // Upload file to Supabase Storage
@@ -376,7 +347,7 @@ const MerchantRegister = () => {
         .from('merchant_registrations' as any)
         .insert({
           customer_id: (customerProfile as any).id,
-          code_id: codeData.code_id,
+          code_id: null, // No longer using merchant_codes table
           company_name: merchantForm.companyName,
           business_registration_no: merchantForm.businessRegistrationNo,
           tax_id: merchantForm.taxId || null,
@@ -389,8 +360,8 @@ const MerchantRegister = () => {
           ssm_document_url: merchantForm.ssmDocumentUrl,
           bank_proof_url: merchantForm.bankProofUrl,
           workshop_photos: merchantForm.workshopPhotos,
-          referral_code: merchantForm.referralCode || null,
-          referred_by_salesman_id: referralSalesman?.id || null
+          referral_code: salesmanCode.toUpperCase() || null, // Use the salesman code used for access
+          referred_by_salesman_id: salesmanData?.id || null // Use the salesman who gave them access
         } as any);
 
       if (registrationError) {
@@ -425,7 +396,7 @@ const MerchantRegister = () => {
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            {step === 1 ? 'Back to Login' : 'Back to Code Entry'}
+            {step === 1 ? 'Back to Login' : 'Back to Salesman Code'}
           </Button>
         </div>
 
@@ -443,36 +414,36 @@ const MerchantRegister = () => {
         <Card className="bg-card/80 backdrop-blur-sm border-card-border shadow-premium">
           <CardHeader>
             <CardTitle className="text-center text-card-foreground">
-              {step === 1 ? 'Enter Access Code' : 'Complete Your Registration'}
+              {step === 1 ? 'Enter Salesman Code' : 'Complete Your Registration'}
             </CardTitle>
             <CardDescription className="text-center">
               {step === 1
-                ? 'You need a valid merchant access code to register'
+                ? 'Enter the code provided by your sales representative'
                 : 'Fill in your business details to complete registration'}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Step 1: Access Code Validation */}
+            {/* Step 1: Salesman Code Validation */}
             {step === 1 && (
               <form onSubmit={handleValidateCode} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="access-code">Merchant Access Code</Label>
+                  <Label htmlFor="salesman-code">Salesman Code</Label>
                   <Input
-                    id="access-code"
+                    id="salesman-code"
                     type="text"
-                    placeholder="Enter your access code"
-                    value={accessCode}
-                    onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+                    placeholder="Enter salesman code (e.g., AHMAD2K9L)"
+                    value={salesmanCode}
+                    onChange={(e) => setSalesmanCode(e.target.value.toUpperCase())}
                     required
                     className="font-mono uppercase"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Contact your sales representative to obtain an access code
+                    Get your salesman code from your AutoLab sales representative
                   </p>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Validating...' : 'Validate Code'}
+                  {loading ? 'Validating...' : 'Verify Salesman Code'}
                 </Button>
               </form>
             )}
@@ -485,11 +456,11 @@ const MerchantRegister = () => {
                   <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
                   <div>
                     <p className="text-sm font-medium text-green-900 dark:text-green-100">
-                      Access code validated
+                      Salesman code verified
                     </p>
-                    {codeData?.description && (
+                    {salesmanData && (
                       <p className="text-xs text-green-700 dark:text-green-300">
-                        {codeData.description}
+                        Referred by: {salesmanData.name}
                       </p>
                     )}
                   </div>
@@ -832,45 +803,6 @@ const MerchantRegister = () => {
                     </div>
                   </div>
 
-                  {/* Referral Section */}
-                  <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold text-sm text-muted-foreground uppercase">
-                      Referral Code (Optional)
-                    </h3>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="referral-code">Salesman Referral Code</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="referral-code"
-                          type="text"
-                          placeholder="Enter referral code"
-                          value={merchantForm.referralCode}
-                          onChange={(e) => {
-                            setMerchantForm({...merchantForm, referralCode: e.target.value.toUpperCase()});
-                            setReferralValidated(false);
-                            setReferralSalesman(null);
-                          }}
-                          className="font-mono uppercase"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleValidateReferral}
-                          disabled={!merchantForm.referralCode}
-                        >
-                          Verify
-                        </Button>
-                      </div>
-                      {referralValidated && referralSalesman && (
-                        <p className="text-sm text-green-600 flex items-center gap-1">
-                          <CheckCircle2 className="h-4 w-4" />
-                          Referred by: {referralSalesman.name}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
                   <Button type="submit" className="w-full" disabled={loading || uploading}>
                     {loading ? (
                       <>
@@ -891,18 +823,17 @@ const MerchantRegister = () => {
           </CardContent>
         </Card>
 
-        {/* Sample Codes Info (for demo) */}
+        {/* Info box */}
         {step === 1 && (
           <Card className="mt-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
             <CardContent className="pt-6">
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                Demo Access Codes (for testing):
+                Don't have a salesman code?
               </p>
-              <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-                <li>• <code className="font-mono bg-blue-100 dark:bg-blue-900 px-1 rounded">MERCHANT2024</code> - General merchant registration</li>
-                <li>• <code className="font-mono bg-blue-100 dark:bg-blue-900 px-1 rounded">DEALER100</code> - Dealer program</li>
-                <li>• <code className="font-mono bg-blue-100 dark:bg-blue-900 px-1 rounded">WORKSHOP50</code> - Workshop partner</li>
-              </ul>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Contact our sales team to get your unique salesman code. Each salesman has a unique code
+                (e.g., AHMAD2K9L) that you'll need to start your merchant registration.
+              </p>
             </CardContent>
           </Card>
         )}

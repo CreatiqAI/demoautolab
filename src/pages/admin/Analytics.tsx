@@ -18,7 +18,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
-  Star
+  Star,
+  Car
 } from 'lucide-react';
 import {
   LineChart,
@@ -47,7 +48,8 @@ export default function Analytics() {
     customers: [],
     orders: [],
     inventory: [],
-    merchants: []
+    merchants: [],
+    vehicles: []
   });
   const [stats, setStats] = useState<any>({});
 
@@ -74,6 +76,7 @@ export default function Analytics() {
       processOrderAnalytics(ordersData);
       processInventoryAnalytics(productsData);
       processMerchantAnalytics(merchantsData);
+      processVehicleAnalytics(customersData);
 
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -368,6 +371,62 @@ export default function Analytics() {
     }));
   };
 
+  const processVehicleAnalytics = (customers: any[]) => {
+    // Filter customers with car info
+    const customersWithCars = customers.filter(c => c.car_make_name);
+    const customersWithoutCars = customers.filter(c => !c.car_make_name);
+
+    // Count by car make
+    const makeCount: { [key: string]: number } = {};
+    customersWithCars.forEach(c => {
+      const make = c.car_make_name || 'Unknown';
+      makeCount[make] = (makeCount[make] || 0) + 1;
+    });
+
+    // Sort by count and get top makes
+    const makeDistribution = Object.entries(makeCount)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    // Count by car model (grouped by make)
+    const modelCount: { [key: string]: { make: string; model: string; count: number }[] } = {};
+    customersWithCars.forEach(c => {
+      const make = c.car_make_name || 'Unknown';
+      const model = c.car_model_name || 'Unknown Model';
+
+      if (!modelCount[make]) {
+        modelCount[make] = [];
+      }
+
+      const existing = modelCount[make].find(m => m.model === model);
+      if (existing) {
+        existing.count++;
+      } else {
+        modelCount[make].push({ make, model, count: 1 });
+      }
+    });
+
+    // Flatten and sort model data
+    const modelDistribution = Object.values(modelCount)
+      .flat()
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15); // Top 15 models
+
+    setData((prev: any) => ({
+      ...prev,
+      vehicles: {
+        totalWithCars: customersWithCars.length,
+        totalWithoutCars: customersWithoutCars.length,
+        totalCustomers: customers.length,
+        makeDistribution,
+        modelDistribution,
+        topMakes: makeDistribution.slice(0, 10),
+        uniqueMakes: makeDistribution.length,
+        uniqueModels: modelDistribution.length
+      }
+    }));
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-MY', {
       style: 'currency',
@@ -411,13 +470,14 @@ export default function Analytics() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="revenue">Revenue</TabsTrigger>
           <TabsTrigger value="sales">Sales</TabsTrigger>
           <TabsTrigger value="customers">Customers</TabsTrigger>
           <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="inventory">Inventory</TabsTrigger>
           <TabsTrigger value="merchants">Merchants</TabsTrigger>
+          <TabsTrigger value="vehicles">Vehicles</TabsTrigger>
         </TabsList>
 
         {/* Revenue Analytics Tab */}
@@ -1191,6 +1251,194 @@ export default function Analytics() {
                   </p>
                   <p className="text-xs text-muted-foreground">Applications pending</p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Vehicles Analytics Tab */}
+        <TabsContent value="vehicles" className="space-y-6">
+          {/* Vehicle Overview Cards */}
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card className="border-l-4 border-l-blue-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Customers with Cars</CardTitle>
+                <Car className="h-4 w-4 text-blue-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">{data.vehicles?.totalWithCars || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  {data.vehicles?.totalCustomers > 0
+                    ? `${((data.vehicles?.totalWithCars / data.vehicles?.totalCustomers) * 100).toFixed(1)}% of customers`
+                    : '0% of customers'}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-orange-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Without Car Info</CardTitle>
+                <Users className="h-4 w-4 text-orange-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">{data.vehicles?.totalWithoutCars || 0}</div>
+                <p className="text-xs text-muted-foreground">Legacy registrations</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-green-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Unique Car Makes</CardTitle>
+                <BarChart3 className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{data.vehicles?.uniqueMakes || 0}</div>
+                <p className="text-xs text-muted-foreground">Different brands</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-purple-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Top Car Brand</CardTitle>
+                <Star className="h-4 w-4 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-lg font-bold text-purple-600 truncate">
+                  {data.vehicles?.topMakes?.[0]?.name || 'N/A'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {data.vehicles?.topMakes?.[0]?.value || 0} customers
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Car Make Distribution Chart */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PieChart className="h-5 w-5 text-primary" />
+                  Car Brand Distribution
+                </CardTitle>
+                <CardDescription>Breakdown by car manufacturer</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={350}>
+                  <RechartsPieChart>
+                    <Pie
+                      data={data.vehicles?.topMakes || []}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={120}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {(data.vehicles?.topMakes || []).map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Top Car Brands
+                </CardTitle>
+                <CardDescription>Number of customers per brand</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={data.vehicles?.topMakes || []} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" />
+                    <YAxis dataKey="name" type="category" width={100} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="value" fill="#3b82f6" name="Customers" radius={[0, 8, 8, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Top Car Models Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Car className="h-5 w-5 text-primary" />
+                Top Car Models
+              </CardTitle>
+              <CardDescription>Most popular car models among customers</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {(data.vehicles?.modelDistribution || []).length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No vehicle data available yet</p>
+                ) : (
+                  (data.vehicles?.modelDistribution || []).map((model: any, index: number) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-4 rounded-lg border hover:shadow-md transition-shadow bg-gradient-to-r from-gray-50 to-white"
+                    >
+                      <div className="flex items-center gap-4 flex-1">
+                        {/* Rank Badge */}
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-full font-bold text-white text-sm shadow-md ${
+                          index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' :
+                          index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500' :
+                          index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
+                          'bg-gradient-to-br from-blue-400 to-blue-600'
+                        }`}>
+                          {index + 1}
+                        </div>
+
+                        {/* Model Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-base">{model.make} {model.model}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs">
+                              {model.make}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Count */}
+                      <div className="text-right ml-4">
+                        <p className="text-2xl font-bold text-primary">{model.count}</p>
+                        <p className="text-xs text-muted-foreground">customers</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* All Makes Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle>All Car Makes Summary</CardTitle>
+              <CardDescription>Complete breakdown of all registered car brands</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-4 gap-4">
+                {(data.vehicles?.makeDistribution || []).map((make: any, index: number) => (
+                  <div key={index} className="flex items-center justify-between p-3 rounded-lg border">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="font-medium text-sm">{make.name}</span>
+                    </div>
+                    <Badge variant="secondary">{make.value}</Badge>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
