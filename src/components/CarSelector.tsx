@@ -67,6 +67,7 @@ export default function CarSelector({
   }, [selectedMakeId]);
 
   const fetchMakes = async () => {
+    console.log('[CarSelector] Fetching car makes...');
     try {
       setLoadingMakes(true);
       const { data, error } = await supabase
@@ -74,15 +75,18 @@ export default function CarSelector({
         .select('*')
         .order('sort_order', { ascending: true });
 
+      console.log('[CarSelector] car_makes response:', { data, error, count: data?.length });
+
       if (error) {
-        console.error('Error fetching car makes:', error);
+        console.error('[CarSelector] Error fetching car makes:', error);
         // Set empty array on error - user can skip vehicle selection
         setMakes([]);
         return;
       }
       setMakes(data || []);
+      console.log('[CarSelector] Makes set:', data?.length, 'items');
     } catch (error) {
-      console.error('Error fetching car makes:', error);
+      console.error('[CarSelector] Exception fetching car makes:', error);
       setMakes([]);
     } finally {
       setLoadingMakes(false);
