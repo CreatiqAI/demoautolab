@@ -1,141 +1,80 @@
-# Database Migration Scripts
+# AutoLab Database - SQL Scripts
 
-This folder contains all SQL migration scripts for the AutoLab system.
+All SQL migration scripts are consolidated in this folder, organized by modification date (latest first).
 
-## Setup Order (Run these in sequence)
+## File Organization
 
-### 1. Core System Setup
-```sql
--- Admin authentication
-\i setup-admin-auth-system.sql
+Files are categorized into:
 
--- Premium partnerships (merchant subscriptions)
-\i premium-partner-system.sql
+### 1. Timestamped Migrations (Core Setup)
+Files starting with `20XXXXXX_` - Initial database setup and core migrations:
+- `20250201000000_add_car_to_customer_profiles.sql` - Latest customer profile update
+- `20250903122916_implement_inventory_deduction.sql` - Inventory deduction system
+- `20250911000000_enhanced_commercial_kb.sql` - Knowledge base enhancements
+- `20250913000001_merchant_system_updated.sql` - Merchant system
+- `20250910000001_enhanced_knowledge_base_with_pdf.sql` - PDF support for KB
+- And other initial migrations...
 
--- Customer tier system
-\i customer-tiers-system.sql
-
--- Installation guides (for enterprise merchants)
-\i installation-guides-system.sql
-
--- Product reviews with moderation
-\i product-reviews-migration.sql
-
--- Voucher system
-\i voucher-system.sql
-```
-
-### 2. RLS Policy Fixes (If admin features don't work)
-
-Since admins use localStorage auth (not Supabase Auth), RLS needs to be disabled:
-
-```sql
--- Fix customer tiers RLS
-\i fix-customer-tiers-rls-NO-RLS.sql
-
--- Fix installation guides RLS
-\i fix-installation-guides-rls.sql
-
--- Fix premium partnerships RLS
-\i fix-premium-partnership-rls.sql
-
--- Fix subscription plan constraint
-\i fix-subscription-plan-constraint-v3.sql
-```
-
-### 3. Additional Features (Optional)
-
-```sql
--- Add shop photos feature
-\i add-shop-photos.sql
-
--- Add review images support
-\i add-review-images.sql
-
--- Add renewal history tracking
-\i add-renewal-history.sql
-
--- Fix order status enum
-\i fix-order-status-enum.sql
-```
-
-## File Descriptions
-
-### Core Setup Files
-- `setup-admin-auth-system.sql` - Admin login system (username/password)
-- `premium-partner-system.sql` - Merchant subscription management
+### 2. Feature Systems
+Core system implementations:
+- `voucher-system.sql` - Complete voucher/coupon system
+- `premium-partner-system.sql` - Merchant partnership/subscription system
 - `customer-tiers-system.sql` - 5-tier customer loyalty system
-- `installation-guides-system.sql` - Video guides for enterprise merchants
-- `product-reviews-migration.sql` - Product review system with moderation
-- `voucher-system.sql` - Voucher creation and validation
+- `installation-guides-system.sql` - Product installation guides
+- `product-reviews-migration.sql` - Product review system
+- `COMPLETE-MIGRATION-FIXED-V2.sql` - Complete database migration script
 
-### Fix/Update Files
-- `fix-customer-tiers-rls-NO-RLS.sql` - Disables RLS for admin access
-- `fix-installation-guides-rls.sql` - Disables RLS for guides
-- `fix-premium-partnership-rls.sql` - Disables RLS for partnerships
-- `fix-subscription-plan-constraint-v3.sql` - Updates plan constraint
-- `fix-review-rls-policies.sql` - Updates review RLS policies
-- `fix-order-status-enum.sql` - Fixes order status values
-- `fix-expired-subscription.sql` - Handles expired subscriptions
+### 3. Phase Migrations
+Feature phases implemented:
+- `PHASE1-manufacturers-table.sql` - Product manufacturers
+- `PHASE1-auto-generate-welcome-voucher.sql` - Auto voucher generation
+- `PHASE1-rename-enterprise-to-panel.sql` - Plan name updates
+- `PHASE2-points-rewards-system.sql` - Points and rewards
+- `PHASE2-secondhand-marketplace.sql` - 2nd hand marketplace
+- `PHASE2-notification-system.sql` - Push notifications
+- `PHASE2-order-history-access-pricing.sql` - Order pricing access
 
-### Enhancement Files
-- `add-shop-photos.sql` - Shop photo gallery feature
-- `add-review-images.sql` - Image uploads for reviews
-- `add-renewal-history.sql` - Track subscription renewals
-- `add-completed-status.sql` - Add completed order status
-- `customer-tiers-monthly-update.sql` - Monthly spending reset
+### 4. Recent Enhancements
+- `merchant-registration-enhancements.sql` - Salesmen referral tracking
+- `user-registration-enhancements.sql` - User registration with car selection
+- `product-installation-guides.sql` - Per-product installation guides
+- `car-makes-models.sql` - Malaysian car makes/models data
+- `storage-merchant-documents.sql` - Merchant document storage
 
-### Utility Files
-- `verify-admin-and-tiers.sql` - Check admin and tier setup
-- `sample-premium-partnerships.sql` - Sample partnership data
-- `categories-rls-fix.sql` - Fix category RLS
-- `orders-rls-fix.sql` - Fix orders RLS
+### 5. Fix Scripts
+Bug fixes and corrections (run as needed):
+- `FIX-vouchers-schema-mismatch.sql` - Latest voucher trigger fix
+- `FIX-all-tables-rls.sql` - RLS policies for all tables
+- `FIX-google-auth-COMPLETE.sql` - Google OAuth complete fix
+- `FIX-ALL-POINTS-RLS-FINAL.sql` - Points system RLS
+- `FIX-REDEEM-REWARD-FUNCTION.sql` - Reward redemption fix
+- And other fixes...
 
-## About These Files
+## Quick Setup
 
-This folder contains only the essential SQL migration scripts needed for the system. All old versions, test files, and deprecated scripts have been removed to keep the database folder clean and maintainable.
-
-## Quick Commands
-
-### Check if migrations ran successfully
+### For New Installation
+Run the timestamped migrations in order, then:
 ```sql
--- Check if tables exist
-SELECT table_name FROM information_schema.tables
-WHERE table_schema = 'public'
-AND table_name IN (
-  'admin_profiles',
-  'customer_tiers',
-  'installation_guides',
-  'premium_partnerships',
-  'product_reviews'
-);
-
--- Check RLS status
-SELECT tablename, rowsecurity
-FROM pg_tables
-WHERE schemaname = 'public'
-ORDER BY tablename;
+\i COMPLETE-MIGRATION-FIXED-V2.sql
+\i RUN-ALL-POINTS-REWARDS-FIXES-V3.sql
 ```
 
-### Reset (if needed)
-```sql
--- CAUTION: This will delete all data!
-DROP TABLE IF EXISTS customer_tiers CASCADE;
-DROP TABLE IF EXISTS installation_guides CASCADE;
--- etc...
-```
+### For Feature Updates
+Run the relevant PHASE files for new features.
 
-## Troubleshooting
+### For Bug Fixes
+Check the FIX-* files for specific issues.
 
-**Admin features not working?**
-→ Run RLS fix scripts (see section 2 above)
+## Latest Changes (as of Feb 2025)
 
-**Subscription plan error?**
-→ Run `fix-subscription-plan-constraint-v3.sql`
+1. `FIX-vouchers-schema-mismatch.sql` - Fixed welcome voucher trigger
+2. `merchant-registration-enhancements.sql` - Added salesmen referral system
+3. `user-registration-enhancements.sql` - Enhanced user registration
+4. `FIX-all-tables-rls.sql` - Comprehensive RLS fix
+5. `FIX-google-auth-COMPLETE.sql` - Google OAuth fix
 
-**Tiers not auto-upgrading?**
-→ Check triggers exist: `SELECT * FROM pg_trigger WHERE tgname LIKE '%tier%';`
+## Notes
 
----
-
-For detailed setup instructions, see `SETUP_GUIDE.md` in project root.
+- All SQL files from `/supabase/migrations/` have been moved here
+- Old versions and diagnostic scripts have been removed
+- Files are named by their creation/modification date for easy ordering

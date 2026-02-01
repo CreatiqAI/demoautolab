@@ -12,7 +12,6 @@ import Footer from '@/components/Footer';
 import {
   Store,
   CreditCard,
-  BookOpen,
   Search,
   Upload,
   Save,
@@ -31,12 +30,10 @@ import {
   ExternalLink,
   Settings,
   Users,
-  DollarSign,
-  Video,
-  Info
+  DollarSign
 } from 'lucide-react';
 
-type TabType = 'dashboard' | 'profile' | 'subscription' | 'guides';
+type TabType = 'dashboard' | 'profile' | 'subscription';
 
 interface PartnershipData {
   id: string;
@@ -72,17 +69,10 @@ const MerchantConsole = () => {
   const [partnership, setPartnership] = useState<PartnershipData | null>(null);
   const [isMerchant, setIsMerchant] = useState(false);
 
-  const hasGuidesAccess = (partnership?.subscription_plan === 'professional' || partnership?.subscription_plan === 'panel') &&
-                          partnership?.subscription_status === 'ACTIVE' &&
-                          partnership?.admin_approved &&
-                          partnership?.subscription_end_date &&
-                          new Date(partnership.subscription_end_date) > new Date();
-
   const navItems = [
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: Store },
     { id: 'profile' as TabType, label: 'Business Profile', icon: Settings },
     { id: 'subscription' as TabType, label: 'Subscription', icon: CreditCard },
-    { id: 'guides' as TabType, label: 'Installation Guides', icon: BookOpen, locked: !hasGuidesAccess },
   ];
 
   useEffect(() => {
@@ -228,7 +218,6 @@ const MerchantConsole = () => {
             {activeTab === 'dashboard' && <DashboardTab partnership={partnership} />}
             {activeTab === 'profile' && <ProfileTab partnership={partnership} onUpdate={checkMerchantAndFetchData} />}
             {activeTab === 'subscription' && <SubscriptionTab partnership={partnership} onUpdate={checkMerchantAndFetchData} />}
-            {activeTab === 'guides' && hasGuidesAccess && <GuidesTab />}
           </div>
         </div>
       </div>
@@ -858,313 +847,6 @@ const SubscriptionTab = ({ partnership }: { partnership: PartnershipData | null 
           </CardContent>
         </Card>
       </div>
-    </div>
-  );
-};
-
-// Guides Tab
-const GuidesTab = () => {
-  const { toast } = useToast();
-  const [search, setSearch] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('All Brands');
-  const [guides, setGuides] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [brands, setBrands] = useState<string[]>(['All Brands']);
-  const [selectedGuide, setSelectedGuide] = useState<any | null>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-
-  useEffect(() => {
-    fetchGuides();
-  }, []);
-
-  const fetchGuides = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('installation_guides')
-        .select('*')
-        .eq('is_published', true)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      setGuides(data || []);
-      const uniqueBrands = ['All Brands', ...new Set(data?.map((g: any) => g.car_brand).filter(Boolean) || [])];
-      setBrands(uniqueBrands as string[]);
-    } catch (error: any) {
-      toast({ title: 'Error', description: 'Failed to load guides', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredGuides = guides.filter(g => {
-    const matchesSearch = g.title.toLowerCase().includes(search.toLowerCase()) ||
-                          g.car_model?.toLowerCase().includes(search.toLowerCase()) ||
-                          g.car_brand?.toLowerCase().includes(search.toLowerCase());
-    const matchesBrand = selectedBrand === 'All Brands' || g.car_brand === selectedBrand;
-    return matchesSearch && matchesBrand;
-  });
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <BookOpen className="h-12 w-12 animate-pulse text-lime-600" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Installation Guides</h1>
-        <p className="text-sm text-gray-500 mt-1">Professional video guides and resources</p>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search guides..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
-          />
-        </div>
-        <div className="flex gap-2 overflow-x-auto">
-          {brands.map(brand => (
-            <Button
-              key={brand}
-              variant={selectedBrand === brand ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedBrand(brand)}
-              className={selectedBrand === brand ? 'bg-lime-600 hover:bg-lime-700' : ''}
-            >
-              {brand}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredGuides.map((guide) => (
-          <Card key={guide.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-            <div
-              className="aspect-video bg-gray-900 relative group cursor-pointer"
-              onClick={() => {
-                setSelectedGuide(guide);
-                setIsDetailModalOpen(true);
-              }}
-            >
-              <img
-                src={guide.thumbnail_url || 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400'}
-                alt={guide.title}
-                className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-12 h-12 bg-white/20 backdrop-blur-sm border-2 border-white/50 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Info className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <div className="absolute top-3 left-3">
-                <Badge variant={
-                  guide.difficulty_level === 'Easy' ? 'default' :
-                  guide.difficulty_level === 'Medium' ? 'secondary' :
-                  'destructive'
-                } className="text-xs">
-                  {guide.difficulty_level}
-                </Badge>
-              </div>
-              {guide.recommended_time && (
-                <div className="absolute bottom-3 right-3 bg-black/80 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {guide.recommended_time}
-                </div>
-              )}
-            </div>
-            <CardHeader className="pb-3">
-              <CardDescription className="text-xs uppercase tracking-wide">{guide.category}</CardDescription>
-              <CardTitle className="text-sm line-clamp-2">{guide.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {guide.description && (
-                <p className="text-xs text-gray-600 mb-3 line-clamp-2">{guide.description}</p>
-              )}
-              <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
-                <span className="font-medium">{guide.car_brand} {guide.car_model}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
-                {guide.workman_power && (
-                  <div className="flex items-center gap-1 text-gray-600">
-                    <Users className="w-3 h-3" />
-                    <span>{guide.workman_power} {guide.workman_power === 1 ? 'worker' : 'workers'}</span>
-                  </div>
-                )}
-                {guide.installation_price > 0 && (
-                  <div className="flex items-center gap-1 text-lime-600 font-medium col-span-2">
-                    <DollarSign className="w-3 h-3" />
-                    <span>RM {guide.installation_price.toFixed(2)}</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedGuide(guide);
-                    setIsDetailModalOpen(true);
-                  }}
-                >
-                  <Info className="w-3 h-3 mr-1" />
-                  Details
-                </Button>
-                <Button
-                  size="sm"
-                  className="flex-1 bg-lime-600 hover:bg-lime-700"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.open(guide.video_url, '_blank');
-                  }}
-                >
-                  <Video className="w-3 h-3 mr-1" />
-                  Watch
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredGuides.length === 0 && (
-        <div className="text-center py-12">
-          <BookOpen className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-          <p className="text-sm text-gray-500">No guides found</p>
-        </div>
-      )}
-
-      {/* Guide Detail Modal */}
-      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          {selectedGuide && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="text-xl">{selectedGuide.title}</DialogTitle>
-                <DialogDescription>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge variant={
-                      selectedGuide.difficulty_level === 'Easy' ? 'default' :
-                      selectedGuide.difficulty_level === 'Medium' ? 'secondary' :
-                      'destructive'
-                    }>
-                      {selectedGuide.difficulty_level}
-                    </Badge>
-                    <Badge variant="outline">{selectedGuide.category}</Badge>
-                    <span className="text-sm text-gray-600">{selectedGuide.car_brand} {selectedGuide.car_model}</span>
-                  </div>
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-6">
-                {/* Thumbnail */}
-                {selectedGuide.thumbnail_url && (
-                  <div className="aspect-video rounded-lg overflow-hidden bg-gray-900">
-                    <img
-                      src={selectedGuide.thumbnail_url}
-                      alt={selectedGuide.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
-
-                {/* Description */}
-                {selectedGuide.description && (
-                  <div>
-                    <h3 className="font-semibold text-sm mb-2">Description</h3>
-                    <p className="text-sm text-gray-600">{selectedGuide.description}</p>
-                  </div>
-                )}
-
-                {/* Installation Details */}
-                <div>
-                  <h3 className="font-semibold text-sm mb-3">Installation Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {selectedGuide.recommended_time && (
-                      <Card>
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-blue-100 rounded-lg">
-                              <Clock className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Recommended Time</p>
-                              <p className="font-semibold text-sm">{selectedGuide.recommended_time}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {selectedGuide.workman_power && (
-                      <Card>
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-purple-100 rounded-lg">
-                              <Users className="w-5 h-5 text-purple-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Workman Power</p>
-                              <p className="font-semibold text-sm">
-                                {selectedGuide.workman_power} {selectedGuide.workman_power === 1 ? 'worker' : 'workers'}
-                              </p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {selectedGuide.installation_price > 0 && (
-                      <Card>
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-lime-100 rounded-lg">
-                              <DollarSign className="w-5 h-5 text-lime-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Installation Price</p>
-                              <p className="font-semibold text-sm text-lime-600">RM {selectedGuide.installation_price.toFixed(2)}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-                </div>
-
-                {/* Video Link */}
-                <div className="flex gap-3 pt-4 border-t">
-                  <Button
-                    className="flex-1 bg-lime-600 hover:bg-lime-700"
-                    onClick={() => window.open(selectedGuide.video_url, '_blank')}
-                  >
-                    <Video className="w-4 h-4 mr-2" />
-                    Watch Installation Video
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsDetailModalOpen(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
