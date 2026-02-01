@@ -117,7 +117,9 @@ export default function CarSelector({
   };
 
   const handleMakeChange = (makeId: string) => {
+    console.log('[CarSelector] handleMakeChange called with:', makeId);
     const make = makes.find(m => m.id === makeId);
+    console.log('[CarSelector] Found make:', make);
     onMakeChange(makeId, make?.name || '');
     // Reset model when make changes
     onModelChange('', '');
