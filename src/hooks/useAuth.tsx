@@ -176,11 +176,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // OTP is valid - check if user exists
       // First, try to sign in with phone (to check if user exists)
-      const { data: existingCustomer } = await supabase
-        .from('customer_profiles')
-        .select('id, user_id')
-        .eq('phone', phone)
-        .single();
+      // Note: This query may fail with 406 if RLS blocks unauthenticated access
+      // In that case, we treat it as "new user" to allow registration
+      let existingCustomer = null;
+      try {
+        const { data, error } = await supabase
+          .from('customer_profiles')
+          .select('id, user_id')
+          .eq('phone', phone)
+          .single();
+
+        // Only use the result if there's no error
+        if (!error) {
+          existingCustomer = data;
+        } else {
+          // Log the error but continue - treat as new user
+          console.log('Profile check during OTP verification:', error.code, error.message);
+        }
+      } catch (queryError) {
+        // Query failed (possibly due to RLS) - treat as new user
+        console.log('Profile query exception during OTP verification:', queryError);
+      }
 
       if (existingCustomer?.user_id) {
         // Existing user - sign them in using a custom token or session
@@ -206,7 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: null, isNewUser: false };
       }
 
-      // New user - keep OTP valid for registration completion
+      // New user (or couldn't verify due to RLS) - keep OTP valid for registration completion
       return { error: null, isNewUser: true };
     } catch (error) {
       console.error('Error verifying OTP:', error);
