@@ -100,11 +100,11 @@ export default function Customers() {
     try {
       setLoading(true);
 
-      // Query customer_profiles table with all customer data
-      const { data, error } = await supabase
-        .from('customer_profiles' as any)
-        .select('*')
-        .order('updated_at', { ascending: false});
+      // Use RPC function to bypass RLS
+      const { data, error } = await supabase.rpc('get_all_customer_profiles');
+
+      console.log('📋 Fetched customers via RPC:', data?.length, 'records');
+      console.log('❌ Customers error:', error);
 
       if (error) throw error;
 
@@ -146,14 +146,14 @@ export default function Customers() {
 
       console.log(`✅ Found ${registrations.length} registrations`);
 
-      // Fetch customer profiles
+      // Fetch customer profiles using RPC to bypass RLS
       const customerIds = (registrations as any[]).map((r: any) => r.customer_id);
       console.log('👥 Fetching customers for IDs:', customerIds);
 
-      const { data: customers, error: custError } = await supabase
-        .from('customer_profiles' as any)
-        .select('id, full_name, phone, email')
-        .in('id', customerIds);
+      const { data: customers, error: custError } = await supabase.rpc(
+        'get_customer_profiles_by_ids',
+        { customer_ids: customerIds }
+      );
 
       console.log('👥 Customers data:', customers);
       console.log('❌ Customers error:', custError);

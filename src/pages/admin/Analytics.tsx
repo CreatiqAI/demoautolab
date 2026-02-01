@@ -102,9 +102,7 @@ export default function Analytics() {
 
   const fetchCustomers = async () => {
     try {
-      const { data } = await supabase
-        .from('customer_profiles' as any)
-        .select('*');
+      const { data } = await supabase.rpc('get_all_customer_profiles');
       return data || [];
     } catch (error) {
       return [];

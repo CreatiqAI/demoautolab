@@ -111,9 +111,7 @@ export default function PointsRewards() {
   };
 
   const fetchCustomerPoints = async () => {
-    const { data, error } = await supabase
-      .from('customer_profiles')
-      .select('id, full_name, email, created_at');
+    const { data, error } = await supabase.rpc('get_all_customer_profiles');
 
     if (!error && data) {
       // Get points for each customer

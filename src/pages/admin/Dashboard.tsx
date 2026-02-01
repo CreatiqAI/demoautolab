@@ -109,13 +109,10 @@ export default function Dashboard() {
         console.warn('Component library table may not exist:', error);
       }
 
-      // Fetch customers
+      // Fetch customers using RPC to bypass RLS
       let customersData: any[] = [];
       try {
-        const { data } = await supabase
-          .from('customer_profiles' as any)
-          .select('*')
-          .order('created_at', { ascending: false });
+        const { data } = await supabase.rpc('get_all_customer_profiles');
 
         if (data) customersData = data;
       } catch (error) {
