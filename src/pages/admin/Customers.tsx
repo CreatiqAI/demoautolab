@@ -412,12 +412,16 @@ export default function Customers() {
     if (!customerToAction) return;
 
     try {
-      const { error } = await supabase
-        .from('customer_profiles' as any)
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('id', customerToAction.id);
+      // Use RPC function to bypass RLS
+      const { data, error } = await supabase.rpc('admin_suspend_customer', {
+        p_customer_id: customerToAction.id
+      });
 
       if (error) throw error;
+
+      if (data && !data.success) {
+        throw new Error(data.error || 'Failed to suspend customer');
+      }
 
       toast({
         title: 'Account Suspended',
@@ -431,7 +435,7 @@ export default function Customers() {
       console.error('Error suspending customer:', error);
       toast({
         title: 'Error',
-        description: 'Failed to suspend account',
+        description: error.message || 'Failed to suspend account',
         variant: 'destructive'
       });
     }
@@ -440,12 +444,16 @@ export default function Customers() {
   // Reactivate customer account
   const handleReactivateCustomer = async (customer: CustomerProfile) => {
     try {
-      const { error } = await supabase
-        .from('customer_profiles' as any)
-        .update({ is_active: true, updated_at: new Date().toISOString() })
-        .eq('id', customer.id);
+      // Use RPC function to bypass RLS
+      const { data, error } = await supabase.rpc('admin_reactivate_customer', {
+        p_customer_id: customer.id
+      });
 
       if (error) throw error;
+
+      if (data && !data.success) {
+        throw new Error(data.error || 'Failed to reactivate customer');
+      }
 
       toast({
         title: 'Account Reactivated',
@@ -457,7 +465,7 @@ export default function Customers() {
       console.error('Error reactivating customer:', error);
       toast({
         title: 'Error',
-        description: 'Failed to reactivate account',
+        description: error.message || 'Failed to reactivate account',
         variant: 'destructive'
       });
     }
@@ -468,12 +476,16 @@ export default function Customers() {
     if (!customerToAction) return;
 
     try {
-      const { error } = await supabase
-        .from('customer_profiles' as any)
-        .delete()
-        .eq('id', customerToAction.id);
+      // Use RPC function to bypass RLS and handle cascading deletes
+      const { data, error } = await supabase.rpc('admin_delete_customer', {
+        p_customer_id: customerToAction.id
+      });
 
       if (error) throw error;
+
+      if (data && !data.success) {
+        throw new Error(data.error || 'Failed to delete customer');
+      }
 
       toast({
         title: 'Customer Deleted',
@@ -487,7 +499,7 @@ export default function Customers() {
       console.error('Error deleting customer:', error);
       toast({
         title: 'Error',
-        description: 'Failed to delete customer',
+        description: error.message || 'Failed to delete customer',
         variant: 'destructive'
       });
     }
