@@ -45,7 +45,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadCartFromDatabase = async () => {
     // Only load cart for authenticated users
     if (!user) {
-      console.log('🔄 No authenticated user, clearing cart');
       setCartItems([]);
       setLoading(false);
       return;
@@ -53,13 +52,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Don't set loading to true if we're already in the middle of an operation
     if (loading) {
-      console.log('🔄 Cart loading already in progress, skipping...');
       return;
     }
 
     try {
       setLoading(true);
-      console.log('🔄 Loading cart from database for user:', user?.id);
       
       const { data, error } = await supabase
         .rpc('get_user_cart_items', { 
@@ -68,28 +65,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
       if (error) {
-        console.error('❌ Database cart load failed:', error);
-        console.log('🔄 Falling back to localStorage');
         loadCartFromLocalStorage();
         setLoading(false);
         return;
       }
-
-      console.log('✅ Database cart data received:', data);
 
       if (data && data.length > 0) {
         // Get unique component SKUs to fetch images
         const componentSkus = [...new Set(data.map((item: any) => item.component_sku))];
 
         // Fetch ALL component images to avoid special character issues with .in() operator
-        console.log('🔍 Fetching component images for:', componentSkus);
-        const { data: allComponentsData, error: componentsError } = await supabase
+        const { data: allComponentsData } = await supabase
           .from('component_library')
           .select('component_sku, default_image_url');
-
-        if (componentsError) {
-          console.error('⚠️ Error fetching component images:', componentsError);
-        }
 
         // Create a map of component_sku to image URL
         // Filter to only components we need (to avoid memory issues with large datasets)
@@ -104,7 +92,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             });
         }
-        console.log('🖼️ Image map created:', imageMap);
 
         // Transform database items to match CartItem interface with images
         const transformedItems: CartItem[] = data.map((item: any) => ({
@@ -117,21 +104,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           component_image: imageMap.get(item.component_sku) || item.default_image_url || undefined
         })).sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
 
-        console.log('🔄 Transformed items with images:', transformedItems);
         setCartItems(transformedItems);
 
         // Also sync to localStorage for offline access
         localStorage.setItem('cart', JSON.stringify(transformedItems));
-        console.log('💾 Synced to localStorage');
       } else {
-        console.log('📭 No items in database cart');
         // Clear any old localStorage cart data to prevent unwanted auto-migration
-        console.log('🧹 Clearing old localStorage cart data');
         localStorage.removeItem('cart');
         setCartItems([]);
       }
     } catch (error) {
-      console.error('💥 Unexpected error loading cart:', error);
       loadCartFromLocalStorage();
       setLoading(false);
     } finally {
@@ -153,12 +135,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addToCart = async (newItem: Omit<CartItem, 'id'>) => {
     // Require authentication for cart operations
     if (!user) {
-      console.warn('❌ User not authenticated - cannot add to cart');
       return;
     }
 
     try {
-      console.log('🛒 Adding item to cart:', newItem);
 
       // Immediately update local state for instant UI feedback
       const itemId = `${newItem.component_sku}_${newItem.product_name}`;
@@ -183,7 +163,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       // Find component_id from component_library
-      console.log('🔍 Looking up component:', newItem.component_sku);
       const { data: componentData, error: componentError } = await supabase
         .from('component_library')
         .select('id')
@@ -191,27 +170,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (componentError || !componentData) {
-        console.error('❌ Component lookup failed:', componentError);
-        console.log('🔄 Falling back to localStorage method');
         // State was already updated above, just sync to localStorage
         localStorage.setItem('cart', JSON.stringify(updatedItems));
         return;
       }
 
-      console.log('✅ Component found:', componentData.id);
-      
-      console.log('📞 Calling add_item_to_cart function with params:', {
-        p_component_id: componentData.id,
-        p_component_sku: newItem.component_sku,
-        p_component_name: newItem.name,
-        p_product_context: newItem.product_name,
-        p_quantity: newItem.quantity,
-        p_unit_price: newItem.normal_price,
-        p_user_id: user.id,
-        p_guest_session: null
-      });
-
-      const { data, error } = await supabase
+      const { error } = await supabase
         .rpc('add_item_to_cart', {
           p_component_id: componentData.id,
           p_component_sku: newItem.component_sku,
@@ -224,18 +188,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
       if (error) {
-        console.error('❌ Database add_to_cart failed:', error);
-        console.log('🔄 Database failed but local state already updated');
         // State was already updated above for instant feedback
         return;
       }
-
-      console.log('✅ Database add_to_cart success:', data);
-      
-      // Background sync completed - no need to reload as state is already updated
-      console.log('✅ Cart sync completed successfully');
     } catch (error) {
-      console.error('💥 Unexpected error adding to cart:', error);
       // State was already updated above for instant feedback
     }
   };
@@ -267,7 +223,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const removeFromCart = async (itemId: string) => {
     if (!user) {
-      console.warn('❌ User not authenticated - cannot remove from cart');
       return;
     }
 
@@ -286,7 +241,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (componentError || !componentData) {
-        console.error('Component not found for removal:', componentError);
         // State was already updated above for instant feedback
         return;
       }
@@ -301,15 +255,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
       if (error) {
-        console.error('Error removing from cart database:', error);
         // State was already updated above for instant feedback
         return;
       }
-
-      // Background sync completed successfully
-      console.log('✅ Remove from cart completed successfully');
     } catch (error) {
-      console.error('Error removing from cart:', error);
       // State was already updated above for instant feedback
     }
   };
@@ -324,7 +273,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateQuantity = async (itemId: string, quantity: number) => {
     if (!user) {
-      console.warn('❌ User not authenticated - cannot update cart');
       return;
     }
 
@@ -354,7 +302,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (componentError || !componentData) {
-        console.error('Component not found for update:', componentError);
         return;
       }
 
@@ -379,16 +326,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         p_user_id: user.id,
         p_guest_session: null
       });
-
-      console.log('✅ Quantity updated successfully');
     } catch (error) {
-      console.error('Error updating quantity:', error);
+      // Silently fail - state already updated for instant feedback
     }
   };
 
   const clearCart = async () => {
     if (!user) {
-      console.warn('❌ User not authenticated - cannot clear cart');
       return;
     }
 
@@ -404,7 +348,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
       if (error) {
-        console.error('Error clearing cart database:', error);
         // Fallback to localStorage method
         clearCartLocalStorage();
         return;
@@ -414,7 +357,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCartItems([]);
       localStorage.setItem('cart', JSON.stringify([]));
     } catch (error) {
-      console.error('Error clearing cart:', error);
       // Fallback to localStorage method
       clearCartLocalStorage();
     } finally {

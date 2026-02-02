@@ -60,12 +60,10 @@ export default function ArchivedOrders() {
   const fetchArchivedOrders = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching archived orders...');
 
       let ordersData: any[] = [];
 
       // Fetch orders with COMPLETED status (uppercase - confirmed to work)
-      console.log(`🔍 Fetching orders with status: "COMPLETED"`);
       const { data, error } = await supabase
         .from('orders' as any)
         .select(`
@@ -84,13 +82,11 @@ export default function ArchivedOrders() {
         .order('updated_at', { ascending: false });
 
       if (!error && data) {
-        console.log(`✅ Found ${data.length} completed orders`);
         ordersData = data;
       } else if (error) {
         console.error(`❌ Failed to fetch completed orders:`, error);
         ordersData = [];
       } else {
-        console.log(`⚠️ No completed orders found`);
         ordersData = [];
       }
 
@@ -139,12 +135,10 @@ export default function ArchivedOrders() {
 
       // Update order status to DELIVERED (active status)
       // Note: Database enum uses UPPERCASE values (COMPLETED works, so DELIVERED should too)
-      console.log('🔄 Attempting to reactivate order with status: DELIVERED (uppercase)');
       const updateData = {
         status: 'DELIVERED',
         updated_at: new Date().toISOString()
       };
-      console.log('📝 Update data:', JSON.stringify(updateData));
 
       // Try the update
       const { error, data: updatedData } = await supabase
@@ -153,7 +147,6 @@ export default function ArchivedOrders() {
         .eq('id', order.id)
         .select();
 
-      console.log('📊 Supabase response:', { error, updatedData });
 
       if (error) {
         console.error('❌ Update error details:', error);
@@ -162,13 +155,11 @@ export default function ArchivedOrders() {
         console.error('❌ Error details:', error.details);
 
         // Try alternative status values
-        console.log('🔄 Trying alternative status values...');
 
         // Try each status value from the enum that might work for "active" orders
         const alternativeStatuses = ['PROCESSING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY'];
 
         for (const altStatus of alternativeStatuses) {
-          console.log(`🔍 Trying status: ${altStatus}`);
           const { error: altError, data: altData } = await supabase
             .from('orders' as any)
             .update({ status: altStatus, updated_at: new Date().toISOString() })
@@ -176,7 +167,6 @@ export default function ArchivedOrders() {
             .select();
 
           if (!altError) {
-            console.log(`✅ Success with status: ${altStatus}`);
             toast({
               title: "Order Reactivated",
               description: `Order #${order.order_no} has been moved back to active orders with ${altStatus} status.`
@@ -321,6 +311,7 @@ export default function ArchivedOrders() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -474,6 +465,7 @@ export default function ArchivedOrders() {
                 )}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -547,6 +539,7 @@ export default function ArchivedOrders() {
 
               <div>
                 <h4 className="font-semibold mb-2">Order Items</h4>
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -577,6 +570,7 @@ export default function ArchivedOrders() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
 
               <div className="border-t pt-4">

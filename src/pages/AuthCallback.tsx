@@ -35,7 +35,6 @@ export default function AuthCallback() {
         const refreshToken = hashParams.get('refresh_token');
 
         if (accessToken) {
-          console.log('Found access token in URL hash, setting session...');
 
           // Set the session manually using the tokens from the hash
           const { data, error: sessionError } = await supabase.auth.setSession({
@@ -51,7 +50,6 @@ export default function AuthCallback() {
           }
 
           if (data.session) {
-            console.log('Session established successfully:', data.session.user.email);
 
             // Clear the hash from URL for cleaner look
             window.history.replaceState(null, '', window.location.pathname);
@@ -63,11 +61,9 @@ export default function AuthCallback() {
         }
 
         // Fallback: Try to get existing session
-        console.log('No hash tokens, checking for existing session...');
         const { data: { session } } = await supabase.auth.getSession();
 
         if (session) {
-          console.log('Found existing session:', session.user.email);
           await handleProfileCheck();
           return;
         }

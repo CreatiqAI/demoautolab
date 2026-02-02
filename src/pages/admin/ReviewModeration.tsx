@@ -68,7 +68,6 @@ export default function ReviewModeration() {
     try {
       // Check authentication first
       const { data: { user } } = await supabase.auth.getUser();
-      console.log('Current user:', user?.email);
 
       // Fetch all reviews with product information
       const { data, error } = await supabase
@@ -79,8 +78,6 @@ export default function ReviewModeration() {
         `)
         .order('created_at', { ascending: false });
 
-      console.log('Fetch reviews - Error:', error);
-      console.log('Fetch reviews - Data:', data);
 
       if (error) {
         console.error('Supabase error details:', error);

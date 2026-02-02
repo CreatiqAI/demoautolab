@@ -108,9 +108,6 @@ export default function Customers() {
       // Use RPC function to bypass RLS
       const { data, error } = await supabase.rpc('get_all_customer_profiles');
 
-      console.log('📋 Fetched customers via RPC:', data?.length, 'records');
-      console.log('❌ Customers error:', error);
-
       if (error) throw error;
 
       setCustomers((data as any) || []);
@@ -135,53 +132,30 @@ export default function Customers() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      console.log('📋 Fetched registrations:', registrations);
-      console.log('❌ Registration error:', regError);
-
       if (regError) {
-        console.error('Error fetching registrations:', regError);
         throw regError;
       }
 
       if (!registrations || registrations.length === 0) {
-        console.log('⚠️ No registrations found');
         setApplications([]);
         return;
       }
 
-      console.log(`✅ Found ${registrations.length} registrations`);
-
       // Fetch customer profiles using RPC to bypass RLS
       const customerIds = (registrations as any[]).map((r: any) => r.customer_id);
-      console.log('👥 Fetching customers for IDs:', customerIds);
 
       const { data: customers, error: custError } = await supabase.rpc(
         'get_customer_profiles_by_ids',
         { customer_ids: customerIds }
       );
 
-      console.log('👥 Customers data:', customers);
-      console.log('❌ Customers error:', custError);
-
-      if (custError) {
-        console.error('Error fetching customers:', custError);
-      }
-
       // Fetch merchant codes
       const codeIds = (registrations as any[]).map((r: any) => r.code_id);
-      console.log('🎫 Fetching codes for IDs:', codeIds);
 
       const { data: codes, error: codeError } = await supabase
         .from('merchant_codes' as any)
         .select('id, code, description')
         .in('id', codeIds);
-
-      console.log('🎫 Codes data:', codes);
-      console.log('❌ Codes error:', codeError);
-
-      if (codeError) {
-        console.error('Error fetching codes:', codeError);
-      }
 
       // Fetch salesmen data for referrals
       const salesmanIds = (registrations as any[])
@@ -215,7 +189,6 @@ export default function Customers() {
         salesman: salesmenData.find((s: any) => s.id === reg.referred_by_salesman_id) || null
       }));
 
-      console.log('✨ Enriched applications:', enrichedApplications);
       setApplications(enrichedApplications);
     } catch (error: any) {
       console.error('Error fetching applications:', error);
@@ -581,6 +554,7 @@ export default function Customers() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -732,6 +706,7 @@ export default function Customers() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -752,6 +727,7 @@ export default function Customers() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -826,6 +802,7 @@ export default function Customers() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>

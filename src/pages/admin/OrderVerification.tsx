@@ -82,7 +82,6 @@ export default function OrderVerification() {
 
       if (error) throw error;
 
-      console.log('✅ Order verification data received:', orderData?.length || 0, 'orders');
       setOrders(orderData || []);
     } catch (error: any) {
       console.error('Error fetching pending orders:', error);
@@ -165,7 +164,6 @@ export default function OrderVerification() {
         trackingUrl: `${window.location.origin}/my-orders`
       };
 
-      console.log('🚀 Sending WhatsApp notification webhook:', webhookPayload);
 
       const response = await fetch(webhookUrl, {
         method: 'POST',
@@ -181,7 +179,6 @@ export default function OrderVerification() {
         throw new Error(`Webhook failed: ${response.status} ${response.statusText}`);
       }
 
-      console.log('✅ WhatsApp notification webhook sent successfully');
       return true;
     } catch (error) {
       console.error('❌ Error sending WhatsApp notification webhook:', error);
@@ -222,7 +219,6 @@ export default function OrderVerification() {
         throw error;
       }
 
-      console.log('✅ Payment verification result:', functionResult);
       
       if (!functionResult || !(functionResult as any).success) {
         throw new Error((functionResult as any)?.message || 'Payment verification failed');
@@ -322,7 +318,7 @@ export default function OrderVerification() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

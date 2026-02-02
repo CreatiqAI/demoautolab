@@ -117,7 +117,6 @@ export default function PointsRewards() {
       // Get points for each customer
       const customersWithPoints = await Promise.all(
         data.map(async (customer) => {
-          console.log(`📊 Fetching points for customer: ${customer.full_name} (${customer.id})`);
 
           const { data: balanceData, error: balanceError } = await (supabase.rpc as any)('get_customer_points_balance', {
             p_customer_id: customer.id
@@ -126,7 +125,6 @@ export default function PointsRewards() {
           if (balanceError) {
             console.error(`❌ Error fetching balance for ${customer.full_name}:`, balanceError);
           } else {
-            console.log(`✅ Balance for ${customer.full_name}:`, balanceData);
           }
 
           const { data: lifetimeData, error: lifetimeError } = await (supabase.rpc as any)('get_customer_lifetime_points', {
@@ -136,7 +134,6 @@ export default function PointsRewards() {
           if (lifetimeError) {
             console.error(`❌ Error fetching lifetime points for ${customer.full_name}:`, lifetimeError);
           } else {
-            console.log(`✅ Lifetime points for ${customer.full_name}:`, lifetimeData);
           }
 
           return {
@@ -147,7 +144,6 @@ export default function PointsRewards() {
         })
       );
 
-      console.log('📊 All customers with points:', customersWithPoints);
       setCustomers(customersWithPoints.sort((a, b) => b.current_points - a.current_points));
     } else if (error) {
       console.error('❌ Error fetching customer profiles:', error);

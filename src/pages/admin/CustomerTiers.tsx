@@ -86,7 +86,6 @@ export default function CustomerTiers() {
     // Check authentication state
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      console.log('[CustomerTiers] Current user:', user);
 
       if (user) {
         // Check if user is admin
@@ -96,7 +95,6 @@ export default function CustomerTiers() {
           .eq('user_id', user.id)
           .single();
 
-        console.log('[CustomerTiers] User profile:', profile);
       }
     };
 
@@ -106,7 +104,6 @@ export default function CustomerTiers() {
 
   const fetchTiers = async () => {
     try {
-      console.log('[CustomerTiers] Fetching tiers...');
       setLoading(true);
 
       const { data, error } = await supabase
@@ -114,14 +111,12 @@ export default function CustomerTiers() {
         .select('*')
         .order('tier_level', { ascending: true });
 
-      console.log('[CustomerTiers] Fetch result:', { data, error });
 
       if (error) {
         console.error('[CustomerTiers] Fetch error details:', error);
         throw error;
       }
 
-      console.log('[CustomerTiers] Number of tiers fetched:', data?.length || 0);
       setTiers(data || []);
     } catch (error: any) {
       console.error('[CustomerTiers] Error fetching tiers:', error);
@@ -202,7 +197,6 @@ export default function CustomerTiers() {
           throw error;
         }
 
-        console.log('Tier updated successfully:', data);
 
         toast({
           title: 'Tier Updated',
@@ -220,7 +214,6 @@ export default function CustomerTiers() {
           throw error;
         }
 
-        console.log('Tier created successfully:', data);
 
         toast({
           title: 'Tier Created',
@@ -283,7 +276,6 @@ export default function CustomerTiers() {
         throw error;
       }
 
-      console.log('Tier status toggled successfully:', data);
 
       toast({
         title: newStatus ? 'Tier Activated' : 'Tier Deactivated',
@@ -387,6 +379,7 @@ export default function CustomerTiers() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -469,6 +462,7 @@ export default function CustomerTiers() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -144,7 +144,6 @@ export default function WarehouseOperations() {
   const fetchWarehouseOrders = async () => {
     try {
       setLoading(true);
-      console.log('🏭 Fetching warehouse orders...');
 
       // Warehouse operation statuses (PROCESSING = auto-approved orders)
       const warehouseStatuses = ['PROCESSING', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED'];
@@ -166,7 +165,6 @@ export default function WarehouseOperations() {
 
       if (!ordersError && ordersWithItems) {
         ordersData = ordersWithItems;
-        console.log('✅ Successfully fetched warehouse orders with items:', ordersData.length);
       } else {
         console.warn('Warehouse orders with items query failed, trying basic approach:', ordersError);
 
@@ -179,7 +177,6 @@ export default function WarehouseOperations() {
 
         if (!basicError && basicData) {
           ordersData = (basicData as any[]).map((order: any) => ({ ...order, order_items: [] }));
-          console.log('✅ Fetched warehouse orders without items (fallback):', ordersData.length);
         } else {
           console.warn('Direct warehouse query failed, trying all orders and filtering:', basicError);
 
@@ -193,7 +190,6 @@ export default function WarehouseOperations() {
             ordersData = (allData as any[])
               .filter((order: any) => warehouseStatuses.includes(order.status))
               .map((order: any) => ({ ...order, order_items: [] }));
-            console.log('✅ Filtered warehouse orders from all orders:', ordersData.length);
           } else {
             console.error('❌ All warehouse order queries failed:', allError);
           }
@@ -496,7 +492,6 @@ export default function WarehouseOperations() {
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     try {
       setIsUpdating(true);
-      console.log('🔄 Updating order status:', { orderId, status });
 
       // Update order status directly
       const { error } = await supabase

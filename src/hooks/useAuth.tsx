@@ -64,8 +64,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         authSubscription = supabase.auth.onAuthStateChange((event, session) => {
           if (!isMounted) return;
 
-          console.log('Auth event:', event);
-
           // ONLY logout on explicit signout - ignore all other events that might cause logout
           if (event === 'SIGNED_OUT') {
             setSession(null);
@@ -124,8 +122,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         code,
         expiresAt
       }));
-
-      console.log(`[DEV] OTP for ${phone}: ${code}`);
 
       // In production, you would call Twilio/SMS API here:
       // await twilioClient.messages.create({
@@ -189,13 +185,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Only use the result if there's no error
         if (!error) {
           existingCustomer = data;
-        } else {
-          // Log the error but continue - treat as new user
-          console.log('Profile check during OTP verification:', error.code, error.message);
         }
+        // If error, treat as new user to allow registration
       } catch (queryError) {
         // Query failed (possibly due to RLS) - treat as new user
-        console.log('Profile query exception during OTP verification:', queryError);
       }
 
       if (existingCustomer?.user_id) {
@@ -381,7 +374,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileError) {
         // PGRST116 = not found, which is expected for new users
         // 406 or other errors = assume new user to allow registration flow
-        console.log('Profile check result:', profileError.code, profileError.message);
         return { isNewUser: true, error: null };
       }
 
@@ -399,7 +391,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { isNewUser: false, error: null };
     } catch (error) {
       // On any error, treat as new user to allow registration
-      console.log('Profile check exception:', error);
       return { isNewUser: true, error: null };
     }
   };

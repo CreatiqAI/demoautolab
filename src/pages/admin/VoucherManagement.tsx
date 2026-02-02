@@ -525,6 +525,7 @@ const VoucherManagement = () => {
               <p>No vouchers created yet</p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -617,6 +618,7 @@ const VoucherManagement = () => {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

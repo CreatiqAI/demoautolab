@@ -168,7 +168,6 @@ export default function Settings() {
   const loadSystemSettings = async () => {
     // In a real app, this would load from database
     // For now, we'll use the default settings
-    console.log('Loading system settings...');
   };
 
   const saveSystemSettings = async () => {
@@ -800,7 +799,7 @@ export default function Settings() {
                       Add Category
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle>
                         {editingCategory ? 'Edit Category' : 'Add New Category'}
@@ -871,6 +870,7 @@ export default function Settings() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -932,6 +932,7 @@ export default function Settings() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>

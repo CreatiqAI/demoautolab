@@ -150,7 +150,6 @@ export default function Orders() {
           .order('created_at', { ascending: false });
 
         if (!basicError && basicData) {
-          console.log('📦 Using basic orders data (no items):', basicData.length, 'orders');
           ordersData = basicData.map(order => ({
             ...order,
             order_items: [] // No items in fallback
@@ -165,14 +164,12 @@ export default function Orders() {
             .limit(10);
 
           if (!simpleError && simpleData) {
-            console.log('📦 Using simple orders data:', simpleData.length, 'orders');
             ordersData = simpleData.map(order => ({
               ...order,
               order_items: []
             }));
           } else {
             console.error('❌ Even simple query failed:', simpleError);
-            console.log('🔍 Let\'s check if orders table exists and has data...');
 
             // Check table existence and permissions
             const { count, error: countError } = await supabase
@@ -290,7 +287,6 @@ export default function Orders() {
         .eq('id', order.id)
         .select(); // Return updated data to verify the change
 
-      console.log('📝 Update result:', { data, error });
 
       if (error) {
         throw new Error(`Failed to mark order as complete: ${error.message}`);
@@ -334,7 +330,6 @@ export default function Orders() {
       setLoading(true);
 
       // Direct deletion approach - delete voucher usage, order items, then order
-      console.log('Deleting order:', order.order_no, 'with ID:', order.id);
 
       // First delete voucher usage records if any
       const { error: voucherUsageError } = await supabase
@@ -384,7 +379,6 @@ export default function Orders() {
       });
 
       // Refresh the orders list in case the order was actually deleted
-      console.log('Refreshing orders list after failed deletion...');
       fetchOrders();
     } finally {
       setLoading(false);
@@ -662,7 +656,6 @@ export default function Orders() {
       case 'PAYMENT_VERIFIED':
       case 'VERIFIED':
       case 'DELIVERED':
-        console.log('🟢 Green badge for:', status);
         return {
           backgroundColor: '#dcfce7', // green-100
           color: '#166534', // green-800
@@ -672,7 +665,6 @@ export default function Orders() {
       // Light yellow for intermediate states
       case 'PACKING':
       case 'PICKING': // Added this status from your logs
-        console.log('🟡 Yellow badge for:', status);
         return {
           backgroundColor: '#fefce8', // yellow-100
           color: '#854d0e', // yellow-800
@@ -682,7 +674,6 @@ export default function Orders() {
       // Light orange for dispatch states
       case 'DISPATCHED':
       case 'WAREHOUSE_ASSIGNED': // Added this status from your logs
-        console.log('🟠 Orange badge for:', status);
         return {
           backgroundColor: '#fff7ed', // orange-100
           color: '#9a3412', // orange-800
@@ -722,7 +713,6 @@ export default function Orders() {
       // Light gray for initial/archived states
       case 'PLACED':
       case 'COMPLETED':
-        console.log('⚫ Gray badge for:', status);
         return {
           backgroundColor: '#f3f4f6', // gray-100
           color: '#1f2937', // gray-800
@@ -1390,6 +1380,7 @@ export default function Orders() {
 
               <div>
                 <h4 className="font-semibold mb-2">Order Items</h4>
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1420,6 +1411,7 @@ export default function Orders() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
 
               <div className="border-t pt-4">
@@ -1468,7 +1460,7 @@ export default function Orders() {
 
       {/* Edit Order Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Update Order</DialogTitle>
             <DialogDescription>

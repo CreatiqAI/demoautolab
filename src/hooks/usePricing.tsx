@@ -183,24 +183,12 @@ export function useComponentPricing() {
         });
 
       if (fetchError) {
-        console.error('Error fetching components with pricing:', fetchError);
         setError(fetchError.message);
         setComponents([]);
       } else {
-        console.log('✅ Components with pricing loaded:', data?.length, 'components');
-        if (data && data.length > 0) {
-          console.log('📊 Sample component pricing:', {
-            name: data[0].name,
-            normal_price: data[0].normal_price,
-            merchant_price: data[0].merchant_price,
-            price: data[0].price,
-            customer_type: data[0].customer_type
-          });
-        }
         setComponents(data || []);
       }
     } catch (err: any) {
-      console.error('Error in fetchComponents:', err);
       setError(err.message);
     } finally {
       setIsLoading(false);

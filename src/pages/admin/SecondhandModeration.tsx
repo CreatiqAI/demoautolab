@@ -650,7 +650,7 @@ export default function SecondhandModeration() {
 
       {/* Reject Modal */}
       <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Reject Listing</DialogTitle>
             <DialogDescription>

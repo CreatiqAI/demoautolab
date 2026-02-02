@@ -314,13 +314,11 @@ export default function ComponentLibraryPro() {
     if (!confirm(`Are you sure you want to PERMANENTLY DELETE component "${sku}"? This action cannot be undone.`)) return;
 
     try {
-      console.log('Attempting to permanently delete component:', { id, sku });
       
       // Try using the hard delete function first
       const { data: functionData, error: functionError } = await (supabase.rpc as any)('delete_component', { component_id: id });
 
       if (!functionError && functionData) {
-        console.log('Function delete response:', functionData);
         
         if (functionData.success) {
           toast({
@@ -363,7 +361,6 @@ export default function ComponentLibraryPro() {
         .eq('id', id)
         .select();
 
-      console.log('Direct hard delete response:', { data, error });
 
       if (error) throw error;
       
@@ -372,7 +369,6 @@ export default function ComponentLibraryPro() {
       }
       
       // Success! The direct delete worked
-      console.log('✅ Component successfully deleted via direct delete');
       toast({
         title: "Success", 
         description: "Component permanently deleted"
@@ -669,6 +665,7 @@ export default function ComponentLibraryPro() {
           {loading ? (
             <div className="text-center py-8">Loading components...</div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -774,8 +771,9 @@ export default function ComponentLibraryPro() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
-          
+
           {!loading && searchResults.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               {searchTerm ? 'No components found matching your search.' : 'No components created yet.'}

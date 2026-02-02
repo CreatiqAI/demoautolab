@@ -474,7 +474,7 @@ const InventoryAlerts = () => {
 
       {/* Restock Dialog */}
       <Dialog open={restockDialogOpen} onOpenChange={setRestockDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Create Restock Order</DialogTitle>
             <DialogDescription>

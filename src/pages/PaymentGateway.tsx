@@ -114,12 +114,6 @@ export default function PaymentGateway() {
 
       // Skip order processing for subscription renewals
       if (!isSubscriptionRenewal) {
-        // Try to call payment processing function with new payment states
-        console.log('🔄 Calling process_payment_response RPC function...', {
-          orderId: orderData.orderId,
-          status: success ? 'SUCCESS' : 'FAILED'
-        });
-
         const { data: rpcData, error } = await (supabase.rpc as any)('process_payment_response', {
           p_order_id: orderData.orderId,
           p_status: success ? 'SUCCESS' : 'FAILED',
@@ -133,7 +127,6 @@ export default function PaymentGateway() {
           }
         });
 
-        console.log('📦 RPC function response:', { data: rpcData, error });
 
         // If function doesn't exist, fall back to direct order update
         if (error?.code === '42883') { // Function does not exist
@@ -164,7 +157,6 @@ export default function PaymentGateway() {
               throw updateError;
             }
 
-            console.log('✅ Order payment state updated to SUCCESS, status updated to PROCESSING', updateData);
           } else {
             // For failed payment, update to FAILED
             const { data: updateData, error: updateError } = await supabase
@@ -187,25 +179,21 @@ export default function PaymentGateway() {
               console.error('Order update error:', updateError);
             }
 
-            console.log('⚠️ Order payment state updated to FAILED', updateData);
           }
         } else if (error && success) {
           console.error('❌ Payment processing error:', error);
           throw error;
         } else if (!error && success) {
-          console.log('✅ Payment processed successfully via RPC function');
         }
 
         // Verify the update was successful before proceeding
         if (success) {
-          console.log('🔍 Verifying payment update in database...');
           const { data: verifyData, error: verifyError } = await supabase
             .from('orders')
             .select('payment_state, status, payment_gateway_response')
             .eq('id', orderData.orderId)
             .single();
 
-          console.log('✅ Database verification result:', verifyData);
 
           if (verifyError) {
             console.error('❌ Error verifying payment update:', verifyError);
@@ -218,7 +206,6 @@ export default function PaymentGateway() {
             throw new Error(`Payment update failed - payment state is still ${verifyData.payment_state}`);
           }
 
-          console.log('✅ Payment verification successful - payment_state is SUCCESS');
         }
       }
 

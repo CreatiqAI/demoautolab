@@ -94,7 +94,6 @@ const ProductDetails = () => {
       }
     } catch (error) {
       // No installation guide for this product - that's fine
-      console.log('No installation guide for this product');
     }
   };
 
@@ -200,7 +199,6 @@ const ProductDetails = () => {
       }
 
       if (!productComponentData || productComponentData.length === 0) {
-        console.log('No components found for product');
         setComponents([]);
         return;
       }

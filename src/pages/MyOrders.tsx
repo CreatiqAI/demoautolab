@@ -133,7 +133,6 @@ export default function MyOrders() {
         }
       } catch (err) {
         // Tables don't exist yet - silently ignore, feature not yet implemented
-        console.log('Order history access feature not yet available');
       }
 
       const { data: ordersWithItems, error: ordersError } = await supabase
