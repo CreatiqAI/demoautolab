@@ -2,6 +2,7 @@
 -- These functions bypass RLS for admin operations
 
 -- Function to delete a customer profile (admin only)
+-- Safely handles tables that may not exist
 CREATE OR REPLACE FUNCTION admin_delete_customer(p_customer_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -24,33 +25,77 @@ BEGIN
     );
   END IF;
 
-  -- Delete related records first (if not handled by foreign key cascades)
-  -- Delete from points_ledger
-  DELETE FROM points_ledger WHERE customer_id = p_customer_id;
+  -- Delete related records first (safely handle missing tables)
+  -- Each block catches "relation does not exist" errors
 
-  -- Delete from reward_redemptions
-  DELETE FROM reward_redemptions WHERE customer_id = p_customer_id;
+  -- Delete from voucher_usage
+  BEGIN
+    DELETE FROM voucher_usage WHERE customer_id = p_customer_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
 
-  -- Delete from notification_preferences
-  DELETE FROM notification_preferences WHERE customer_id = p_customer_id;
+  -- Delete from vouchers (assigned_to_customer_id)
+  BEGIN
+    DELETE FROM vouchers WHERE assigned_to_customer_id = p_customer_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
 
   -- Delete from customer_vouchers
-  DELETE FROM customer_vouchers WHERE customer_id = p_customer_id;
+  BEGIN
+    DELETE FROM customer_vouchers WHERE customer_id = p_customer_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
+
+  -- Delete from points_ledger
+  BEGIN
+    DELETE FROM points_ledger WHERE customer_id = p_customer_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
+
+  -- Delete from reward_redemptions
+  BEGIN
+    DELETE FROM reward_redemptions WHERE customer_id = p_customer_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
+
+  -- Delete from notification_preferences
+  BEGIN
+    DELETE FROM notification_preferences WHERE customer_id = p_customer_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
 
   -- Delete from merchant_registrations
-  DELETE FROM merchant_registrations WHERE customer_id = p_customer_id;
+  BEGIN
+    DELETE FROM merchant_registrations WHERE customer_id = p_customer_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
 
   -- Delete from secondhand_listings
-  DELETE FROM secondhand_listings WHERE seller_id = p_customer_id;
+  BEGIN
+    DELETE FROM secondhand_listings WHERE seller_id = p_customer_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
+
+  -- Delete from product_reviews
+  BEGIN
+    DELETE FROM product_reviews WHERE customer_id = p_customer_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
+
+  -- Delete cart items for this user
+  BEGIN
+    DELETE FROM cart_items WHERE user_id = v_user_id;
+  EXCEPTION WHEN undefined_table THEN NULL;
+  END;
+
+  -- Nullify orders reference (don't delete orders, just remove customer link)
+  BEGIN
+    UPDATE orders SET customer_profile_id = NULL WHERE customer_profile_id = p_customer_id;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
+  END;
 
   -- Now delete the customer profile
   DELETE FROM customer_profiles WHERE id = p_customer_id;
-
-  -- Optionally delete the auth user (be careful with this)
-  -- If you want to also delete the auth user, uncomment:
-  -- IF v_user_id IS NOT NULL THEN
-  --   DELETE FROM auth.users WHERE id = v_user_id;
-  -- END IF;
 
   RETURN jsonb_build_object(
     'success', true,
