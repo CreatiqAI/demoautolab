@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Eye, ArrowLeft, Package, Truck, CheckCircle, Clock, XCircle, CreditCard, Receipt, ShoppingBag, Lock, Unlock, Calendar, TrendingUp } from 'lucide-react';
+import { Eye, ArrowLeft, Package, Truck, CheckCircle, Clock, XCircle, CreditCard, Receipt, ShoppingBag, Lock, Unlock, Calendar, TrendingUp, ExternalLink, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
@@ -33,6 +33,9 @@ interface CustomerOrder {
   updated_at: string;
   voucher_code: string | null;
   voucher_discount: number | null;
+  // Courier tracking fields
+  courier_provider: string | null;
+  courier_tracking_number: string | null;
   order_items: Array<{
     id: string;
     component_sku: string;
@@ -238,6 +241,8 @@ export default function MyOrders() {
         updated_at: order.updated_at,
         voucher_code: order.voucher_code || null,
         voucher_discount: order.voucher_discount || null,
+        courier_provider: order.courier_provider || null,
+        courier_tracking_number: order.courier_tracking_number || null,
         order_items: order.order_items || []
       }));
 
@@ -1055,6 +1060,35 @@ export default function MyOrders() {
                       </Button>
                     </div>
                   )}
+
+                  {/* Request Return Button - Show for delivered orders within 7 days */}
+                  {selectedOrder.payment_state === 'SUCCESS' &&
+                   ['DELIVERED', 'COMPLETED'].includes(selectedOrder.status) &&
+                   (() => {
+                     const deliveryDate = new Date(selectedOrder.updated_at);
+                     const daysSinceDelivery = Math.floor((Date.now() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24));
+                     return daysSinceDelivery <= 7;
+                   })() && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h4 className="text-xs font-bold uppercase tracking-wide text-gray-700 mb-3 flex items-center gap-2">
+                        <RotateCcw className="h-4 w-4" />
+                        Need to Return?
+                      </h4>
+                      <p className="text-sm text-gray-700 mb-4">
+                        If there's an issue with your order, you can request a return within 7 days of delivery.
+                      </p>
+                      <Button
+                        onClick={() => {
+                          navigate(`/return-request?orderId=${selectedOrder.id}`);
+                        }}
+                        variant="outline"
+                        className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Request Return
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 {/* RIGHT COLUMN - Order Status Timeline (1/3 width) */}
@@ -1117,6 +1151,40 @@ export default function MyOrders() {
                             );
                           })}
                         </div>
+
+                        {/* Tracking Information */}
+                        {selectedOrder.courier_tracking_number && (
+                          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h4 className="text-xs font-bold uppercase tracking-wide text-blue-700 mb-2 flex items-center gap-2">
+                              <Truck className="h-4 w-4" />
+                              Tracking Information
+                            </h4>
+                            <div className="space-y-2">
+                              {selectedOrder.courier_provider && (
+                                <p className="text-sm text-blue-800">
+                                  <span className="font-medium">Courier:</span> {selectedOrder.courier_provider === 'JNT' ? 'J&T Express' : selectedOrder.courier_provider === 'LALAMOVE' ? 'Lalamove' : selectedOrder.courier_provider}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-blue-800 font-medium">Tracking:</span>
+                                <code className="px-2 py-1 bg-white border border-blue-200 rounded text-blue-900 font-mono text-sm">
+                                  {selectedOrder.courier_tracking_number}
+                                </code>
+                              </div>
+                              {selectedOrder.courier_provider === 'JNT' && (
+                                <a
+                                  href={`https://www.jtexpress.my/tracking?billcode=${selectedOrder.courier_tracking_number}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium mt-2"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  Track Parcel on J&T Express
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : selectedOrder.payment_state === 'FAILED' ? (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-4">

@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Search, Trash2, Download, FileText, X, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
+import { QRCodeSVG } from 'qrcode.react';
 
 // HTML2PDF CDN integration
 declare global {
@@ -1577,11 +1578,23 @@ export default function Orders() {
                         <p style={{ margin: '2px 0', fontSize: '9px' }}>Tel: 03-4297 7668</p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ border: '1px solid #000', padding: '5px 15px', display: 'inline-block' }}>
-                          <h2 style={{ margin: '0', textAlign: 'center', fontSize: '14px' }}>INVOICE</h2>
-                          <p style={{ margin: '3px 0', fontSize: '9px' }} id="invoice-order-id-p">
-                            <strong>Order ID: </strong>{selectedOrderForInvoice.order_no}
-                          </p>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', gap: '10px' }}>
+                          {/* QR Code for warehouse scanning */}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <QRCodeSVG
+                              value={`${window.location.origin}/warehouse/scan?order=${selectedOrderForInvoice.order_no}`}
+                              size={60}
+                              level="M"
+                              includeMargin={false}
+                            />
+                            <p style={{ margin: '2px 0 0', fontSize: '6px', textAlign: 'center' }}>Scan to update</p>
+                          </div>
+                          <div style={{ border: '1px solid #000', padding: '5px 15px', display: 'inline-block' }}>
+                            <h2 style={{ margin: '0', textAlign: 'center', fontSize: '14px' }}>INVOICE</h2>
+                            <p style={{ margin: '3px 0', fontSize: '9px' }} id="invoice-order-id-p">
+                              <strong>Order ID: </strong>{selectedOrderForInvoice.order_no}
+                            </p>
+                          </div>
                         </div>
                         <p style={{ margin: '5px 0 2px', fontSize: '9px' }}>
                           <strong>Date: </strong>

@@ -65,6 +65,16 @@ import MyPoints from './pages/MyPoints';
 import PointsRewards from './pages/admin/PointsRewards';
 import Salesmen from './pages/admin/Salesmen';
 
+// Returns Pages
+import ReturnRequest from './pages/ReturnRequest';
+import MyReturns from './pages/MyReturns';
+import ReturnPolicy from './pages/ReturnPolicy';
+import AdminReturns from './pages/admin/Returns';
+
+// Warehouse Pages
+import WarehouseDashboard from './pages/warehouse/Dashboard';
+import WarehouseScan from './pages/warehouse/Scan';
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -108,6 +118,23 @@ const App = () => (
                   <Route path="/notification-settings" element={<NotificationSettings />} />
                   <Route path="/my-points" element={<MyPoints />} />
 
+                  {/* Returns Routes */}
+                  <Route path="/return-request" element={<ReturnRequest />} />
+                  <Route path="/my-returns" element={<MyReturns />} />
+                  <Route path="/return-policy" element={<ReturnPolicy />} />
+
+                  {/* Warehouse Routes (Protected) */}
+                  <Route path="/warehouse/dashboard" element={
+                    <ProtectedAdminRoute>
+                      <WarehouseDashboard />
+                    </ProtectedAdminRoute>
+                  } />
+                  <Route path="/warehouse/scan" element={
+                    <ProtectedAdminRoute>
+                      <WarehouseScan />
+                    </ProtectedAdminRoute>
+                  } />
+
                   {/* Admin Routes */}
                   <Route path="/admin/*" element={
                     <ProtectedAdminRoute>
@@ -134,6 +161,7 @@ const App = () => (
                     <Route path="points-rewards" element={<PointsRewards />} />
                     <Route path="secondhand-moderation" element={<SecondhandModeration />} />
                     <Route path="salesmen" element={<Salesmen />} />
+                    <Route path="returns" element={<AdminReturns />} />
                     <Route path="knowledge-base" element={<KnowledgeBase />} />
                     <Route path="users" element={<UserManagement />} />
                     <Route path="settings" element={<Settings />} />

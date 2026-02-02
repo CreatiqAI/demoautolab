@@ -27,7 +27,8 @@ import {
   TrendingUp,
   ChevronDown,
   ChevronUp,
-  Briefcase
+  Briefcase,
+  RotateCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +62,7 @@ const navigation: NavigationElement[] = [
     icon: ShoppingBag,
     items: [
       { name: 'All Orders', href: '/admin/orders', icon: ShoppingBag },
+      { name: 'Returns', href: '/admin/returns', icon: RotateCcw },
       { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
       { name: 'Archived Orders', href: '/admin/archived-orders', icon: Archive },
     ]

@@ -14,7 +14,8 @@ import {
   X,
   ChevronDown,
   Coins,
-  Settings
+  Settings,
+  RotateCcw
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -401,6 +402,14 @@ const Header = () => {
                             className="text-xl font-heading font-bold uppercase text-gray-900 hover:text-lime-600 transition-colors py-3 border-b border-gray-100"
                           >
                             My Orders
+                          </Link>
+                          <Link
+                            to="/my-returns"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="text-xl font-heading font-bold uppercase text-gray-900 hover:text-lime-600 transition-colors py-3 border-b border-gray-100 flex items-center gap-2"
+                          >
+                            <RotateCcw className="h-5 w-5" />
+                            My Returns
                           </Link>
                           <Link
                             to="/my-vouchers"

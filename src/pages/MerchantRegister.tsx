@@ -32,6 +32,7 @@ const MerchantRegister = () => {
   const [merchantForm, setMerchantForm] = useState({
     username: '',
     phone: '',
+    email: '',
     password: '',
     confirmPassword: '',
     companyName: '',
@@ -354,6 +355,8 @@ const MerchantRegister = () => {
           business_type: merchantForm.businessType,
           address: merchantForm.address,
           status: 'PENDING',
+          // Contact info
+          email: merchantForm.email || null,
           // New fields
           company_profile_url: merchantForm.companyProfileUrl || null,
           social_media_links: merchantForm.socialMediaLinks.filter(l => l.url),
@@ -487,20 +490,33 @@ const MerchantRegister = () => {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone Number *</Label>
-                      <div className="flex">
-                        <div className="flex items-center bg-muted border border-r-0 rounded-l-md px-3 text-sm text-muted-foreground">
-                          +60
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone Number *</Label>
+                        <div className="flex">
+                          <div className="flex items-center bg-muted border border-r-0 rounded-l-md px-3 text-sm text-muted-foreground">
+                            +60
+                          </div>
+                          <Input
+                            id="phone"
+                            type="tel"
+                            placeholder="12345678"
+                            value={merchantForm.phone}
+                            onChange={(e) => setMerchantForm({...merchantForm, phone: e.target.value})}
+                            required
+                            className="rounded-l-none"
+                          />
                         </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email Address</Label>
                         <Input
-                          id="phone"
-                          type="tel"
-                          placeholder="12345678"
-                          value={merchantForm.phone}
-                          onChange={(e) => setMerchantForm({...merchantForm, phone: e.target.value})}
-                          required
-                          className="rounded-l-none"
+                          id="email"
+                          type="email"
+                          placeholder="business@example.com"
+                          value={merchantForm.email}
+                          onChange={(e) => setMerchantForm({...merchantForm, email: e.target.value})}
                         />
                       </div>
                     </div>
