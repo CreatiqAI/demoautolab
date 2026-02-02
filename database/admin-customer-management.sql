@@ -31,61 +31,61 @@ BEGIN
   -- Delete from voucher_usage
   BEGIN
     DELETE FROM voucher_usage WHERE customer_id = p_customer_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Delete from vouchers (assigned_to_customer_id)
   BEGIN
     DELETE FROM vouchers WHERE assigned_to_customer_id = p_customer_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Delete from customer_vouchers
   BEGIN
     DELETE FROM customer_vouchers WHERE customer_id = p_customer_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Delete from points_ledger
   BEGIN
     DELETE FROM points_ledger WHERE customer_id = p_customer_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Delete from reward_redemptions
   BEGIN
     DELETE FROM reward_redemptions WHERE customer_id = p_customer_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Delete from notification_preferences
   BEGIN
     DELETE FROM notification_preferences WHERE customer_id = p_customer_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Delete from merchant_registrations
   BEGIN
     DELETE FROM merchant_registrations WHERE customer_id = p_customer_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Delete from secondhand_listings
   BEGIN
     DELETE FROM secondhand_listings WHERE seller_id = p_customer_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Delete from product_reviews
   BEGIN
     DELETE FROM product_reviews WHERE customer_id = p_customer_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Delete cart items for this user
   BEGIN
     DELETE FROM cart_items WHERE user_id = v_user_id;
-  EXCEPTION WHEN undefined_table THEN NULL;
+  EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
   END;
 
   -- Nullify orders reference (don't delete orders, just remove customer link)
