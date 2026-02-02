@@ -58,6 +58,9 @@ export default function PointsRewards() {
   // Dialog states
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchAllData();
@@ -181,6 +184,38 @@ export default function PointsRewards() {
       style: 'currency',
       currency: 'MYR',
     }).format(amount);
+  };
+
+  const handleDeleteRewardItem = async () => {
+    if (!itemToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('reward_items')
+        .delete()
+        .eq('id', itemToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Reward Item Deleted',
+        description: `${itemToDelete.name} has been removed.`
+      });
+
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
+      fetchRewardItems();
+    } catch (error: any) {
+      console.error('Error deleting reward item:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete reward item',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -375,8 +410,16 @@ export default function PointsRewards() {
                         <Edit className="h-3 w-3 mr-1" />
                         Edit
                       </Button>
-                      <Button variant="outline" size="sm">
-                        <BarChart3 className="h-3 w-3" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200"
+                        onClick={() => {
+                          setItemToDelete(item);
+                          setDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </CardContent>
@@ -509,6 +552,53 @@ export default function PointsRewards() {
           setEditingItem(null);
         }}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Reward Item</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this reward item? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {itemToDelete && (
+            <div className="py-4">
+              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                {itemToDelete.image_url && (
+                  <div className="w-12 h-12 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                    <img
+                      src={itemToDelete.image_url}
+                      alt={itemToDelete.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div>
+                  <p className="font-medium">{itemToDelete.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {itemToDelete.points_required} points • {itemToDelete.total_redeemed || 0} redeemed
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteRewardItem}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
