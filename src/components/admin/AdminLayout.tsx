@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -121,24 +121,45 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({
-    'Orders': false,
-    'Products': false,
-    'Customers': false,
-    'Rewards & Loyalty': false,
-    'System': false,
-  });
+
+  // Helper to check if a group contains the current path
+  const isGroupContainingPath = (group: NavigationGroup, pathname: string) => {
+    return group.items.some(item => {
+      if (item.exact) {
+        return pathname === item.href;
+      }
+      return pathname.startsWith(item.href);
+    });
+  };
+
+  // Initialize expanded groups based on current path
+  const getInitialExpandedGroup = (): string | null => {
+    for (const item of navigation) {
+      if (isGroup(item) && isGroupContainingPath(item, location.pathname)) {
+        return item.name;
+      }
+    }
+    return null;
+  };
+
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(getInitialExpandedGroup);
+
+  // Update expanded group when location changes (e.g., back/forward navigation)
+  React.useEffect(() => {
+    const activeGroup = getInitialExpandedGroup();
+    if (activeGroup && activeGroup !== expandedGroup) {
+      setExpandedGroup(activeGroup);
+    }
+  }, [location.pathname]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
   };
 
+  // Accordion behavior: only one group open at a time
   const toggleGroup = (groupName: string) => {
-    setExpandedGroups(prev => ({
-      ...prev,
-      [groupName]: !prev[groupName]
-    }));
+    setExpandedGroup(prev => prev === groupName ? null : groupName);
   };
 
   const isCurrentPath = (href: string, exact = false) => {
@@ -166,7 +187,7 @@ export default function AdminLayout() {
           if (isGroup(item)) {
             // Render group with collapsible sub-items
             const Icon = item.icon;
-            const isExpanded = expandedGroups[item.name];
+            const isExpanded = expandedGroup === item.name;
             const groupActive = isGroupActive(item);
 
             return (

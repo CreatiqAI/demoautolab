@@ -114,17 +114,50 @@ const MerchantConsole = () => {
         return;
       }
 
-      setIsMerchant(true);
-
+      // Check if merchant has panel subscription - only panel customers can access MerchantConsole
       if (profile?.id) {
-        const { data: partnershipData } = await supabase
-          .from('premium_partnerships' as any)
-          .select('*')
-          .eq('merchant_id', profile.id)
-          .single();
+        try {
+          const { data: partnershipData, error: partnershipError } = await supabase
+            .from('premium_partnerships' as any)
+            .select('*')
+            .eq('merchant_id', profile.id)
+            .single();
 
-        setPartnership(partnershipData as any);
+          if (!partnershipError && partnershipData) {
+            const plan = (partnershipData as any).subscription_plan;
+            if (plan !== 'panel') {
+              toast({
+                title: 'Panel Access Only',
+                description: 'The Merchant Console is only available for Panel (Authorized) merchants. Your merchant info is available in Settings.',
+                variant: 'destructive'
+              });
+              navigate('/settings');
+              return;
+            }
+            setPartnership(partnershipData as any);
+          } else {
+            // No partnership record - not a panel customer
+            toast({
+              title: 'Panel Access Only',
+              description: 'The Merchant Console is only available for Panel (Authorized) merchants. Your merchant info is available in Settings.',
+              variant: 'destructive'
+            });
+            navigate('/settings');
+            return;
+          }
+        } catch {
+          // premium_partnerships table may not exist yet - redirect to settings
+          toast({
+            title: 'Panel Access Only',
+            description: 'The Merchant Console is only available for Panel (Authorized) merchants.',
+            variant: 'destructive'
+          });
+          navigate('/settings');
+          return;
+        }
       }
+
+      setIsMerchant(true);
     } catch (error) {
       console.error('Error fetching merchant data:', error);
     } finally {

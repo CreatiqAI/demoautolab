@@ -62,16 +62,13 @@ interface MerchantApplication {
   ssm_document_url: string | null;
   bank_proof_url: string | null;
   workshop_photos: string[] | null;
+  payment_slip_url: string | null;
   referral_code: string | null;
   referred_by_salesman_id: string | null;
   customer_profiles: {
     full_name: string;
     phone: string | null;
     email: string | null;
-  };
-  merchant_codes: {
-    code: string;
-    description: string | null;
   };
   salesman?: Salesman | null;
 }
@@ -149,14 +146,6 @@ export default function Customers() {
         { customer_ids: customerIds }
       );
 
-      // Fetch merchant codes
-      const codeIds = (registrations as any[]).map((r: any) => r.code_id);
-
-      const { data: codes, error: codeError } = await supabase
-        .from('merchant_codes' as any)
-        .select('id, code, description')
-        .in('id', codeIds);
-
       // Fetch salesmen data for referrals
       const salesmanIds = (registrations as any[])
         .filter((r: any) => r.referred_by_salesman_id)
@@ -182,10 +171,6 @@ export default function Customers() {
           phone: null,
           email: null
         },
-        merchant_codes: (codes as any)?.find((mc: any) => mc.id === (reg as any).code_id) || {
-          code: 'Unknown',
-          description: null
-        },
         salesman: salesmenData.find((s: any) => s.id === reg.referred_by_salesman_id) || null
       }));
 
@@ -204,6 +189,11 @@ export default function Customers() {
     try {
       setLoading(true);
 
+      // Find the application to get customer_id and company_name
+      const application = applications.find(a => a.id === applicationId);
+      if (!application) throw new Error('Application not found');
+
+      // 1. Update merchant_registrations status to APPROVED
       const { error } = await supabase
         .from('merchant_registrations' as any)
         .update({
@@ -214,9 +204,88 @@ export default function Customers() {
 
       if (error) throw error;
 
+      // 2. Auto-create Professional plan subscription
+      const now = new Date();
+      const oneYearLater = new Date(now);
+      oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+
+      try {
+        // Check if partnership already exists
+        const { data: existingPartnership } = await supabase
+          .from('premium_partnerships' as any)
+          .select('id')
+          .eq('merchant_id', application.customer_id)
+          .single();
+
+        if (!existingPartnership) {
+          const { error: partnershipError } = await supabase
+            .from('premium_partnerships' as any)
+            .insert([{
+              merchant_id: application.customer_id,
+              business_name: application.company_name || '',
+              business_registration_no: application.business_registration_no || '',
+              business_type: application.business_type || '',
+              contact_person: application.customer_profiles?.full_name || '',
+              contact_phone: application.customer_profiles?.phone || '',
+              contact_email: application.customer_profiles?.email || '',
+              address: application.address || '',
+              subscription_plan: 'professional',
+              yearly_fee: 99,
+              subscription_status: 'ACTIVE',
+              admin_approved: true,
+              subscription_start_date: now.toISOString(),
+              subscription_end_date: oneYearLater.toISOString(),
+            }]);
+
+          if (partnershipError) {
+            console.error('Error creating professional subscription:', partnershipError);
+          }
+        }
+      } catch (partnershipErr) {
+        console.error('Error checking/creating partnership:', partnershipErr);
+      }
+
+      // 3. Auto-create RM50 Welcome Voucher for this merchant
+      try {
+        // Check if welcome voucher already exists for this merchant
+        const welcomeCode = `WELCOME-${application.customer_id.substring(0, 8).toUpperCase()}`;
+        const { data: existingVoucher } = await supabase
+          .from('vouchers' as any)
+          .select('id')
+          .eq('code', welcomeCode)
+          .single();
+
+        if (!existingVoucher) {
+          const { error: voucherError } = await supabase
+            .from('vouchers' as any)
+            .insert([{
+              code: welcomeCode,
+              name: 'RM50 Merchant Welcome Voucher',
+              description: 'Welcome voucher for newly approved merchant. RM50 off your purchase.',
+              discount_type: 'FIXED_AMOUNT',
+              discount_value: 50,
+              max_discount_amount: null,
+              min_purchase_amount: 0,
+              max_usage_total: null, // No total limit
+              max_usage_per_user: 1, // One use per merchant
+              customer_type_restriction: 'MERCHANT',
+              valid_from: now.toISOString(),
+              valid_until: null, // No expiry
+              is_active: true,
+              admin_notes: `Auto-generated welcome voucher for merchant ${application.customer_profiles?.full_name || application.customer_id}`,
+            }]);
+
+          if (voucherError) {
+            console.error('Error creating welcome voucher:', voucherError);
+          }
+        }
+      } catch (voucherErr) {
+        console.error('Error checking/creating welcome voucher:', voucherErr);
+      }
+
       toast({
         title: "Success",
-        description: "Merchant application approved successfully! Wallet created automatically.",
+        description: "Merchant approved! Professional plan activated & RM50 Welcome Voucher created.",
       });
 
       setIsApplicationDialogOpen(false);
@@ -782,7 +851,7 @@ export default function Customers() {
                           </TableCell>
                           <TableCell>{application.business_type}</TableCell>
                           <TableCell>
-                            <Badge variant="outline">{application.merchant_codes.code}</Badge>
+                            <Badge variant="outline">{application.referral_code || 'N/A'}</Badge>
                           </TableCell>
                           <TableCell>
                             <div className="text-sm">
@@ -1181,9 +1250,9 @@ export default function Customers() {
                   <div className="space-y-2 text-sm">
                     <div><span className="font-medium">Company Name:</span> {selectedApplication.company_name}</div>
                     <div><span className="font-medium">Business Type:</span> {selectedApplication.business_type}</div>
-                    <div><span className="font-medium">Registration Code Used:</span>
+                    <div><span className="font-medium">Referral Code:</span>
                       <Badge variant="outline" className="ml-2">
-                        {selectedApplication.merchant_codes.code}
+                        {selectedApplication.referral_code || 'N/A'}
                       </Badge>
                     </div>
                   </div>
@@ -1272,7 +1341,7 @@ export default function Customers() {
               )}
 
               {/* Documents */}
-              {(selectedApplication.ssm_document_url || selectedApplication.bank_proof_url) && (
+              {(selectedApplication.ssm_document_url || selectedApplication.bank_proof_url || (selectedApplication as any).payment_slip_url) && (
                 <div>
                   <h4 className="font-semibold mb-3 flex items-center gap-2">
                     <FileText className="h-4 w-4" />
@@ -1305,6 +1374,21 @@ export default function Customers() {
                         >
                           <FileText className="h-4 w-4" />
                           View Document
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    )}
+                    {(selectedApplication as any).payment_slip_url && (
+                      <div className="p-3 border rounded-lg border-amber-200 bg-amber-50/50">
+                        <div className="text-sm font-medium mb-2">RM99 Payment Slip</div>
+                        <a
+                          href={(selectedApplication as any).payment_slip_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-amber-100 text-amber-800 rounded hover:bg-amber-200 text-sm"
+                        >
+                          <FileText className="h-4 w-4" />
+                          View Payment Slip
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       </div>
@@ -1369,12 +1453,12 @@ export default function Customers() {
                 </div>
               )}
 
-              {/* Code Description */}
-              {selectedApplication.merchant_codes.description && (
+              {/* Salesman Info */}
+              {selectedApplication.salesman && (
                 <div>
-                  <h4 className="font-semibold mb-2">Registration Code Details</h4>
+                  <h4 className="font-semibold mb-2">Referred By</h4>
                   <p className="text-sm text-muted-foreground">
-                    {selectedApplication.merchant_codes.description}
+                    {selectedApplication.salesman.name} (Code: {selectedApplication.salesman.referral_code})
                   </p>
                 </div>
               )}
@@ -1597,17 +1681,19 @@ export default function Customers() {
               <AlertTriangle className="h-5 w-5" />
               Suspend Customer Account
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to suspend <strong>{customerToAction?.full_name}</strong>'s account?
-              <br /><br />
-              This will prevent the customer from:
-              <ul className="list-disc ml-6 mt-2 space-y-1">
-                <li>Logging into their account</li>
-                <li>Placing new orders</li>
-                <li>Accessing their profile</li>
-              </ul>
-              <br />
-              You can reactivate the account later if needed.
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to suspend <strong>{customerToAction?.full_name}</strong>'s account?
+                <br /><br />
+                This will prevent the customer from:
+                <ul className="list-disc ml-6 mt-2 space-y-1">
+                  <li>Logging into their account</li>
+                  <li>Placing new orders</li>
+                  <li>Accessing their profile</li>
+                </ul>
+                <br />
+                You can reactivate the account later if needed.
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1631,18 +1717,20 @@ export default function Customers() {
               <AlertTriangle className="h-5 w-5" />
               Delete Customer Permanently
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to permanently delete <strong>{customerToAction?.full_name}</strong>'s account?
-              <br /><br />
-              <span className="text-red-600 font-semibold">This action cannot be undone.</span> All customer data including:
-              <ul className="list-disc ml-6 mt-2 space-y-1">
-                <li>Profile information</li>
-                <li>Order history</li>
-                <li>Points and rewards</li>
-                <li>Saved vehicles and preferences</li>
-              </ul>
-              <br />
-              will be permanently deleted.
+            <AlertDialogDescription asChild>
+              <div>
+                Are you sure you want to permanently delete <strong>{customerToAction?.full_name}</strong>'s account?
+                <br /><br />
+                <span className="text-red-600 font-semibold">This action cannot be undone.</span> All customer data including:
+                <ul className="list-disc ml-6 mt-2 space-y-1">
+                  <li>Profile information</li>
+                  <li>Order history</li>
+                  <li>Points and rewards</li>
+                  <li>Saved vehicles and preferences</li>
+                </ul>
+                <br />
+                will be permanently deleted.
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

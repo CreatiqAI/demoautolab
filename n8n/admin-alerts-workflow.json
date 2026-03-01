@@ -1,0 +1,291 @@
+{
+  "name": "AutoLab Admin Alerts → WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "admin-alerts",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-admin",
+      "name": "Admin Alert Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 400],
+      "webhookId": "admin-alerts-autolab"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "admin-phone-1",
+              "name": "ADMIN_PHONE",
+              "value": "=60342977668",
+              "type": "string"
+            },
+            {
+              "id": "admin-supabase-url",
+              "name": "SUPABASE_URL",
+              "value": "=YOUR_SUPABASE_URL",
+              "type": "string"
+            },
+            {
+              "id": "admin-supabase-key",
+              "name": "SUPABASE_SERVICE_KEY",
+              "value": "=YOUR_SUPABASE_SERVICE_KEY",
+              "type": "string"
+            },
+            {
+              "id": "admin-wa-phone-id",
+              "name": "WHATSAPP_PHONE_NUMBER_ID",
+              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "admin-wa-token",
+              "name": "WHATSAPP_ACCESS_TOKEN",
+              "value": "=YOUR_WHATSAPP_ACCESS_TOKEN",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "admin-env-setup",
+      "name": "Admin Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse admin alert payload\n// Supports: NEW_ORDER, PAYMENT_SUBMITTED, LOW_STOCK, NEW_RETURN, NEW_REVIEW, NEW_MERCHANT\n\nconst body = $input.first().json.body || $input.first().json;\nlet payload = body;\n\n// Supabase Database Webhook format (orders table INSERT)\nif (body.type === 'INSERT' && body.table === 'orders') {\n  const record = body.record || {};\n  payload = {\n    alert_type: 'NEW_ORDER',\n    data: {\n      order_no: record.order_no,\n      customer_name: record.customer_name,\n      customer_phone: record.customer_phone,\n      total: record.total,\n      payment_state: record.payment_state,\n      delivery_method: record.delivery_method,\n      item_count: record.item_count || 0,\n      created_at: record.created_at\n    }\n  };\n}\n// Supabase Database Webhook format (orders table UPDATE - payment submitted)\nelse if (body.type === 'UPDATE' && body.table === 'orders') {\n  const record = body.record || {};\n  const old_record = body.old_record || {};\n  \n  if (old_record.payment_state !== record.payment_state && record.payment_state === 'SUBMITTED') {\n    payload = {\n      alert_type: 'PAYMENT_SUBMITTED',\n      data: {\n        order_no: record.order_no,\n        customer_name: record.customer_name,\n        total: record.total,\n        created_at: record.updated_at\n      }\n    };\n  } else {\n    return []; // Skip non-relevant updates\n  }\n}\n// Supabase Database Webhook format (returns table INSERT)\nelse if (body.type === 'INSERT' && body.table === 'returns') {\n  const record = body.record || {};\n  payload = {\n    alert_type: 'NEW_RETURN',\n    data: {\n      return_no: record.return_no,\n      reason: record.reason,\n      refund_method: record.refund_method,\n      customer_id: record.customer_id,\n      order_id: record.order_id,\n      created_at: record.created_at\n    }\n  };\n}\n// Direct payload format (from custom triggers/functions)\n// Expected: { alert_type: 'LOW_STOCK', data: { ... } }\n\nreturn { json: payload };"
+      },
+      "id": "parse-admin-alert",
+      "name": "Parse Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [{ "leftValue": "={{ $json.alert_type }}", "rightValue": "NEW_ORDER", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "New Order"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [{ "leftValue": "={{ $json.alert_type }}", "rightValue": "PAYMENT_SUBMITTED", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "Payment Submitted"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [{ "leftValue": "={{ $json.alert_type }}", "rightValue": "LOW_STOCK", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "Low Stock"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [{ "leftValue": "={{ $json.alert_type }}", "rightValue": "NEW_RETURN", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "New Return"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "route-admin-alert",
+      "name": "Route Alert Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// NEW ORDER alert for admin\nconst data = $input.first().json.data;\nconst adminPhone = $('Admin Config').first().json.ADMIN_PHONE;\n\nconst paymentLabel = {\n  'UNPAID': '⏳ Unpaid',\n  'SUBMITTED': '📸 Proof Submitted',\n  'APPROVED': '✅ Paid',\n  'ON_CREDIT': '🏷️ On Credit'\n};\n\nconst message = `🔔 *NEW ORDER RECEIVED!*\n\n📋 *${data.order_no}*\n👤 ${data.customer_name}\n📱 ${data.customer_phone}\n💰 *RM ${parseFloat(data.total).toFixed(2)}*\n💳 ${paymentLabel[data.payment_state] || data.payment_state}\n📦 ${data.delivery_method === 'DELIVERY' ? 'Delivery' : 'Self Pickup'}\n🕐 ${new Date(data.created_at).toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur' })}\n\n👉 Review: https://autolab.my/admin/orders`;\n\nreturn {\n  json: {\n    phone: adminPhone,\n    message: message\n  }\n};"
+      },
+      "id": "msg-new-order",
+      "name": "New Order Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 140]
+    },
+    {
+      "parameters": {
+        "jsCode": "// PAYMENT SUBMITTED alert for admin\nconst data = $input.first().json.data;\nconst adminPhone = $('Admin Config').first().json.ADMIN_PHONE;\n\nconst message = `💳 *PAYMENT PROOF SUBMITTED!*\n\n📋 *${data.order_no}*\n👤 ${data.customer_name}\n💰 *RM ${parseFloat(data.total).toFixed(2)}*\n🕐 ${new Date(data.created_at).toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur' })}\n\n⚡ *Action Required:* Verify payment\n👉 https://autolab.my/admin/orders`;\n\nreturn {\n  json: {\n    phone: adminPhone,\n    message: message\n  }\n};"
+      },
+      "id": "msg-payment-submitted",
+      "name": "Payment Submitted Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "// LOW STOCK alert for admin\n// Expected data: { products: [{ name, sku, current_stock, reorder_level }] }\nconst data = $input.first().json.data;\nconst adminPhone = $('Admin Config').first().json.ADMIN_PHONE;\n\nconst products = data.products || [];\n\nif (products.length === 0) {\n  return [];\n}\n\nlet productList = products.slice(0, 10).map((p, i) => \n  `${i+1}. *${p.name}*\\n   SKU: ${p.sku} | Stock: *${p.current_stock}* (Min: ${p.reorder_level})`\n).join('\\n\\n');\n\nconst message = `⚠️ *LOW STOCK ALERT!*\n\n${products.length} product(s) below reorder level:\n\n${productList}${products.length > 10 ? `\\n\\n... and ${products.length - 10} more` : ''}\n\n⚡ *Action Required:* Restock items\n👉 https://autolab.my/admin/inventory`;\n\nreturn {\n  json: {\n    phone: adminPhone,\n    message: message\n  }\n};"
+      },
+      "id": "msg-low-stock",
+      "name": "Low Stock Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 580]
+    },
+    {
+      "parameters": {
+        "jsCode": "// NEW RETURN REQUEST alert for admin\nconst data = $input.first().json.data;\nconst adminPhone = $('Admin Config').first().json.ADMIN_PHONE;\n\nconst reasonLabel = {\n  'DEFECTIVE': '🔧 Defective/Damaged',\n  'WRONG_ITEM': '❌ Wrong Item Received'\n};\n\nconst methodLabel = {\n  'ORIGINAL_PAYMENT': '💰 Refund',\n  'EXCHANGE': '🔄 Exchange'\n};\n\nconst message = `🔁 *NEW RETURN REQUEST!*\n\n📋 *${data.return_no}*\n📝 Reason: ${reasonLabel[data.reason] || data.reason}\n🔁 Method: ${methodLabel[data.refund_method] || data.refund_method}\n🕐 ${new Date(data.created_at).toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur' })}\n\n⚡ *Action Required:* Review return request\n👉 https://autolab.my/admin/returns`;\n\nreturn {\n  json: {\n    phone: adminPhone,\n    message: message\n  }\n};"
+      },
+      "id": "msg-new-return",
+      "name": "New Return Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Admin Config').first().json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.phone, type: 'text', text: { preview_url: true, body: $json.message } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "send-whatsapp-admin",
+      "name": "Send Admin WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-bearer",
+          "name": "WhatsApp Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: { success: true, alert_sent: true, timestamp: new Date().toISOString() } };"
+      },
+      "id": "log-admin-result",
+      "name": "Log Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1620, 400]
+    }
+  ],
+  "connections": {
+    "Admin Alert Webhook": {
+      "main": [
+        [
+          { "node": "Admin Config", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Admin Config": {
+      "main": [
+        [
+          { "node": "Parse Alert", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse Alert": {
+      "main": [
+        [
+          { "node": "Route Alert Type", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Route Alert Type": {
+      "main": [
+        [
+          { "node": "New Order Alert", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Payment Submitted Alert", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Low Stock Alert", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "New Return Alert", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "New Order Alert": {
+      "main": [
+        [
+          { "node": "Send Admin WhatsApp", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Payment Submitted Alert": {
+      "main": [
+        [
+          { "node": "Send Admin WhatsApp", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Low Stock Alert": {
+      "main": [
+        [
+          { "node": "Send Admin WhatsApp", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "New Return Alert": {
+      "main": [
+        [
+          { "node": "Send Admin WhatsApp", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Admin WhatsApp": {
+      "main": [
+        [
+          { "node": "Log Result", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "autolab" },
+    { "name": "admin" },
+    { "name": "alerts" },
+    { "name": "whatsapp" }
+  ],
+  "triggerCount": 0
+}

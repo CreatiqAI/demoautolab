@@ -21,7 +21,10 @@ import {
   Newspaper,
   Tag as TagIcon,
   Package,
-  Calendar
+  Calendar,
+  Building,
+  FileText,
+  ExternalLink
 } from 'lucide-react';
 
 type TabType = 'account' | 'notifications';
@@ -33,6 +36,23 @@ interface CustomerProfile {
   phone: string;
   date_of_birth: string | null;
   customer_type: 'normal' | 'merchant';
+  created_at: string;
+}
+
+interface MerchantRegistration {
+  company_name: string;
+  business_registration_no: string;
+  tax_id: string | null;
+  business_type: string;
+  address: string;
+  status: string;
+  email: string | null;
+  company_profile_url: string | null;
+  ssm_document_url: string | null;
+  bank_proof_url: string | null;
+  payment_slip_url: string | null;
+  workshop_photos: string[];
+  referral_code: string | null;
   created_at: string;
 }
 
@@ -55,6 +75,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [merchantReg, setMerchantReg] = useState<MerchantRegistration | null>(null);
   const [notifications, setNotifications] = useState<NotificationPreferences>({
     customer_id: '',
     notify_new_products: true,
@@ -95,6 +116,25 @@ export default function Settings() {
         customer_type: profileData.customer_type,
         created_at: profileData.created_at
       });
+
+      // Fetch merchant registration data if merchant
+      if (profileData.customer_type === 'merchant') {
+        try {
+          const { data: merchantData } = await supabase
+            .from('merchant_registrations' as any)
+            .select('*')
+            .eq('customer_id', profileData.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (merchantData) {
+            setMerchantReg(merchantData as any);
+          }
+        } catch {
+          // Merchant registration might not exist
+        }
+      }
 
       // Fetch notification preferences
       const { data: notifData, error: notifError } = await supabase
@@ -311,30 +351,103 @@ export default function Settings() {
                   </CardContent>
                 </Card>
 
-                {/* Merchant Console Link */}
-                {profile?.customer_type === 'merchant' && (
-                  <Card className="border-lime-200 bg-lime-50">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 bg-lime-100 rounded-lg flex items-center justify-center">
-                            <Store className="w-5 h-5 text-lime-700" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-gray-900">Merchant Console</h3>
-                            <p className="text-sm text-gray-600 mt-0.5">
-                              Manage your business profile, subscriptions, and access premium features
-                            </p>
-                          </div>
+                {/* Merchant Business Information */}
+                {profile?.customer_type === 'merchant' && merchantReg && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Building className="w-5 h-5 text-lime-600" />
+                        Business Information
+                      </CardTitle>
+                      <CardDescription>Your registered merchant details</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                          <p className="text-gray-900 font-medium">{merchantReg.company_name}</p>
                         </div>
-                        <Button
-                          onClick={() => navigate('/merchant-console')}
-                          className="bg-lime-600 hover:bg-lime-700"
-                        >
-                          <Store className="w-4 h-4 mr-2" />
-                          Open Console
-                        </Button>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Business Type</label>
+                          <p className="text-gray-900 font-medium">{merchantReg.business_type}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Registration No.</label>
+                          <p className="text-gray-900 font-medium">{merchantReg.business_registration_no}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
+                          <p className="text-gray-900 font-medium">{merchantReg.tax_id || 'Not provided'}</p>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Business Address</label>
+                          <p className="text-gray-900 font-medium">{merchantReg.address}</p>
+                        </div>
+                        {merchantReg.company_profile_url && (
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                            <a href={merchantReg.company_profile_url} target="_blank" rel="noopener noreferrer" className="text-lime-600 hover:text-lime-700 font-medium flex items-center gap-1">
+                              {merchantReg.company_profile_url}
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Application Status</label>
+                          <Badge variant={merchantReg.status === 'APPROVED' ? 'default' : 'secondary'}>
+                            {merchantReg.status}
+                          </Badge>
+                        </div>
+                        {merchantReg.referral_code && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Referral Code</label>
+                            <p className="text-gray-900 font-medium font-mono">{merchantReg.referral_code}</p>
+                          </div>
+                        )}
                       </div>
+
+                      {/* Documents */}
+                      <Separator />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <FileText className="w-4 h-4 inline mr-1" />
+                          Submitted Documents
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {merchantReg.ssm_document_url && (
+                            <a href={merchantReg.ssm_document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors">
+                              <FileText className="w-3 h-3" /> SSM Document
+                            </a>
+                          )}
+                          {merchantReg.bank_proof_url && (
+                            <a href={merchantReg.bank_proof_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors">
+                              <FileText className="w-3 h-3" /> Bank Proof
+                            </a>
+                          )}
+                          {merchantReg.payment_slip_url && (
+                            <a href={merchantReg.payment_slip_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors">
+                              <FileText className="w-3 h-3" /> Payment Slip
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Workshop Photos */}
+                      {merchantReg.workshop_photos && merchantReg.workshop_photos.length > 0 && (
+                        <>
+                          <Separator />
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Workshop Photos</label>
+                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                              {merchantReg.workshop_photos.map((photo, i) => (
+                                <a key={i} href={photo} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity">
+                                  <img src={photo} alt={`Workshop ${i + 1}`} className="w-full h-full object-cover" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </CardContent>
                   </Card>
                 )}

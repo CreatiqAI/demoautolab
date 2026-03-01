@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Store, ArrowLeft, CheckCircle2, Upload, X, Plus, Globe, FileText, Building, Image, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Store, ArrowLeft, CheckCircle2, Upload, X, Plus, Globe, FileText, Building, Image, Loader2, Car } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import CarSelector from '@/components/CarSelector';
 
 interface SocialMediaLink {
   platform: string;
@@ -23,7 +23,6 @@ const MerchantRegister = () => {
   const [step, setStep] = useState(1); // 1: Code validation, 2: Registration form
   const [codeValidated, setCodeValidated] = useState(false);
   const [codeData, setCodeData] = useState<any>(null);
-  const { signUp } = useAuth();
   const navigate = useNavigate();
 
   const [salesmanCode, setSalesmanCode] = useState('');
@@ -33,6 +32,11 @@ const MerchantRegister = () => {
     username: '',
     phone: '',
     email: '',
+    dateOfBirth: '',
+    carMakeId: '',
+    carMakeName: '',
+    carModelId: '',
+    carModelName: '',
     password: '',
     confirmPassword: '',
     companyName: '',
@@ -45,6 +49,7 @@ const MerchantRegister = () => {
     socialMediaLinks: [] as SocialMediaLink[],
     ssmDocumentUrl: '',
     bankProofUrl: '',
+    paymentSlipUrl: '',
     workshopPhotos: [] as string[]
   });
 
@@ -166,6 +171,27 @@ const MerchantRegister = () => {
       toast.success('Bank proof uploaded');
     } else {
       toast.error('Failed to upload bank proof');
+    }
+    setUploading(false);
+  };
+
+  // Handle payment slip upload
+  const handlePaymentSlipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB');
+      return;
+    }
+
+    setUploading(true);
+    const url = await uploadFile(file, 'payment-slips');
+    if (url) {
+      setMerchantForm({ ...merchantForm, paymentSlipUrl: url });
+      toast.success('Payment slip uploaded');
+    } else {
+      toast.error('Failed to upload payment slip');
     }
     setUploading(false);
   };
@@ -294,20 +320,43 @@ const MerchantRegister = () => {
       return;
     }
 
+    if (!merchantForm.dateOfBirth) {
+      toast.error('Date of birth is required');
+      return;
+    }
+
+    if (!merchantForm.paymentSlipUrl) {
+      toast.error('Payment slip is required');
+      return;
+    }
+
+    if (!merchantForm.email || !merchantForm.email.includes('@')) {
+      toast.error('Please provide a valid email address');
+      return;
+    }
+
     setLoading(true);
     const normalizedPhone = normalizePhone(merchantForm.phone);
 
     try {
-      // First, create the user account
-      const { error: signUpError } = await signUp(
-        normalizedPhone,
-        merchantForm.password,
-        merchantForm.username
-      );
+      const authEmail = merchantForm.email;
+
+      // First, create the user account using Supabase auth directly
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: authEmail,
+        password: merchantForm.password,
+        options: {
+          data: {
+            phone: normalizedPhone,
+            full_name: merchantForm.username,
+            auth_method: 'merchant_registration'
+          }
+        }
+      });
 
       if (signUpError) {
         if (signUpError.message?.includes('already registered')) {
-          toast.error('This phone number is already registered');
+          toast.error('This email/phone is already registered');
         } else if (signUpError.message?.includes('username')) {
           toast.error('This username is already taken');
         } else {
@@ -317,31 +366,60 @@ const MerchantRegister = () => {
         return;
       }
 
-      // Get the created user ID and customer profile
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        toast.error('Failed to get user information');
+      if (!authData.user) {
+        toast.error('Failed to create user account');
         setLoading(false);
         return;
       }
 
-      // Wait a bit for the customer profile to be created by the trigger
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const user = authData.user;
 
-      // Get customer profile ID
-      const { data: customerProfile, error: profileFetchError } = await supabase
+      // Wait a bit for the customer profile to be created by the trigger
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Get customer profile ID (may be created by trigger or we create it)
+      let { data: customerProfile, error: profileFetchError } = await supabase
         .from('customer_profiles' as any)
         .select('id')
         .eq('user_id', user.id)
         .single();
 
+      // If no profile exists, create one
       if (profileFetchError || !customerProfile) {
-        console.error('Profile fetch error:', profileFetchError);
-        toast.error('Failed to get customer profile');
-        setLoading(false);
-        return;
+        const { data: newProfile, error: createProfileError } = await supabase
+          .from('customer_profiles' as any)
+          .insert({
+            user_id: user.id,
+            username: merchantForm.username,
+            full_name: merchantForm.username,
+            phone: normalizedPhone,
+            email: merchantForm.email || null,
+            customer_type: 'normal'
+          })
+          .select('id')
+          .single();
+
+        if (createProfileError) {
+          console.error('Profile creation error:', createProfileError);
+          toast.error('Failed to create customer profile');
+          setLoading(false);
+          return;
+        }
+
+        customerProfile = newProfile;
       }
+
+      // Update profile with DOB and car data
+      await supabase
+        .from('customer_profiles' as any)
+        .update({
+          date_of_birth: merchantForm.dateOfBirth || null,
+          car_make_id: merchantForm.carMakeId || null,
+          car_make_name: merchantForm.carMakeName || null,
+          car_model_id: merchantForm.carModelId || null,
+          car_model_name: merchantForm.carModelName || null
+        })
+        .eq('id', (customerProfile as any).id);
 
       // Create merchant registration application
       const { error: registrationError } = await supabase
@@ -362,6 +440,7 @@ const MerchantRegister = () => {
           social_media_links: merchantForm.socialMediaLinks.filter(l => l.url),
           ssm_document_url: merchantForm.ssmDocumentUrl,
           bank_proof_url: merchantForm.bankProofUrl,
+          payment_slip_url: merchantForm.paymentSlipUrl,
           workshop_photos: merchantForm.workshopPhotos,
           referral_code: salesmanCode.toUpperCase() || null, // Use the salesman code used for access
           referred_by_salesman_id: salesmanData?.id || null // Use the salesman who gave them access
@@ -510,15 +589,41 @@ const MerchantRegister = () => {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="email">Email Address</Label>
+                        <Label htmlFor="email">Email Address *</Label>
                         <Input
                           id="email"
                           type="email"
                           placeholder="business@example.com"
                           value={merchantForm.email}
                           onChange={(e) => setMerchantForm({...merchantForm, email: e.target.value})}
+                          required
                         />
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="dob">Date of Birth *</Label>
+                      <Input
+                        id="dob"
+                        type="date"
+                        value={merchantForm.dateOfBirth}
+                        onChange={(e) => setMerchantForm({...merchantForm, dateOfBirth: e.target.value})}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-1">
+                        <Car className="h-4 w-4" />
+                        Car Brand & Model
+                      </Label>
+                      <CarSelector
+                        selectedMakeId={merchantForm.carMakeId}
+                        selectedModelId={merchantForm.carModelId}
+                        onMakeChange={(makeId, makeName) => setMerchantForm({...merchantForm, carMakeId: makeId, carMakeName: makeName})}
+                        onModelChange={(modelId, modelName) => setMerchantForm({...merchantForm, carModelId: modelId, carModelName: modelName})}
+                        showLabels={false}
+                      />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -772,6 +877,42 @@ const MerchantRegister = () => {
                               type="file"
                               accept=".pdf,image/*"
                               onChange={handleBankProofUpload}
+                              className="hidden"
+                              disabled={uploading}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Payment Slip */}
+                    <div className="space-y-2">
+                      <Label>Payment Slip - RM99 Annual Subscription *</Label>
+                      <div className="border-2 border-dashed rounded-lg p-4">
+                        {merchantForm.paymentSlipUrl ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="h-5 w-5 text-green-500" />
+                              <span className="text-sm">Payment slip uploaded</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setMerchantForm({...merchantForm, paymentSlipUrl: ''})}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center cursor-pointer">
+                            <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                            <span className="text-sm text-muted-foreground">Upload Payment Slip</span>
+                            <span className="text-xs text-muted-foreground">(Proof of RM99 annual subscription payment - PDF or Image, max 10MB)</span>
+                            <input
+                              type="file"
+                              accept=".pdf,image/*"
+                              onChange={handlePaymentSlipUpload}
                               className="hidden"
                               disabled={uploading}
                             />

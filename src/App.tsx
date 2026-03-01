@@ -24,6 +24,7 @@ import Cart from './pages/Cart';
 import PaymentGateway from './pages/PaymentGateway';
 import NotFound from "./pages/NotFound";
 import AdminRegister from './pages/AdminRegister';
+import Register from './pages/Register';
 import MerchantRegister from './pages/MerchantRegister';
 import MerchantConsole from './pages/MerchantConsole';
 import ShopDetails from './pages/ShopDetails';
@@ -101,6 +102,7 @@ const App = () => (
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/settings" element={<UserSettings />} />
                   <Route path="/payment-gateway" element={<PaymentGateway />} />
+                  <Route path="/register" element={<Register />} />
                   <Route path="/admin-register" element={<AdminRegister />} />
                   <Route path="/merchant-register" element={<MerchantRegister />} />
                   <Route path="/premium-partner" element={<PremiumPartner />} />

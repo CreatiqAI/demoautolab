@@ -122,13 +122,19 @@ const Header = () => {
         localStorage.setItem(`merchant_status_${user.id}`, String(isMerchantUser));
 
         if (isMerchantUser && profile?.id) {
-          const { data: partnershipData } = await supabase
-            .from('premium_partnerships' as any)
-            .select('subscription_end_date, subscription_status, admin_approved')
-            .eq('merchant_id', profile.id)
-            .single();
+          try {
+            const { data: partnershipData, error: partnershipError } = await supabase
+              .from('premium_partnerships' as any)
+              .select('subscription_end_date, subscription_status, admin_approved, subscription_plan')
+              .eq('merchant_id', profile.id)
+              .single();
 
-          setPartnership(partnershipData);
+            if (!partnershipError) {
+              setPartnership(partnershipData);
+            }
+          } catch {
+            // premium_partnerships table may not exist yet - silently ignore
+          }
         }
       } catch (error) {
         console.error('Error checking merchant status:', error);
@@ -334,8 +340,8 @@ const Header = () => {
               {/* Account Actions */}
               {user ? (
                 <>
-                  {/* Merchant Console Button (for merchants only) */}
-                  {isMerchant && (
+                  {/* Merchant Console Button (for panel merchants only) */}
+                  {isMerchant && partnership?.subscription_plan === 'panel' && (
                     <Link
                       to="/merchant-console"
                       className={`hidden sm:block relative p-2 ${linkHoverColor} transition-colors duration-300`}
@@ -445,7 +451,7 @@ const Header = () => {
 
                       {user ? (
                         <div className="space-y-2">
-                          {isMerchant && (
+                          {isMerchant && partnership?.subscription_plan === 'panel' && (
                             <Link
                               to="/merchant-console"
                               onClick={() => setMobileMenuOpen(false)}

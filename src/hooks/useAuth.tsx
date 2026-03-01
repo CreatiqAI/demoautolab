@@ -29,8 +29,10 @@ interface AuthContextType {
   loading: boolean;
   // Phone OTP methods (simulated/dummy for testing)
   sendPhoneOTP: (phone: string) => Promise<{ error: any; code?: string }>;
-  verifyPhoneOTP: (phone: string, token: string) => Promise<{ error: any; isNewUser?: boolean }>;
+  verifyPhoneOTP: (phone: string, token: string) => Promise<{ error: any; isNewUser?: boolean; existingUserEmail?: string }>;
   signUpWithPhoneOTP: (phone: string, token: string, userData: RegistrationData) => Promise<{ error: any }>;
+  // Email/Password sign in (used after phone OTP verification for existing users)
+  signInWithPassword: (email: string, password: string) => Promise<{ error: any }>;
   // Google OAuth (FREE)
   signInWithGoogle: () => Promise<{ error: any }>;
   checkAndCreateProfile: () => Promise<{ isNewUser: boolean; error: any }>;
@@ -138,7 +140,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Verify Phone OTP - handles both login and registration
-  const verifyPhoneOTP = async (phone: string, token: string): Promise<{ error: any; isNewUser?: boolean }> => {
+  // Returns email for existing users so they can complete login with password
+  const verifyPhoneOTP = async (phone: string, token: string): Promise<{
+    error: any;
+    isNewUser?: boolean;
+    existingUserEmail?: string;
+  }> => {
     try {
       // Get stored OTP
       let storedOTP = otpStore.get(phone);
@@ -171,14 +178,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // OTP is valid - check if user exists
-      // First, try to sign in with phone (to check if user exists)
-      // Note: This query may fail with 406 if RLS blocks unauthenticated access
-      // In that case, we treat it as "new user" to allow registration
+      // Query customer_profiles to find user by phone
       let existingCustomer = null;
       try {
         const { data, error } = await supabase
           .from('customer_profiles')
-          .select('id, user_id')
+          .select('id, user_id, email')
           .eq('phone', phone)
           .single();
 
@@ -192,33 +197,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (existingCustomer?.user_id) {
-        // Existing user - sign them in using a custom token or session
-        // For now, we'll create a "phantom" session by setting user state directly
-        // In production, you'd use Supabase's phone auth or custom JWT
+        // Existing user found - return their email so they can complete login with password
+        // The OTP verification proves they own the phone, now they need password for security
 
-        // Try to get the auth user
-        const { data: authUser } = await supabase.auth.admin?.getUserById?.(existingCustomer.user_id) || { data: null };
+        // Keep OTP data for a short while in case they need to retry
+        // (will be cleared after successful login or after expiry)
 
-        if (authUser?.user) {
-          // For demo purposes, we'll sign in with a password-less approach
-          // In production, implement proper phone auth with Supabase
-          setUser(authUser.user as any);
-
-          // Clear OTP data
-          otpStore.delete(phone);
-          localStorage.removeItem('pending_phone_auth');
-
-          return { error: null, isNewUser: false };
-        }
-
-        // Fallback: Mark as existing user (they'll need to use Google sign-in)
-        return { error: null, isNewUser: false };
+        return {
+          error: null,
+          isNewUser: false,
+          existingUserEmail: existingCustomer.email || undefined
+        };
       }
 
       // New user (or couldn't verify due to RLS) - keep OTP valid for registration completion
       return { error: null, isNewUser: true };
     } catch (error) {
       console.error('Error verifying OTP:', error);
+      return { error };
+    }
+  };
+
+  // Sign in with email and password (used after phone OTP verification for existing users)
+  const signInWithPassword = async (email: string, password: string): Promise<{ error: any }> => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        return { error };
+      }
+
+      // Clear any pending phone OTP data on successful login
+      otpStore.clear();
+      localStorage.removeItem('pending_phone_auth');
+
+      // Update auth state
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.user);
+      }
+
+      return { error: null };
+    } catch (error) {
+      console.error('Error signing in with password:', error);
       return { error };
     }
   };
@@ -476,6 +500,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendPhoneOTP,
     verifyPhoneOTP,
     signUpWithPhoneOTP,
+    signInWithPassword,
     signInWithGoogle,
     checkAndCreateProfile,
     completeGoogleRegistration,

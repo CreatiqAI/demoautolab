@@ -125,13 +125,14 @@ export default function AdminReturns() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
+      // Use explicit foreign key hint to resolve ambiguity between order_id and exchange_order_id
       let query = supabase
         .from('returns' as any)
         .select(`
           *,
           return_items (*),
           return_images (*),
-          orders!inner (
+          orders!returns_order_id_fkey (
             order_no,
             customer_name,
             customer_phone,

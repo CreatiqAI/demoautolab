@@ -52,7 +52,11 @@
       "WebFetch(domain:www.airbnb.com)",
       "WebSearch",
       "Bash(timeout 30 npx tsc:*)",
-      "Bash(timeout 60 npx tsc:*)"
+      "Bash(timeout 60 npx tsc:*)",
+      "WebFetch(domain:www.twilio.com)",
+      "Bash(del /f \"c:\\\\Users\\\\USER\\\\OneDrive\\\\Desktop\\\\AutoLab\\\\autolab-website\\\\nul\")",
+      "WebFetch(domain:www.plivo.com)",
+      "Bash(npx vite build)"
     ],
     "deny": [],
     "ask": []

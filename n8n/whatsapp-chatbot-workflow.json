@@ -1,0 +1,670 @@
+{
+  "name": "AutoLab WhatsApp AI Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 400],
+      "webhookId": "whatsapp-autolab"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok' }) }}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract message from WhatsApp Cloud API webhook payload\nconst body = $input.first().json.body || $input.first().json;\n\nlet senderPhone = '';\nlet messageText = '';\nlet messageType = 'text';\nlet senderName = '';\n\n// WhatsApp Cloud API format\nif (body.entry) {\n  const entry = body.entry[0];\n  const changes = entry.changes[0];\n  const value = changes.value;\n\n  // Skip status updates (only process messages)\n  if (!value.messages || !value.messages[0]) {\n    return []; // Empty = stop execution\n  }\n\n  const msg = value.messages[0];\n  senderPhone = msg.from;\n  messageText = msg.text?.body || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';\n  messageType = msg.type;\n\n  if (value.contacts && value.contacts[0]) {\n    senderName = value.contacts[0].profile?.name || '';\n  }\n}\n// Fallback\nelse if (body.from) {\n  senderPhone = body.from;\n  messageText = body.text?.body || body.body || '';\n  senderName = body.profile_name || '';\n}\n\n// Normalize phone (remove + prefix)\nsenderPhone = senderPhone.replace(/^\\+/, '');\n\nif (!senderPhone || !messageText) {\n  return []; // Stop if no valid message\n}\n\nreturn {\n  json: {\n    senderPhone,\n    messageText: messageText.trim(),\n    messageType,\n    senderName: senderName || 'Customer',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "extract-message",
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "env-supabase-url",
+              "name": "SUPABASE_URL",
+              "value": "=YOUR_SUPABASE_URL",
+              "type": "string"
+            },
+            {
+              "id": "env-supabase-key",
+              "name": "SUPABASE_SERVICE_KEY",
+              "value": "=YOUR_SUPABASE_SERVICE_ROLE_KEY",
+              "type": "string"
+            },
+            {
+              "id": "env-website-url",
+              "name": "WEBSITE_BASE_URL",
+              "value": "=https://autolab.my",
+              "type": "string"
+            },
+            {
+              "id": "env-wa-phone-id",
+              "name": "WHATSAPP_PHONE_NUMBER_ID",
+              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "env-wa-token",
+              "name": "WHATSAPP_ACCESS_TOKEN",
+              "value": "=YOUR_WHATSAPP_ACCESS_TOKEN",
+              "type": "string"
+            },
+            {
+              "id": "env-sender-phone",
+              "name": "senderPhone",
+              "value": "={{ $('Extract Message').first().json.senderPhone }}",
+              "type": "string"
+            },
+            {
+              "id": "env-sender-name",
+              "name": "senderName",
+              "value": "={{ $('Extract Message').first().json.senderName }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "env-setup",
+      "name": "Environment Setup",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Customer phone: {{ $('Environment Setup').first().json.senderPhone }}\nCustomer name: {{ $('Environment Setup').first().json.senderName }}\n\nCustomer message: {{ $('Extract Message').first().json.messageText }}",
+        "options": {
+          "systemMessage": "=You are AutoLab's WhatsApp AI shopping assistant. AutoLab is a Malaysian online auto parts & car accessories store.\n\n**Website: {{ $('Environment Setup').first().json.WEBSITE_BASE_URL }}**\n\n## Your Personality\n- Friendly, helpful, and knowledgeable about car parts\n- Use WhatsApp formatting: *bold* for emphasis, _italic_ for hints\n- Use emojis naturally to make messages visual and engaging\n- Keep responses concise - this is WhatsApp chat, not email\n- Communicate in English (okay to use simple Malay greetings like 'Salam')\n- Respond in the same language the customer uses\n\n## CRITICAL RULES\n- NEVER make up product info, prices, or stock levels - ALWAYS use the search tools\n- NEVER hallucinate products that don't exist in search results\n- ALWAYS use the customer's phone number from the message context when calling tools that need it\n- Product page links: {{ $('Environment Setup').first().json.WEBSITE_BASE_URL }}/product/{product_slug}\n- All prices are in RM (Malaysian Ringgit)\n- The search tools handle typos automatically via fuzzy matching - just pass the user's text directly\n\n## What You Can Do\n\n### 1. Product Search (Your Main Job)\nGuide customers to find the right auto parts. Follow this conversational flow:\n1. Ask what *car brand* they have (Proton, Perodua, Toyota, Honda, Nissan, Mazda, BMW, etc.)\n2. Ask what *car model* (Saga, Myvi, Vios, City, Almera, etc.)\n3. Ask what *product type* they need (Android Player, Camera, Dashcam, Wiring, Accessories, etc.)\n4. Use the `search_products` tool to find matching items\n5. Present results as a clean numbered list with name, price, stock status, and product link\n6. When they pick a product, show full details and offer to add to cart\n7. To add to cart: first call `get_product_components` to get the component SKU, then call `add_to_cart`\n\n**IMPORTANT:** You don't have to follow the flow rigidly. If a customer directly says 'I need an android player for Toyota Vios', skip straight to searching - don't ask questions you already have answers to.\n\n**IMPORTANT:** If user just asks for a brand (e.g. 'audi'), do NOT return all products. Instead, ask what specific model they're looking for first. Get the targeted car brand + model before returning product lists.\n\n### 2. Order Tracking\n- Use `check_customer_orders` with the customer's phone number\n- Show order number, status, total, and tracking info\n- For J&T Express tracking: https://www.jtexpress.my/tracking?billcode={tracking_number}\n\n### 3. Cart Management\n- Use `get_cart` to show their current cart\n- Use `add_to_cart` after getting component SKU from `get_product_components`\n- Use `remove_from_cart` to remove items or reduce quantity. ALWAYS call `get_cart` first to see current items and their component_sku values, then use the component_sku (NOT component name) to remove.\n- Use `clear_cart` to empty the entire cart when customer says 'clear cart' or 'remove everything'\n- Direct them to {{ $('Environment Setup').first().json.WEBSITE_BASE_URL }} to complete checkout\n\n**Cart removal workflow:**\n1. Customer says 'remove X from cart' or 'reduce quantity'\n2. Call `get_cart` to see current items with SKUs\n3. Call `remove_from_cart` with the correct component_sku and quantity\n4. Confirm the removal and show updated cart\n\n### 4. Talk to Human / Admin\nProvide contact info:\n- Phone: 03-4297 7668\n- WhatsApp: wa.me/60342977668\n- Email: support@autolab.my\n- Hours: Mon-Fri, 9am-6pm\n\n### 5. Returns & Refunds\nTell customers to contact admin directly for returns/refund requests (within 7 days of delivery for defective or wrong items only).\n\n## When Customer Says Hi / Menu / Start\nShow a welcome message with these options:\n\ud83d\udd0d *Find Products* - Search car parts & accessories\n\ud83d\udce6 *My Orders* - Track your orders\n\ud83d\uded2 *My Cart* - View your shopping cart\n\ud83d\udc64 *Talk to Admin* - Connect with our team\n\n## Response Format Tips\n- Use numbered lists (1. 2. 3.) for product results\n- Use *bold* for product names and prices\n- Include \u2705 In Stock or \u274c Out of Stock\n- Keep each message under 1000 characters when possible\n- When showing multiple products, format like:\n  *1.* Product Name\n  \ud83d\udcb0 RM XXX.XX | \u2705 In Stock\n  \ud83d\udd17 {{ $('Environment Setup').first().json.WEBSITE_BASE_URL }}/product/{slug}\n\n## Popular Malaysian Car Brands\nProton, Perodua, Toyota, Honda, Nissan, Mazda, Hyundai, Kia, BMW, Mercedes-Benz, Mitsubishi, Suzuki, Volkswagen, Ford, Subaru\n\n## Popular Product Categories\nHead Unit / Android Player, Camera (reverse/dash), Dashcam, Car Accessories, Wiring Harness, Speakers, LED Lights, Amplifier, Subwoofer, Car Casing/Frame"
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 800
+        }
+      },
+      "id": "openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [960, 640],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-key",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Extract Message').first().json.senderPhone }}",
+        "contextWindowLength": 12
+      },
+      "id": "memory-buffer",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [1160, 640]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search for auto parts and car accessories in AutoLab's product catalog. Supports fuzzy matching (handles typos). Extract only the relevant product/car keywords from the customer's message. Examples: 'android player', 'toyota vios dashcam', 'proton saga casing'. Do NOT include conversation history - only clean search keywords.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_search_products",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_query",
+              "value": "={{ $fromAI('query', 'Search text for product name/type (e.g. android player, dashcam, casing). Pass empty string if not filtering by text.', 'string') }}"
+            },
+            {
+              "name": "p_car_brand",
+              "value": "={{ $fromAI('car_brand', 'Car brand name (e.g. Toyota, Proton, Honda). Pass empty string if not filtering by brand.', 'string') }}"
+            },
+            {
+              "name": "p_car_model",
+              "value": "={{ $fromAI('car_model', 'Car model name (e.g. Vios, Saga, City). Pass empty string if not filtering by model.', 'string') }}"
+            },
+            {
+              "name": "p_category_name",
+              "value": "={{ $fromAI('category', 'Product category (e.g. Head Unit, Camera, Dashcam). Pass empty string if not filtering by category.', 'string') }}"
+            },
+            {
+              "name": "p_limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-search-products",
+      "name": "search_products",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [740, 840]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get the purchasable component variants (SKUs) for a specific product. Returns component SKU codes, names, individual prices, and stock levels. You MUST call this before add_to_cart to get the correct component_sku.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_product_components",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_product_id",
+              "value": "={{ $fromAI('product_id', 'The UUID of the product from search_products results product_id field', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-get-components",
+      "name": "get_product_components",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [960, 840]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Look up a customer's recent orders by their phone number. Returns order numbers, statuses, totals, item counts, courier info, and tracking numbers. The phone number is automatically injected from the customer context.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_customer_orders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Environment Setup').first().json.senderPhone }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-check-orders",
+      "name": "check_customer_orders",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [1180, 840]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get full details of a specific order by order number. Returns order items, prices, status, payment state, courier, and tracking info.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_order_details",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_order_no",
+              "value": "={{ $fromAI('order_no', 'The order number e.g. ORD-20260225-000012', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-order-details",
+      "name": "get_order_details",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [1400, 840]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Add a product component to the customer's shopping cart. Requires the component_sku from get_product_components. The customer phone is automatically injected. MANDATORY: Always call search_products first, then get_product_components, then this tool.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_add_to_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Environment Setup').first().json.senderPhone }}\",\n  \"p_component_sku\": \"{{ $fromAI('component_sku', 'The component SKU code from get_product_components results', 'string') }}\",\n  \"p_quantity\": {{ $fromAI('quantity', 'Number of items to add (default 1)', 'number') }}\n}",
+        "options": {}
+      },
+      "id": "tool-add-to-cart",
+      "name": "add_to_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [740, 1040]
+    },
+    {
+      "parameters": {
+        "toolDescription": "View the customer's current shopping cart. Returns all cart items with names, quantities, unit prices, line totals, and overall cart total. The customer phone is automatically injected.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Environment Setup').first().json.senderPhone }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-get-cart",
+      "name": "get_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [960, 1040]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Fuzzy search for car brand names. Handles typos (e.g. 'toyata' finds 'Toyota', 'protn' finds 'Proton'). Use when you need to verify or find the correct brand name.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_search_car_makes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_query",
+              "value": "={{ $fromAI('brand_query', 'Car brand name to search for (can have typos)', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-search-brands",
+      "name": "search_car_brands",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [1180, 1040]
+    },
+    {
+      "parameters": {
+        "toolDescription": "List all available product categories in the store with their product counts. Use this to show customers what categories are available when they are browsing.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_list_popular_categories",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {}
+      },
+      "id": "tool-list-categories",
+      "name": "list_categories",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [1400, 1040]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Remove an item from the customer's shopping cart or reduce its quantity. Requires the component_sku of the item to remove. Call get_cart first to see current items and their SKUs. If quantity >= current quantity, the item is removed entirely. The customer phone is automatically injected.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_remove_from_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Environment Setup').first().json.senderPhone }}\",\n  \"p_component_sku\": \"{{ $fromAI('component_sku', 'The component SKU of the item to remove (from get_cart results component_sku field)', 'string') }}\",\n  \"p_quantity\": {{ $fromAI('quantity', 'Number of items to remove. If >= current quantity the item is removed entirely.', 'number') }}\n}",
+        "options": {}
+      },
+      "id": "tool-remove-from-cart",
+      "name": "remove_from_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [740, 1240]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Clear all items from the customer's shopping cart. Use when customer says 'clear cart', 'empty cart', or 'remove everything'. The customer phone is automatically injected. No parameters needed.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_clear_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Environment Setup').first().json.senderPhone }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-clear-cart",
+      "name": "clear_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [960, 1240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $('Environment Setup').first().json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Extract Message').first().json.senderPhone, type: 'text', text: { preview_url: true, body: $json.output } }) }}",
+        "options": {}
+      },
+      "id": "send-whatsapp-reply",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1520, 400]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          { "node": "Respond to Webhook", "type": "main", "index": 0 },
+          { "node": "Extract Message", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Extract Message": {
+      "main": [
+        [
+          { "node": "Environment Setup", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Environment Setup": {
+      "main": [
+        [
+          { "node": "AI Agent", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          { "node": "Send WhatsApp Reply", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          { "node": "AI Agent", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          { "node": "AI Agent", "type": "ai_memory", "index": 0 }
+        ]
+      ]
+    },
+    "search_products": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "get_product_components": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "check_customer_orders": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "get_order_details": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "add_to_cart": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "get_cart": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "search_car_brands": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "list_categories": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "remove_from_cart": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "clear_cart": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "WhatsApp" },
+    { "name": "AI Agent" },
+    { "name": "AutoLab" }
+  ]
+}

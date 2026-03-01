@@ -3,8 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { ShoppingCart, Package, Minus, Plus, ArrowLeft, Eye, ChevronDown, ChevronUp, Clock, Users, DollarSign, Wrench, Video } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ShoppingCart, Package, Minus, Plus, ArrowLeft, Eye, ChevronDown, Clock, Users, DollarSign, Wrench, Video, Star, Info, PlayCircle, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/hooks/useCartDB';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,6 +17,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { ProductInstallationGuide } from '@/types/product-types';
+import { cn } from '@/lib/utils';
 
 interface ComponentData {
   id: string;
@@ -66,10 +69,12 @@ const ProductDetails = () => {
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [currentLightboxIndex, setCurrentLightboxIndex] = useState(0);
   const [installationGuide, setInstallationGuide] = useState<ProductInstallationGuide | null>(null);
+  const [installationOpen, setInstallationOpen] = useState(false);
+  const [reviewsOpen, setReviewsOpen] = useState(true);
   const { toast } = useToast();
   const { addToCart, loading: cartLoading } = useCart();
   const { user } = useAuth();
-  const { customerType, getDisplayPrice } = usePricing();
+  const { getDisplayPrice } = usePricing();
 
   useEffect(() => {
     if (id) {
@@ -105,7 +110,7 @@ const ProductDetails = () => {
       return (
         <iframe
           src={`https://www.youtube.com/embed/${youtubeMatch[1]}`}
-          className="w-full h-full"
+          className="w-full h-full rounded-lg"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
         />
@@ -118,7 +123,7 @@ const ProductDetails = () => {
       return (
         <iframe
           src={`https://player.vimeo.com/video/${vimeoMatch[1]}`}
-          className="w-full h-full"
+          className="w-full h-full rounded-lg"
           allow="autoplay; fullscreen; picture-in-picture"
           allowFullScreen
         />
@@ -127,7 +132,7 @@ const ProductDetails = () => {
 
     // Fallback: Show link button
     return (
-      <div className="flex items-center justify-center h-full bg-gray-100">
+      <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
         <Button
           onClick={() => window.open(url, '_blank')}
           className="bg-lime-600 hover:bg-lime-700"
@@ -178,7 +183,7 @@ const ProductDetails = () => {
 
   const fetchProductComponents = async () => {
     if (!id) return;
-    
+
     setLoading(true);
     try {
       const { data: productComponentData, error: productComponentError } = await supabase
@@ -243,16 +248,16 @@ const ProductDetails = () => {
       });
       return;
     }
-    
+
     if (newQuantity < 0) return;
-    
+
     setLocalCart(prevCart => {
       const existingIndex = prevCart.findIndex(item => item.component.id === component.id);
-      
+
       if (newQuantity === 0) {
         return prevCart.filter(item => item.component.id !== component.id);
       }
-      
+
       if (existingIndex >= 0) {
         const newCart = [...prevCart];
         newCart[existingIndex] = { ...newCart[existingIndex], quantity: newQuantity };
@@ -339,13 +344,12 @@ const ProductDetails = () => {
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gray-50">
         <Header />
-        <div className="container mx-auto px-3 sm:px-4 py-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="text-lg">Loading product...</div>
-            </div>
+        <div className="container mx-auto px-4 py-12">
+          <div className="flex flex-col items-center justify-center h-64 space-y-4">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+            <p className="text-gray-500">Loading product...</p>
           </div>
         </div>
       </div>
@@ -355,566 +359,535 @@ const ProductDetails = () => {
   const primaryImage = product.product_images.find(img => img.is_primary) || product.product_images[0];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-50">
       <Header />
-      
-      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        {/* Back Button */}
-        <div className="mb-4 sm:mb-6">
-          <Button 
-            variant="outline" 
-            size="sm" 
+
+      <div className="container mx-auto px-4 py-6 max-w-7xl">
+        {/* Breadcrumb / Back */}
+        <nav className="mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => navigate('/catalog')}
-            className="flex items-center gap-2"
+            className="text-gray-600 hover:text-gray-900 -ml-2"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Catalog
           </Button>
-        </div>
+        </nav>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 lg:gap-8 xl:gap-12">
-          {/* Product Images - Left Column (2/5 width) */}
-          <div className="lg:col-span-2 space-y-3 sm:space-y-4">
-            {/* Main Product Image */}
-            <div className="relative rounded-xl overflow-hidden shadow-sm cursor-pointer group"
-                 onClick={() => openLightbox(product.product_images.map(img => img.url), selectedImage)}>
-              <img
-                src={product.product_images[selectedImage]?.url || primaryImage?.url || '/placeholder.svg'}
-                alt={product.product_images[selectedImage]?.alt_text || product.name}
-                className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-                decoding="async"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = '/placeholder.svg';
-                }}
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 rounded-full p-2">
-                  <Eye className="h-5 w-5 text-gray-800" />
+        {/* Main Product Section */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+            {/* Left: Product Images */}
+            <div className="p-6 lg:p-8 bg-gray-50/50">
+              {/* Main Image */}
+              <div
+                className="relative aspect-square rounded-xl overflow-hidden bg-white cursor-pointer group mb-4"
+                onClick={() => openLightbox(product.product_images.map(img => img.url), selectedImage)}
+              >
+                <img
+                  src={product.product_images[selectedImage]?.url || primaryImage?.url || '/placeholder.svg'}
+                  alt={product.product_images[selectedImage]?.alt_text || product.name}
+                  className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500"
+                  loading="lazy"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/placeholder.svg';
+                  }}
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
+                <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                  <Eye className="h-5 w-5 text-gray-700" />
                 </div>
               </div>
-            </div>
-            
-            {/* Thumbnail Images */}
-            {product.product_images.length > 1 && (
-              <div className="flex gap-2 sm:gap-3 justify-center lg:justify-start overflow-x-auto pb-2">
-                {product.product_images.map((image, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedImage(index)}
-                    className={`relative rounded-lg overflow-hidden flex-shrink-0 transition-all duration-200 ${
-                      index === selectedImage 
-                        ? 'ring-2 ring-primary scale-105' 
-                        : 'hover:scale-102'
-                    }`}
-                  >
-                    <img
-                      src={image.url}
-                      alt={image.alt_text || `Thumbnail ${index + 1}`}
-                      className="w-12 sm:w-16 h-auto object-cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* Product Info and Selection - Right Column (3/5 width) */}
-          <div className="lg:col-span-3 space-y-4 sm:space-y-6 lg:space-y-8">
-            {/* Product Header */}
-            <div className="space-y-4 sm:space-y-6">
-              <div>
-                <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 leading-tight mb-3 sm:mb-4">
-                  {product.name}
-                </h1>
-                
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                  <Badge variant="default" className="px-2 sm:px-3 py-1 text-xs">
-                    ✓ In Stock
+              {/* Thumbnails */}
+              {product.product_images.length > 1 && (
+                <div className="flex gap-2 justify-center">
+                  {product.product_images.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setSelectedImage(index)}
+                      className={cn(
+                        "relative w-16 h-16 rounded-lg overflow-hidden border-2 transition-all duration-200",
+                        index === selectedImage
+                          ? 'border-primary ring-2 ring-primary/20'
+                          : 'border-transparent hover:border-gray-300'
+                      )}
+                    >
+                      <img
+                        src={image.url}
+                        alt={image.alt_text || `View ${index + 1}`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right: Product Info */}
+            <div className="p-6 lg:p-8 flex flex-col">
+              {/* Product Header */}
+              <div className="mb-6">
+                {/* Badges */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-0">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    In Stock
                   </Badge>
                   {product.featured && (
-                    <Badge variant="secondary" className="px-2 sm:px-3 py-1 text-xs">
-                      ⭐ Featured
-                    </Badge>
-                  )}
-                  {product.screen_size && product.screen_size.length > 0 && (
-                    product.screen_size.slice(0, 2).map((size) => (
-                      <Badge key={size} variant="outline" className="px-2 sm:px-3 py-1 text-xs">
-                        {size}" Display
-                      </Badge>
-                    ))
-                  )}
-                  {product.screen_size && product.screen_size.length > 2 && (
-                    <Badge variant="outline" className="px-2 sm:px-3 py-1 text-xs">
-                      +{product.screen_size.length - 2}
+                    <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-0">
+                      <Star className="h-3 w-3 mr-1 fill-current" />
+                      Featured
                     </Badge>
                   )}
                 </div>
-                
-                <div className="text-lg sm:text-xl text-gray-600 font-medium mb-3 sm:mb-4">
+
+                {/* Title */}
+                <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
+                  {product.name}
+                </h1>
+
+                {/* Brand/Model/Year */}
+                <p className="text-lg text-gray-600 mb-4">
                   {product.brand} {product.model}
                   {product.year_from && product.year_to && (
-                    <span className="text-base sm:text-lg text-gray-500 ml-1 sm:ml-2 block sm:inline">
-                      ({product.year_from}-{product.year_to})
+                    <span className="text-gray-400 ml-2">
+                      ({product.year_from}–{product.year_to})
                     </span>
                   )}
-                </div>
-                
-                {product.description && (
-                  <div className="prose prose-gray max-w-none">
-                    <p className="text-gray-700 leading-relaxed">
-                      {product.description}
-                    </p>
+                </p>
+
+                {/* Screen Sizes */}
+                {product.screen_size && product.screen_size.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {product.screen_size.map((size) => (
+                      <Badge key={size} variant="outline" className="text-xs">
+                        {size}" Display
+                      </Badge>
+                    ))}
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Component Selection */}
-            <div className="border-t border-gray-200 pt-4 sm:pt-6 lg:pt-8">
-              <div className="space-y-4 sm:space-y-6">
-                <div>
-                  <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 mb-2">
-                    Select Components
-                  </h2>
-                  <p className="text-sm sm:text-base text-gray-600">
-                    Choose the components you need and specify quantities
+              {/* Description */}
+              {product.description && (
+                <div className="mb-6">
+                  <p className="text-gray-600 leading-relaxed">
+                    {product.description}
                   </p>
                 </div>
-                
+              )}
+
+              <Separator className="my-4" />
+
+              {/* Component Selection */}
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Select Components
+                  </h2>
+                  <span className="text-sm text-gray-500">
+                    {components.length} option{components.length !== 1 ? 's' : ''} available
+                  </span>
+                </div>
+
                 {loading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    <span className="ml-3 text-gray-600">Loading components...</span>
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                   </div>
                 ) : components.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Components Available</h3>
-                    <p className="text-gray-600">This product currently has no available components.</p>
+                  <div className="text-center py-8 bg-gray-50 rounded-xl">
+                    <Package className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">No components available</p>
                   </div>
                 ) : (
-                  /* Expandable Components List */
-                  <div className="space-y-2">
-                    <div className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
-                      Available Components ({components.length} options)
-                    </div>
-                    <div className="border rounded-lg divide-y max-h-64 sm:max-h-80 overflow-y-auto">
-                      {components.map((component) => {
-                        const quantity = getLocalCartQuantity(component.id);
-                        const isExpanded = expandedComponent === component.id;
-                        
-                        return (
-                          <div 
-                            key={component.id} 
-                            className={`bg-white transition-all duration-300 ease-in-out overflow-hidden ${
-                              isExpanded ? 'shadow-sm' : ''
-                            }`}
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                    {components.map((component) => {
+                      const quantity = getLocalCartQuantity(component.id);
+                      const isExpanded = expandedComponent === component.id;
+                      const price = getDisplayPrice(component.normal_price, component.merchant_price);
+
+                      return (
+                        <div
+                          key={component.id}
+                          className={cn(
+                            "border rounded-xl transition-all duration-200",
+                            isExpanded ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300',
+                            quantity > 0 && !isExpanded && 'border-primary/50 bg-primary/5'
+                          )}
+                        >
+                          <div
+                            className="p-3 cursor-pointer"
+                            onClick={() => setExpandedComponent(isExpanded ? null : component.id)}
                           >
-                            <div 
-                              className={`p-2 sm:p-3 hover:bg-gray-50 cursor-pointer transition-all duration-300 ease-in-out ${
-                                isExpanded 
-                                  ? 'bg-gray-50 border-l-4 border-l-primary' 
-                                  : ''
-                              }`}
-                              onClick={() => setExpandedComponent(isExpanded ? null : component.id)}
-                            >
-                              <div className="flex items-start gap-2 sm:gap-3">
-                                {/* Image that grows when expanded */}
-                                <div className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
-                                  isExpanded ? 'w-16 sm:w-20 h-16 sm:h-20' : 'w-8 sm:w-10 h-8 sm:h-10'
-                                }`}>
-                                  {component.default_image_url && (
-                                    <img
-                                      src={component.default_image_url}
-                                      alt={component.name}
-                                      className={`w-full h-full object-cover rounded border transition-all duration-300 ease-in-out ${
-                                        isExpanded
-                                          ? 'rounded-lg shadow-sm cursor-pointer hover:opacity-80'
-                                          : 'rounded border'
-                                      }`}
-                                      loading="lazy"
-                                      onClick={(e) => {
-                                        if (isExpanded) {
-                                          e.stopPropagation();
-                                          openLightbox([component.default_image_url!], 0);
-                                        }
-                                      }}
-                                    />
-                                  )}
+                            <div className="flex items-center gap-3">
+                              {/* Thumbnail */}
+                              {component.default_image_url && (
+                                <div className={cn(
+                                  "flex-shrink-0 rounded-lg overflow-hidden bg-white border transition-all duration-200",
+                                  isExpanded ? 'w-20 h-20' : 'w-12 h-12'
+                                )}>
+                                  <img
+                                    src={component.default_image_url}
+                                    alt={component.name}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    onClick={(e) => {
+                                      if (isExpanded) {
+                                        e.stopPropagation();
+                                        openLightbox([component.default_image_url!], 0);
+                                      }
+                                    }}
+                                  />
                                 </div>
-                                
-                                {/* Content area */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1 min-w-0">
-                                      {!isExpanded ? (
-                                        <div className="font-medium text-xs sm:text-sm text-gray-900 truncate">
-                                          {component.name}
-                                        </div>
-                                      ) : (
-                                        <div className="font-medium text-sm sm:text-base text-gray-900 mb-2">
-                                          {component.name}
-                                        </div>
-                                      )}
-                                      
-                                      <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-500 mb-1 sm:mb-2">
-                                        <span className="font-semibold text-gray-700">
-                                          {formatPrice(getDisplayPrice(component.normal_price, component.merchant_price))}
-                                        </span>
-                                        <span>•</span>
-                                        <span>{component.stock_level} stock</span>
-                                      </div>
-                                      
-                                      {/* Expanded details */}
-                                      <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                                        isExpanded 
-                                          ? 'max-h-32 opacity-100 mb-2 sm:mb-3' 
-                                          : 'max-h-0 opacity-0'
-                                      }`}>
-                                        <div className="text-xs sm:text-sm text-gray-700 mb-1 sm:mb-2">
-                                          {component.description || 'No additional description available'}
-                                        </div>
-                                        <div className="text-xs text-gray-500">
-                                          Type: {component.component_type}
-                                        </div>
-                                        {isExpanded && component.default_image_url && (
-                                          <div className="text-xs text-blue-600 mt-1">
-                                            Click image to enlarge
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Controls */}
-                                    <div className="flex items-center gap-1 sm:gap-2 ml-2 sm:ml-3">
-                                      {user && quantity > 0 && (
-                                        <div className="flex items-center border rounded text-xs">
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              updateLocalQuantity(component, quantity - 1);
-                                            }}
-                                            disabled={quantity === 0}
-                                            className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50"
-                                          >
-                                            <Minus className="h-2 w-2 sm:h-3 sm:w-3" />
-                                          </button>
-                                          <span className="w-5 sm:w-6 text-center font-medium text-xs">{quantity}</span>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              updateLocalQuantity(component, quantity + 1);
-                                            }}
-                                            disabled={quantity >= component.stock_level}
-                                            className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50"
-                                          >
-                                            <Plus className="h-2 w-2 sm:h-3 sm:w-3" />
-                                          </button>
-                                        </div>
-                                      )}
-                                      
-                                      {user && quantity === 0 && (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            updateLocalQuantity(component, 1);
-                                          }}
-                                          disabled={component.stock_level === 0}
-                                          className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 px-2 sm:px-3 py-1 rounded"
-                                        >
-                                          Add
-                                        </button>
-                                      )}
-                                      
-                                      {!user && (
-                                        <div onClick={(e) => e.stopPropagation()}>
-                                          <LoginPromptButton
-                                            variant="default"
-                                            size="sm"
-                                            className="text-xs px-2 sm:px-3 py-1 h-auto"
-                                            redirectTo={`/product/${id}`}
-                                          >
-                                            Login
-                                          </LoginPromptButton>
-                                        </div>
-                                      )}
-                                      
-                                      <div className={`transition-transform duration-300 ease-in-out ${
-                                        isExpanded ? 'rotate-180' : 'rotate-0'
-                                      }`}>
-                                        <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
-                                      </div>
+                              )}
+
+                              {/* Info */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <h3 className={cn(
+                                      "font-medium text-gray-900 transition-all",
+                                      isExpanded ? 'text-base' : 'text-sm truncate'
+                                    )}>
+                                      {component.name}
+                                    </h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="font-semibold text-primary">
+                                        {formatPrice(price)}
+                                      </span>
+                                      <span className="text-xs text-gray-400">•</span>
+                                      <span className="text-xs text-gray-500">
+                                        {component.stock_level} in stock
+                                      </span>
                                     </div>
                                   </div>
+
+                                  {/* Controls */}
+                                  <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                    {user && quantity > 0 ? (
+                                      <div className="flex items-center border rounded-lg bg-white">
+                                        <button
+                                          onClick={() => updateLocalQuantity(component, quantity - 1)}
+                                          className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-l-lg transition-colors"
+                                        >
+                                          <Minus className="h-3 w-3" />
+                                        </button>
+                                        <span className="w-8 text-center font-medium text-sm">{quantity}</span>
+                                        <button
+                                          onClick={() => updateLocalQuantity(component, quantity + 1)}
+                                          disabled={quantity >= component.stock_level}
+                                          className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-r-lg transition-colors disabled:opacity-50"
+                                        >
+                                          <Plus className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : user ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => updateLocalQuantity(component, 1)}
+                                        disabled={component.stock_level === 0}
+                                        className="h-8"
+                                      >
+                                        Add
+                                      </Button>
+                                    ) : (
+                                      <LoginPromptButton
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8"
+                                        redirectTo={`/product/${id}`}
+                                      >
+                                        Login
+                                      </LoginPromptButton>
+                                    )}
+
+                                    <ChevronDown className={cn(
+                                      "h-4 w-4 text-gray-400 transition-transform duration-200",
+                                      isExpanded && "rotate-180"
+                                    )} />
+                                  </div>
                                 </div>
+
+                                {/* Expanded Details */}
+                                {isExpanded && (
+                                  <div className="mt-3 pt-3 border-t border-gray-200">
+                                    <p className="text-sm text-gray-600 mb-2">
+                                      {component.description}
+                                    </p>
+                                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                                      <span>SKU: {component.component_sku}</span>
+                                      <span>Type: {component.component_type}</span>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Compact Cart Summary */}
-            {components.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
-                {localCart.length > 0 ? (
-                  <>
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-sm text-gray-600">
-                        {getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''} selected
-                      </span>
-                      <span className="text-lg font-bold text-primary">
-                        {formatPrice(getLocalCartTotal())}
-                      </span>
+              {/* Cart Summary */}
+              {components.length > 0 && (
+                <div className="mt-6 pt-4 border-t">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-sm text-gray-500">
+                        {localCart.length > 0
+                          ? `${getLocalCartTotalQuantity()} item${getLocalCartTotalQuantity() !== 1 ? 's' : ''} selected`
+                          : 'No items selected'
+                        }
+                      </p>
+                      {localCart.length > 0 && (
+                        <p className="text-2xl font-bold text-gray-900">
+                          {formatPrice(getLocalCartTotal())}
+                        </p>
+                      )}
                     </div>
-                    
-                    {!user ? (
-                      <LoginPromptButton 
-                        variant="default" 
-                        size="sm" 
-                        className="w-full h-9"
-                        redirectTo={`/product/${id}`}
-                      >
-                        <ShoppingCart className="h-3 w-3 mr-2" />
-                        Login to Add Items
-                      </LoginPromptButton>
-                    ) : (
-                      <Button 
-                        size="sm"
+
+                    {user ? (
+                      <Button
+                        size="lg"
                         onClick={handleAddToCart}
-                        disabled={cartLoading}
-                        className="w-full h-9 text-sm font-medium"
+                        disabled={cartLoading || localCart.length === 0}
+                        className="min-w-[160px]"
                       >
-                        <ShoppingCart className="h-3 w-3 mr-2" />
+                        <ShoppingCart className="h-4 w-4 mr-2" />
                         {cartLoading ? 'Adding...' : 'Add to Cart'}
                       </Button>
-                    )}
-                  </>
-                ) : (
-                  <div className="text-center">
-                    <p className="text-gray-500 text-xs mb-2">Select components to add to cart</p>
-                    {!user ? (
-                      <LoginPromptButton 
-                        variant="default" 
-                        size="sm" 
-                        className="w-full h-9"
+                    ) : (
+                      <LoginPromptButton
+                        size="lg"
+                        className="min-w-[160px]"
                         redirectTo={`/product/${id}`}
                       >
-                        <ShoppingCart className="h-3 w-3 mr-2" />
-                        Login to Add Items
+                        <ShoppingCart className="h-4 w-4 mr-2" />
+                        Login to Add
                       </LoginPromptButton>
-                    ) : (
-                      <Button 
-                        disabled
-                        size="sm"
-                        className="w-full h-9 text-sm font-medium"
-                      >
-                        <ShoppingCart className="h-3 w-3 mr-2" />
-                        Add to Cart
-                      </Button>
                     )}
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Installation Guide Section - Only show if product has installation data */}
+        {/* Installation Guide Section */}
         {installationGuide && (
-          <div className="mt-8 border-t pt-8">
-            <div className="max-w-5xl mx-auto">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <Wrench className="h-6 w-6 text-lime-600" />
-                Installation Guide
-              </h2>
-
-              {/* Installation Info Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                {installationGuide.recommended_time && (
-                  <Card className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <Clock className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Recommended Time</p>
-                        <p className="font-semibold">{installationGuide.recommended_time}</p>
-                      </div>
-                    </div>
-                  </Card>
-                )}
-
-                {installationGuide.workman_power && (
-                  <Card className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-100 rounded-lg">
-                        <Users className="h-5 w-5 text-purple-600" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Workers Needed</p>
-                        <p className="font-semibold">
-                          {installationGuide.workman_power} {installationGuide.workman_power === 1 ? 'person' : 'people'}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                )}
-
-                {installationGuide.installation_price && installationGuide.installation_price > 0 && (
-                  <Card className="p-4">
+          <div className="mt-6">
+            <Collapsible open={installationOpen} onOpenChange={setInstallationOpen}>
+              <Card className="overflow-hidden">
+                <CollapsibleTrigger className="w-full">
+                  <div className="flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-lime-100 rounded-lg">
-                        <DollarSign className="h-5 w-5 text-lime-600" />
+                        <Wrench className="h-5 w-5 text-lime-600" />
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Installation Price</p>
-                        <p className="font-semibold text-lime-600">
-                          {formatPrice(installationGuide.installation_price)}
+                      <div className="text-left">
+                        <h3 className="font-semibold text-gray-900">Installation Guide</h3>
+                        <p className="text-sm text-gray-500">
+                          {installationGuide.recommended_time && `${installationGuide.recommended_time}`}
+                          {installationGuide.recommended_time && installationGuide.installation_price && ' • '}
+                          {installationGuide.installation_price && `${formatPrice(installationGuide.installation_price)} installation fee`}
                         </p>
                       </div>
                     </div>
-                  </Card>
-                )}
-              </div>
-
-              {/* Difficulty Badge */}
-              {installationGuide.difficulty_level && (
-                <div className="mb-4">
-                  <Badge
-                    className={
-                      installationGuide.difficulty_level === 'easy' ? 'bg-green-100 text-green-800 hover:bg-green-100' :
-                      installationGuide.difficulty_level === 'medium' ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100' :
-                      installationGuide.difficulty_level === 'hard' ? 'bg-orange-100 text-orange-800 hover:bg-orange-100' :
-                      'bg-red-100 text-red-800 hover:bg-red-100'
-                    }
-                  >
-                    {installationGuide.difficulty_level.charAt(0).toUpperCase() +
-                     installationGuide.difficulty_level.slice(1)} Difficulty
-                  </Badge>
-                </div>
-              )}
-
-              {/* Installation Videos */}
-              {installationGuide.installation_videos && installationGuide.installation_videos.length > 0 && (
-                <div className="space-y-4 mb-6">
-                  <h3 className="font-medium text-gray-900">Installation Videos</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {installationGuide.installation_videos.map((video, index) => (
-                      <Card key={index} className="overflow-hidden">
-                        <div className="aspect-video bg-gray-100 relative">
-                          {getVideoEmbed(video.url)}
-                        </div>
-                        {(video.title || video.duration) && (
-                          <div className="p-3">
-                            {video.title && <p className="font-medium">{video.title}</p>}
-                            {video.duration && (
-                              <p className="text-sm text-gray-500 flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {video.duration}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </Card>
-                    ))}
+                    <ChevronDown className={cn(
+                      "h-5 w-5 text-gray-400 transition-transform duration-300",
+                      installationOpen && "rotate-180"
+                    )} />
                   </div>
-                </div>
-              )}
+                </CollapsibleTrigger>
 
-              {/* Notes */}
-              {installationGuide.notes && (
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium mb-2">Installation Notes</h4>
-                  <p className="text-gray-700">{installationGuide.notes}</p>
-                </div>
-              )}
-            </div>
+                <CollapsibleContent>
+                  <div className="px-5 pb-5 space-y-5">
+                    <Separator />
+
+                    {/* Info Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {installationGuide.recommended_time && (
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <Clock className="h-5 w-5 text-blue-500 mb-2" />
+                          <p className="text-xs text-gray-500 mb-1">Time Required</p>
+                          <p className="font-semibold text-gray-900">{installationGuide.recommended_time}</p>
+                        </div>
+                      )}
+
+                      {installationGuide.workman_power && (
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <Users className="h-5 w-5 text-purple-500 mb-2" />
+                          <p className="text-xs text-gray-500 mb-1">Workers Needed</p>
+                          <p className="font-semibold text-gray-900">
+                            {installationGuide.workman_power} {installationGuide.workman_power === 1 ? 'person' : 'people'}
+                          </p>
+                        </div>
+                      )}
+
+                      {installationGuide.installation_price && installationGuide.installation_price > 0 && (
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <DollarSign className="h-5 w-5 text-green-500 mb-2" />
+                          <p className="text-xs text-gray-500 mb-1">Installation Fee</p>
+                          <p className="font-semibold text-lime-600">{formatPrice(installationGuide.installation_price)}</p>
+                        </div>
+                      )}
+
+                      {installationGuide.difficulty_level && (
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <Info className="h-5 w-5 text-orange-500 mb-2" />
+                          <p className="text-xs text-gray-500 mb-1">Difficulty</p>
+                          <Badge
+                            className={cn(
+                              "capitalize",
+                              installationGuide.difficulty_level === 'easy' && 'bg-green-100 text-green-800 hover:bg-green-100',
+                              installationGuide.difficulty_level === 'medium' && 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
+                              installationGuide.difficulty_level === 'hard' && 'bg-orange-100 text-orange-800 hover:bg-orange-100',
+                              installationGuide.difficulty_level === 'expert' && 'bg-red-100 text-red-800 hover:bg-red-100'
+                            )}
+                          >
+                            {installationGuide.difficulty_level}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Installation Videos */}
+                    {installationGuide.installation_videos && installationGuide.installation_videos.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <PlayCircle className="h-4 w-4 text-gray-500" />
+                          <h4 className="font-medium text-gray-900">Installation Videos</h4>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {installationGuide.installation_videos.map((video, index) => (
+                            <div key={index} className="rounded-xl overflow-hidden border">
+                              <div className="aspect-video bg-gray-100">
+                                {getVideoEmbed(video.url)}
+                              </div>
+                              {(video.title || video.duration) && (
+                                <div className="p-3 bg-white">
+                                  {video.title && <p className="font-medium text-sm">{video.title}</p>}
+                                  {video.duration && (
+                                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                                      <Clock className="h-3 w-3" />
+                                      {video.duration}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    {installationGuide.notes && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                        <h4 className="font-medium text-amber-900 mb-2 flex items-center gap-2">
+                          <Info className="h-4 w-4" />
+                          Installation Notes
+                        </h4>
+                        <p className="text-sm text-amber-800">{installationGuide.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           </div>
         )}
 
         {/* Reviews Section */}
-        <div className="mt-12 border-t pt-8">
-          {showReviewForm ? (
-            <div className="max-w-3xl mx-auto">
-              <ReviewForm
-                productId={product?.id || ''}
-                onSuccess={() => {
-                  setShowReviewForm(false);
-                  // Reviews will be refreshed automatically by the ReviewsSection component
-                }}
-                onCancel={() => setShowReviewForm(false)}
-              />
-            </div>
-          ) : (
-            <div className="max-w-5xl mx-auto">
-              <ReviewsSection
-                productId={product?.id || ''}
-                onWriteReview={() => setShowReviewForm(true)}
-              />
-            </div>
-          )}
+        <div className="mt-6">
+          <Collapsible open={reviewsOpen} onOpenChange={setReviewsOpen}>
+            <Card className="overflow-hidden">
+              <CollapsibleTrigger className="w-full">
+                <div className="flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 rounded-lg">
+                      <Star className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-semibold text-gray-900">Customer Reviews</h3>
+                      <p className="text-sm text-gray-500">See what others are saying about this product</p>
+                    </div>
+                  </div>
+                  <ChevronDown className={cn(
+                    "h-5 w-5 text-gray-400 transition-transform duration-300",
+                    reviewsOpen && "rotate-180"
+                  )} />
+                </div>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent>
+                <div className="px-5 pb-5">
+                  <Separator className="mb-5" />
+                  {showReviewForm ? (
+                    <ReviewForm
+                      productId={product.id}
+                      onSuccess={() => {
+                        setShowReviewForm(false);
+                      }}
+                      onCancel={() => setShowReviewForm(false)}
+                    />
+                  ) : (
+                    <ReviewsSection
+                      productId={product.id}
+                      onWriteReview={() => setShowReviewForm(true)}
+                    />
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
         </div>
       </div>
 
       {/* Image Lightbox */}
       <Dialog open={lightboxOpen} onOpenChange={closeLightbox}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-0 border-0">
-          <div className="relative w-full h-full bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-[400px]">
+        <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-0 border-0 bg-transparent">
+          <div className="relative flex items-center justify-center">
             {lightboxImages[currentLightboxIndex] && (
               <>
-                <img
-                  src={lightboxImages[currentLightboxIndex]}
-                  alt="Product image"
-                  className="max-w-full max-h-[95vh] w-auto h-auto object-contain"
-                />
+                <div className="bg-white rounded-2xl overflow-hidden shadow-2xl">
+                  <img
+                    src={lightboxImages[currentLightboxIndex]}
+                    alt="Product image"
+                    className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain"
+                  />
+                </div>
 
-                {/* Navigation Buttons */}
+                {/* Navigation */}
                 {lightboxImages.length > 1 && (
                   <>
                     <button
                       onClick={() => navigateLightbox("prev")}
-                      className="absolute -left-16 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
-                      aria-label="Previous image"
+                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2.5}
-                        stroke="currentColor"
-                        className="w-6 h-6"
-                      >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                       </svg>
                     </button>
                     <button
                       onClick={() => navigateLightbox("next")}
-                      className="absolute -right-16 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
-                      aria-label="Next image"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2.5}
-                        stroke="currentColor"
-                        className="w-6 h-6"
-                      >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                       </svg>
                     </button>
 
-                    {/* Image Counter */}
-                    <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 bg-white/90 text-gray-800 px-4 py-2 rounded-full text-sm font-medium shadow-lg">
+                    {/* Counter */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm font-medium">
                       {currentLightboxIndex + 1} / {lightboxImages.length}
                     </div>
                   </>

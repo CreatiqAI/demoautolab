@@ -1,0 +1,699 @@
+{
+  "name": "AutoLab Customer Notifications (All-in-One)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "customer-notifications",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-customer",
+      "name": "Customer Notification Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [180, 500],
+      "webhookId": "customer-notifications-autolab"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 10,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Daily 10am (Reminders)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 900]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "env-supabase-url",
+              "name": "SUPABASE_URL",
+              "value": "=YOUR_SUPABASE_URL",
+              "type": "string"
+            },
+            {
+              "id": "env-supabase-key",
+              "name": "SUPABASE_SERVICE_KEY",
+              "value": "=YOUR_SUPABASE_SERVICE_ROLE_KEY",
+              "type": "string"
+            },
+            {
+              "id": "env-wa-phone-id",
+              "name": "WHATSAPP_PHONE_NUMBER_ID",
+              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "env-site-url",
+              "name": "WEBSITE_URL",
+              "value": "=https://autolab.my",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [440, 500]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "env2-supabase-url",
+              "name": "SUPABASE_URL",
+              "value": "=YOUR_SUPABASE_URL",
+              "type": "string"
+            },
+            {
+              "id": "env2-supabase-key",
+              "name": "SUPABASE_SERVICE_KEY",
+              "value": "=YOUR_SUPABASE_SERVICE_ROLE_KEY",
+              "type": "string"
+            },
+            {
+              "id": "env2-wa-phone-id",
+              "name": "WHATSAPP_PHONE_NUMBER_ID",
+              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "env2-site-url",
+              "name": "WEBSITE_URL",
+              "value": "=https://autolab.my",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config-cron",
+      "name": "Config (Cron)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [440, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// UNIFIED PAYLOAD PARSER\n// ============================================================\n// Handles payloads from BOTH Supabase Database Webhooks:\n//   - orders table (INSERT / UPDATE)\n//   - returns table (INSERT / UPDATE)\n// Detects which table the webhook came from and normalises\n// everything into a single { source, event, ... } shape.\n// ============================================================\n\nconst body = $input.first().json.body || $input.first().json;\nlet out = {};\n\n// ---- Supabase Database Webhook format -----------------------\nif (body.type === 'INSERT' || body.type === 'UPDATE') {\n  const rec = body.record || {};\n  const old = body.old_record || {};\n  const table = (body.table || '').toLowerCase();\n\n  // ------- ORDERS TABLE -----------\n  if (table === 'orders' || rec.order_no) {\n    let event = 'ORDER_UPDATED';\n    if (body.type === 'INSERT') event = 'ORDER_CREATED';\n    else if (old.status !== rec.status) event = 'ORDER_STATUS_CHANGED';\n    else if (old.courier_tracking_number !== rec.courier_tracking_number && rec.courier_tracking_number) event = 'TRACKING_NUMBER_ADDED';\n    else if (old.payment_state !== rec.payment_state) event = 'PAYMENT_STATE_CHANGED';\n\n    // Skip irrelevant order updates (no meaningful change)\n    if (event === 'ORDER_UPDATED') return [];\n\n    let phone = (rec.customer_phone || '').replace(/^\\+/, '');\n    if (phone.startsWith('0')) phone = '60' + phone.substring(1);\n    if (!phone.startsWith('6')) phone = '60' + phone;\n    if (!phone || phone.length < 10) return [];\n\n    out = {\n      source: 'order',\n      event,\n      order: {\n        id: rec.id,\n        order_no: rec.order_no,\n        status: rec.status,\n        previous_status: old.status || null,\n        payment_state: rec.payment_state,\n        previous_payment_state: old.payment_state || null,\n        total: rec.total,\n        delivery_method: rec.delivery_method,\n        created_at: rec.created_at,\n        updated_at: rec.updated_at\n      },\n      customer: { name: rec.customer_name, phone, email: rec.customer_email },\n      courier: {\n        provider: rec.courier_provider,\n        tracking_number: rec.courier_tracking_number,\n        shipment_id: rec.courier_shipment_id\n      }\n    };\n  }\n  // ------- RETURNS TABLE ----------\n  else if (table === 'returns' || rec.return_no) {\n    let event = 'RETURN_UPDATED';\n    if (body.type === 'INSERT') event = 'RETURN_CREATED';\n    else if (old.status !== rec.status) event = 'RETURN_STATUS_CHANGED';\n\n    if (event === 'RETURN_UPDATED') return [];\n\n    out = {\n      source: 'return',\n      event,\n      return_data: {\n        id: rec.id,\n        return_no: rec.return_no,\n        order_id: rec.order_id,\n        customer_id: rec.customer_id,\n        status: rec.status,\n        previous_status: old.status || null,\n        reason: rec.reason,\n        reason_details: rec.reason_details,\n        refund_method: rec.refund_method,\n        refund_amount: rec.refund_amount,\n        return_shipping_free: rec.return_shipping_free,\n        return_tracking_number: rec.return_tracking_number,\n        return_courier: rec.return_courier,\n        admin_notes: rec.admin_notes,\n        rejection_reason: rec.rejection_reason,\n        created_at: rec.created_at,\n        updated_at: rec.updated_at\n      },\n      customer: { id: rec.customer_id }\n    };\n  }\n  else {\n    return []; // Unknown table\n  }\n}\n// ---- Already-normalised payload (from webhook_logs, etc.) ----\nelse if (body.event) {\n  out = body;\n  if (body.event.startsWith('ORDER') || body.event === 'TRACKING_NUMBER_ADDED' || body.event === 'PAYMENT_STATE_CHANGED') {\n    out.source = 'order';\n    // Normalise phone\n    let phone = (out.customer?.phone || '').replace(/^\\+/, '');\n    if (phone.startsWith('0')) phone = '60' + phone.substring(1);\n    if (!phone.startsWith('6')) phone = '60' + phone;\n    if (!phone || phone.length < 10) return [];\n    out.customer.phone = phone;\n  } else if (body.event.startsWith('RETURN')) {\n    out.source = 'return';\n  } else {\n    return [];\n  }\n}\nelse {\n  return []; // Unrecognised payload\n}\n\nreturn { json: out };"
+      },
+      "id": "parse-payload",
+      "name": "Parse Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [{ "leftValue": "={{ $json.source }}", "rightValue": "order", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "Order Events"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [{ "leftValue": "={{ $json.source }}", "rightValue": "return", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "Return Events"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "route-source",
+      "name": "Order or Return?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [920, 500]
+    },
+
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": { "combinator": "and", "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "ORDER_CREATED", "operator": { "type": "string", "operation": "equals" } }] },
+              "renameOutput": true, "outputKey": "Created"
+            },
+            {
+              "conditions": { "combinator": "and", "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "ORDER_STATUS_CHANGED", "operator": { "type": "string", "operation": "equals" } }] },
+              "renameOutput": true, "outputKey": "Status"
+            },
+            {
+              "conditions": { "combinator": "and", "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "TRACKING_NUMBER_ADDED", "operator": { "type": "string", "operation": "equals" } }] },
+              "renameOutput": true, "outputKey": "Tracking"
+            },
+            {
+              "conditions": { "combinator": "and", "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "PAYMENT_STATE_CHANGED", "operator": { "type": "string", "operation": "equals" } }] },
+              "renameOutput": true, "outputKey": "Payment"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "route-order-event",
+      "name": "Route Order Event",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1160, 340]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// ORDER CREATED\nconst data = $input.first().json;\nconst o = data.order;\nconst c = data.customer;\nconst site = $('Config').first().json.WEBSITE_URL;\n\nconst payLine = o.payment_state === 'UNPAID'\n  ? `⏳ *Payment Status:* Pending\\nPlease complete your payment to process your order.\\n\\n💳 *Pay now:* ${site}/my-orders`\n  : '✅ *Payment:* Received';\n\nconst msg = `🎉 *Order Confirmed!*\\n\\nHi ${c.name}! Thank you for your order with *AutoLab*!\\n\\n📋 *Order No:* ${o.order_no}\\n💰 *Total:* RM ${parseFloat(o.total).toFixed(2)}\\n📦 *Delivery:* ${o.delivery_method === 'DELIVERY' ? 'Home Delivery' : 'Self Pickup'}\\n\\n${payLine}\\n\\nWe'll notify you when your order is being prepared! 🚀\\n\\n_Questions? Contact us:_\\n📞 03-4297 7668\\n💬 wa.me/60342977668`;\n\nreturn { json: { phone: c.phone, message: msg } };"
+      },
+      "id": "msg-order-created",
+      "name": "Order Created",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ORDER STATUS CHANGED\nconst data = $input.first().json;\nconst o = data.order;\nconst c = data.customer;\nconst courier = data.courier;\nconst site = $('Config').first().json.WEBSITE_URL;\n\nconst map = {\n  'PENDING_VERIFICATION': { e:'🔍', t:'Payment Under Review', b:'We\\'ve received your payment proof and it\\'s being verified.\\nThis usually takes 1-2 business hours during working days.' },\n  'VERIFIED': { e:'✅', t:'Payment Verified!', b:'Your payment has been verified successfully!\\nYour order is now being processed.' },\n  'PACKING': { e:'📦', t:'Order Being Packed', b:'Great news! Your order is now being packed by our warehouse team.\\nWe\\'ll share the tracking number once it\\'s shipped!' },\n  'DISPATCHED': { e:'🚚', t:'Order Shipped!', b:'Your order has been dispatched!' + (courier.tracking_number ? `\\n\\n📬 *Tracking No:* ${courier.tracking_number}\\n🔗 Track: https://www.jtexpress.my/tracking?billcode=${courier.tracking_number}` : '\\nTracking number will be shared shortly.') },\n  'DELIVERED': { e:'🏠', t:'Order Delivered!', b:`Your order has been delivered successfully! 🎉\\nWe hope you're happy with your purchase!\\n\\n⭐ *Rate your experience:*\\n${site}/my-orders\\n\\n📋 *Return Policy:* Within 7 days for defective or wrong items.` },\n  'COMPLETED': { e:'✅', t:'Order Completed', b:'Your order has been marked as completed.\\nThank you for shopping with AutoLab!\\n\\n🏆 You\\'ve earned loyalty points for this purchase!' },\n  'CANCELLED': { e:'❌', t:'Order Cancelled', b:'Your order has been cancelled.' + (o.payment_state === 'APPROVED' ? '\\n\\n💰 A refund will be processed within 3-5 business days.' : '\\n\\nIf you didn\\'t request this cancellation, please contact us immediately.') },\n  'REJECTED': { e:'⚠️', t:'Order Rejected', b:'Unfortunately, your order could not be processed.\\n\\nPlease contact our team for more information.' }\n};\n\nconst tpl = map[o.status];\nif (!tpl) return [];\n\nconst msg = `${tpl.e} *${tpl.t}*\\n\\nHi ${c.name}!\\n\\n${tpl.b}\\n\\n📋 *Order No:* ${o.order_no}\\n💰 *Total:* RM ${parseFloat(o.total).toFixed(2)}\\n\\n_Questions? Contact us:_\\n📞 03-4297 7668\\n💬 wa.me/60342977668`;\n\nreturn { json: { phone: c.phone, message: msg } };"
+      },
+      "id": "msg-order-status",
+      "name": "Status Changed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// TRACKING NUMBER ADDED\nconst data = $input.first().json;\nconst o = data.order;\nconst c = data.customer;\nconst courier = data.courier;\n\nconst names = { 'JNT':'J&T Express', 'LALAMOVE':'Lalamove', 'OWN_DELIVERY':'AutoLab Delivery' };\nconst links = { 'JNT':`https://www.jtexpress.my/tracking?billcode=${courier.tracking_number}`, 'LALAMOVE':'Check your Lalamove app for live tracking', 'OWN_DELIVERY':'Our rider will contact you directly' };\n\nconst provName = names[courier.provider] || courier.provider || 'Courier';\nconst trackLink = links[courier.provider] || '';\n\nconst msg = `📬 *Tracking Number Available!*\\n\\nHi ${c.name}!\\n\\nYour order *${o.order_no}* tracking details:\\n\\n🚛 *Courier:* ${provName}\\n📦 *Tracking No:* ${courier.tracking_number}\\n${trackLink ? '🔗 *Track:* ' + trackLink : ''}\\n\\nEstimated delivery: 2-4 business days (Peninsular MY)\\n\\n_Questions about your delivery?_\\n📞 03-4297 7668\\n💬 wa.me/60342977668`;\n\nreturn { json: { phone: c.phone, message: msg } };"
+      },
+      "id": "msg-tracking",
+      "name": "Tracking Added",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// PAYMENT STATE CHANGED\nconst data = $input.first().json;\nconst o = data.order;\nconst c = data.customer;\nconst site = $('Config').first().json.WEBSITE_URL;\n\nconst map = {\n  'SUBMITTED': { e:'📸', t:'Payment Proof Received', b:'We\\'ve received your payment proof and will verify it shortly.\\nVerification usually takes 1-2 business hours during working days.' },\n  'APPROVED': { e:'✅', t:'Payment Approved!', b:'Your payment has been verified and approved!\\nYour order is now being processed.' },\n  'REJECTED': { e:'❌', t:'Payment Rejected', b:`Unfortunately, we could not verify your payment.\\nThis could be due to unclear proof or mismatched amount.\\n\\n📸 Please re-submit your payment proof at:\\n${site}/my-orders\\n\\nOr contact us for assistance.` }\n};\n\nconst tpl = map[o.payment_state];\nif (!tpl) return [];\n\nconst msg = `${tpl.e} *${tpl.t}*\\n\\nHi ${c.name}!\\n\\n${tpl.b}\\n\\n📋 *Order No:* ${o.order_no}\\n💰 *Amount:* RM ${parseFloat(o.total).toFixed(2)}\\n\\n_Questions? Contact us:_\\n📞 03-4297 7668\\n💬 wa.me/60342977668`;\n\nreturn { json: { phone: c.phone, message: msg } };"
+      },
+      "id": "msg-payment",
+      "name": "Payment Changed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 700]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/get_return_notification_data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $('Config').first().json.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $('Config').first().json.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_return_id: $('Parse Payload').first().json.return_data.id, p_customer_id: $('Parse Payload').first().json.return_data.customer_id }) }}",
+        "options": {}
+      },
+      "id": "fetch-return-customer",
+      "name": "Fetch Return Customer Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-service-key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// FORMAT RETURN NOTIFICATION MESSAGE\nconst retPayload = $('Parse Payload').first().json;\nconst ret = retPayload.return_data;\nconst custRaw = $input.first().json;\nconst cust = Array.isArray(custRaw) ? custRaw[0] : custRaw;\nconst site = $('Config').first().json.WEBSITE_URL;\n\n// Normalise phone\nlet phone = (cust.customer_phone || '').replace(/^\\+/, '');\nif (phone.startsWith('0')) phone = '60' + phone.substring(1);\nif (!phone.startsWith('6')) phone = '60' + phone;\nif (!phone || phone.length < 10) return [];\n\nconst name = cust.customer_name || 'Customer';\nconst orderNo = cust.order_no || '';\n\nconst reasonLabel = ret.reason === 'DEFECTIVE' ? 'Defective/Damaged' : 'Wrong Item Received';\nconst methodLabel = ret.refund_method === 'EXCHANGE' ? 'Item Exchange' : 'Refund to Original Payment';\n\nconst map = {\n  'PENDING': {\n    e:'📋', t:'Return Request Received',\n    b:'We\\'ve received your return request and will review it within 1-2 business days.'\n  },\n  'APPROVED': {\n    e:'✅', t:'Return Request Approved!',\n    b:`Your return request has been approved! Please ship the item back to us.\\n\\n📦 *Return Instructions:*\\n1. Pack the item securely in original packaging\\n2. Include the RMA number on the package\\n3. Ship to:\\n   *AUTO LABS SDN BHD*\\n   17, Jalan 7/95B, Cheras Utama\\n   56100 Kuala Lumpur\\n${ret.return_shipping_free ? '\\n🆓 *Free return shipping* (defective item)' : '\\n💰 Return shipping is at your expense'}\\n\\n📮 After shipping, update your tracking number at:\\n${site}/my-returns`\n  },\n  'REJECTED': {\n    e:'❌', t:'Return Request Declined',\n    b:'Unfortunately, your return request has been declined.' + (ret.rejection_reason ? `\\n\\n📝 *Reason:* ${ret.rejection_reason}` : '')\n  },\n  'ITEM_SHIPPED': {\n    e:'📮', t:'Return Shipment Noted',\n    b:'We\\'ve noted that you\\'ve shipped the item back. We\\'ll notify you once it arrives at our warehouse.'\n  },\n  'ITEM_RECEIVED': {\n    e:'📬', t:'Return Item Received',\n    b:'We\\'ve received your returned item! It\\'s now being inspected by our quality team.\\nWe\\'ll update you on the next steps within 1-2 business days.'\n  },\n  'INSPECTING': {\n    e:'🔍', t:'Item Under Inspection',\n    b:'Your returned item is currently being inspected.\\nWe\\'ll process your refund/exchange once inspection is complete.'\n  },\n  'REFUND_PROCESSING': {\n    e:'💰', t:'Refund Being Processed',\n    b:`Your refund of *RM ${ret.refund_amount ? parseFloat(ret.refund_amount).toFixed(2) : '0.00'}* is being processed.\\nRefunds typically take 3-5 business days to appear in your account.`\n  },\n  'EXCHANGE_PROCESSING': {\n    e:'🔄', t:'Exchange Being Processed',\n    b:'Your exchange item is being prepared!\\nWe\\'ll send you the tracking number once it\\'s shipped.'\n  },\n  'COMPLETED': {\n    e:'✅', t:'Return Completed',\n    b: ret.refund_method === 'EXCHANGE'\n      ? 'Your exchange has been completed! The replacement item is on its way.'\n      : `Your refund of *RM ${ret.refund_amount ? parseFloat(ret.refund_amount).toFixed(2) : '0.00'}* has been processed successfully.\\n\\nThank you for your patience! We hope to serve you better next time. 🙏`\n  },\n  'CANCELLED': {\n    e:'🚫', t:'Return Cancelled',\n    b:'Your return request has been cancelled.'\n  }\n};\n\nconst tpl = map[ret.status];\nif (!tpl) return [];\n\nconst msg = `${tpl.e} *${tpl.t}*\\n\\nHi ${name}!\\n\\n${tpl.b}\\n\\n📋 *RMA No:* ${ret.return_no}\\n📦 *Order:* ${orderNo}\\n📝 *Reason:* ${reasonLabel}\\n🔁 *Method:* ${methodLabel}\\n\\n_Questions about your return?_\\n📞 03-4297 7668\\n💬 wa.me/60342977668`;\n\nreturn { json: { phone, message: msg } };"
+      },
+      "id": "msg-return",
+      "name": "Format Return Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 900]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config (Cron)').first().json.SUPABASE_URL }}/rest/v1/rpc/get_unpaid_orders_for_reminder",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $('Config (Cron)').first().json.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $('Config (Cron)').first().json.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {}
+      },
+      "id": "fetch-unpaid",
+      "name": "Fetch Unpaid Orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 900],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-service-key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// PAYMENT REMINDER FORMATTER\n// Splits unpaid orders into individual items with tiered messages\nconst orders = $input.first().json;\nconst site = $('Config (Cron)').first().json.WEBSITE_URL;\n\nif (!Array.isArray(orders) || orders.length === 0) return [];\n\nreturn orders.map(order => {\n  let phone = (order.customer_phone || '').replace(/^\\+/, '');\n  if (phone.startsWith('0')) phone = '60' + phone.substring(1);\n  if (!phone.startsWith('6')) phone = '60' + phone;\n  if (!phone || phone.length < 10) return null;\n\n  const h = order.hours_since_order || 0;\n  let msg;\n\n  if (h < 24) {\n    // GENTLE (< 24h)\n    msg = `👋 Hi ${order.customer_name}!\\n\\nJust a friendly reminder about your AutoLab order:\\n\\n📋 *Order:* ${order.order_no}\\n💰 *Amount:* RM ${parseFloat(order.total).toFixed(2)}\\n\\n⏳ Payment is still pending. Complete your payment to start processing your order!\\n\\n💳 *Pay now:* ${site}/my-orders\\n\\n_Questions? We're here to help!_\\n📞 03-4297 7668`;\n  } else if (h >= 48) {\n    // URGENT (48-72h)\n    msg = `⚠️ *Payment Reminder - Action Required*\\n\\nHi ${order.customer_name},\\n\\nYour order *${order.order_no}* has been pending payment for over 48 hours.\\n\\n📋 *Order:* ${order.order_no}\\n💰 *Amount:* RM ${parseFloat(order.total).toFixed(2)}\\n\\n⏰ *Orders unpaid for 72+ hours will be automatically cancelled.*\\n\\nPlease complete your payment soon:\\n💳 ${site}/my-orders\\n\\nIf you're facing any issues, let us know:\\n📞 03-4297 7668\\n💬 wa.me/60342977668`;\n  } else {\n    // NUDGE (24-48h)\n    msg = `💬 Hi ${order.customer_name}!\\n\\nYour AutoLab order is waiting for payment:\\n\\n📋 *Order:* ${order.order_no}\\n💰 *Amount:* RM ${parseFloat(order.total).toFixed(2)}\\n\\nWe're holding your items, but they may go out of stock soon! 🏃\\n\\n💳 *Complete payment:* ${site}/my-orders\\n\\n_Need help? Contact us:_\\n📞 03-4297 7668`;\n  }\n\n  return { json: { phone, message: msg, order_no: order.order_no, tier: h < 24 ? 'gentle' : h >= 48 ? 'urgent' : 'nudge' } };\n}).filter(Boolean);"
+      },
+      "id": "format-reminders",
+      "name": "Format Reminders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 900]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "batch-loop",
+      "name": "Loop Over Reminders",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1140, 1100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Config (Cron)').first().json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.phone, type: 'text', text: { preview_url: true, body: $json.message } }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "send-wa-reminder",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 1100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-bearer",
+          "name": "WhatsApp Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rate-limit: wait 2s between WhatsApp messages\nawait new Promise(r => setTimeout(r, 2000));\nreturn $input.all();"
+      },
+      "id": "rate-limit",
+      "name": "Wait 2s",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 1100]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Config').first().json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.phone, type: 'text', text: { preview_url: true, body: $json.message } }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "send-wa-main",
+      "name": "Send WhatsApp Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1720, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-bearer",
+          "name": "WhatsApp Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log successful send\nreturn {\n  json: {\n    success: true,\n    sent_to: $('Send WhatsApp Message').first().json?.contacts?.[0]?.wa_id || 'unknown',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "log-success",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reminder batch summary\nconst items = $input.all();\nreturn { json: { total_reminders_sent: items.length, timestamp: new Date().toISOString() } };"
+      },
+      "id": "reminder-summary",
+      "name": "Reminder Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 1320]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config (Cron)').first().json.SUPABASE_URL }}/rest/v1/rpc/auto_cancel_unpaid_orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $('Config (Cron)').first().json.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $('Config (Cron)').first().json.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {}
+      },
+      "id": "auto-cancel",
+      "name": "Auto-Cancel 72h+ Unpaid",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 1200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase-service-key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Send cancellation WhatsApp to each auto-cancelled order\nconst cancelled = $input.first().json;\nconst site = $('Config (Cron)').first().json.WEBSITE_URL;\n\nif (!Array.isArray(cancelled) || cancelled.length === 0) return [];\n\nreturn cancelled.map(order => {\n  let phone = (order.customer_phone || '').replace(/^\\+/, '');\n  if (phone.startsWith('0')) phone = '60' + phone.substring(1);\n  if (!phone.startsWith('6')) phone = '60' + phone;\n\n  const msg = `⚠️ *Order Auto-Cancelled*\\n\\nHi ${order.customer_name},\\n\\nYour order *${order.cancelled_order_no}* has been automatically cancelled because payment was not received within 72 hours.\\n\\n💰 *Amount:* RM ${parseFloat(order.total).toFixed(2)}\\n\\nIf this was a mistake, you can place a new order anytime:\\n🛒 ${site}\\n\\n_Questions? Contact us:_\\n📞 03-4297 7668\\n💬 wa.me/60342977668`;\n\n  return { json: { phone, message: msg } };\n}).filter(item => item.json.phone && item.json.phone.length >= 10);"
+      },
+      "id": "format-cancel-msgs",
+      "name": "Format Cancel Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 1200]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "batch-loop-cancel",
+      "name": "Loop Over Cancels",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1140, 1400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Config (Cron)').first().json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.phone, type: 'text', text: { preview_url: true, body: $json.message } }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "send-wa-cancel",
+      "name": "Send Cancel Notice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 1400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-bearer",
+          "name": "WhatsApp Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise(r => setTimeout(r, 2000));\nreturn $input.all();"
+      },
+      "id": "rate-limit-cancel",
+      "name": "Wait 2s (Cancel)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 1400]
+    }
+  ],
+  "connections": {
+    "Customer Notification Webhook": {
+      "main": [
+        [
+          { "node": "Config", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          { "node": "Parse Payload", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse Payload": {
+      "main": [
+        [
+          { "node": "Order or Return?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Order or Return?": {
+      "main": [
+        [
+          { "node": "Route Order Event", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Fetch Return Customer Info", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Route Order Event": {
+      "main": [
+        [
+          { "node": "Order Created", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Status Changed", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Tracking Added", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Payment Changed", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Order Created": {
+      "main": [
+        [
+          { "node": "Send WhatsApp Message", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Status Changed": {
+      "main": [
+        [
+          { "node": "Send WhatsApp Message", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Tracking Added": {
+      "main": [
+        [
+          { "node": "Send WhatsApp Message", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Payment Changed": {
+      "main": [
+        [
+          { "node": "Send WhatsApp Message", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Return Customer Info": {
+      "main": [
+        [
+          { "node": "Format Return Message", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Format Return Message": {
+      "main": [
+        [
+          { "node": "Send WhatsApp Message", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send WhatsApp Message": {
+      "main": [
+        [
+          { "node": "Log Success", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Daily 10am (Reminders)": {
+      "main": [
+        [
+          { "node": "Config (Cron)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Config (Cron)": {
+      "main": [
+        [
+          { "node": "Fetch Unpaid Orders", "type": "main", "index": 0 },
+          { "node": "Auto-Cancel 72h+ Unpaid", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Unpaid Orders": {
+      "main": [
+        [
+          { "node": "Format Reminders", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Format Reminders": {
+      "main": [
+        [
+          { "node": "Loop Over Reminders", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Loop Over Reminders": {
+      "main": [
+        [
+          { "node": "Reminder Summary", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Send Reminder", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Reminder": {
+      "main": [
+        [
+          { "node": "Wait 2s", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Wait 2s": {
+      "main": [
+        [
+          { "node": "Loop Over Reminders", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Auto-Cancel 72h+ Unpaid": {
+      "main": [
+        [
+          { "node": "Format Cancel Messages", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Format Cancel Messages": {
+      "main": [
+        [
+          { "node": "Loop Over Cancels", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Loop Over Cancels": {
+      "main": [
+        [
+          { "node": "Reminder Summary", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Send Cancel Notice", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Cancel Notice": {
+      "main": [
+        [
+          { "node": "Wait 2s (Cancel)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Wait 2s (Cancel)": {
+      "main": [
+        [
+          { "node": "Loop Over Cancels", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "autolab" },
+    { "name": "customer" },
+    { "name": "notifications" },
+    { "name": "whatsapp" }
+  ],
+  "triggerCount": 0
+}

@@ -215,10 +215,10 @@ export default function ReturnPolicy() {
                     1
                   </div>
                   <div>
-                    <h4 className="font-semibold text-gray-900">Submit Return Request</h4>
+                    <h4 className="font-semibold text-gray-900">Contact Our Admin Team</h4>
                     <p className="text-sm text-gray-600">
-                      Go to "My Orders", find your order, and click "Request Return". Select the items you want to return
-                      and provide the reason with photos (for defective items).
+                      Reach out to us via WhatsApp, phone call, or email with your order number and reason for return.
+                      Include photos of any defects or issues.
                     </p>
                   </div>
                 </div>
@@ -228,10 +228,10 @@ export default function ReturnPolicy() {
                     2
                   </div>
                   <div>
-                    <h4 className="font-semibold text-gray-900">Wait for Approval</h4>
+                    <h4 className="font-semibold text-gray-900">Get Approval</h4>
                     <p className="text-sm text-gray-600">
-                      Our team will review your request within 1-2 business days. You'll receive a notification
-                      once approved.
+                      Our admin will review your request and confirm if it's eligible for a return.
+                      We'll provide return instructions once approved.
                     </p>
                   </div>
                 </div>
@@ -243,8 +243,8 @@ export default function ReturnPolicy() {
                   <div>
                     <h4 className="font-semibold text-gray-900">Ship the Item Back</h4>
                     <p className="text-sm text-gray-600">
-                      Pack the item securely and ship it to our return address. For defective items, we'll provide
-                      a prepaid shipping label. Add your tracking number in "My Returns".
+                      Pack the item securely and ship it to our return address as instructed by our admin.
+                      For defective items, we'll arrange free return shipping.
                     </p>
                   </div>
                 </div>
@@ -310,15 +310,26 @@ export default function ReturnPolicy() {
                 please don't hesitate to contact us.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-semibold text-gray-900 mb-1">Email Support</h4>
-                  <p className="text-sm text-gray-600">support@autolabs.my</p>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-semibold text-gray-900 mb-1">Phone Support</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <a
+                  href="https://wa.me/60342977668?text=Hi%2C%20I%20need%20help%20with%20a%20return."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors text-center"
+                >
+                  <h4 className="font-semibold text-green-800 mb-1">WhatsApp</h4>
+                  <p className="text-sm text-green-700">Tap to Chat</p>
+                  <p className="text-xs text-green-600">Fastest response</p>
+                </a>
+                <div className="p-4 bg-gray-50 rounded-lg text-center">
+                  <h4 className="font-semibold text-gray-900 mb-1">Phone</h4>
                   <p className="text-sm text-gray-600">03-4297 7668</p>
                   <p className="text-xs text-gray-500">Mon-Fri, 9am-6pm</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg text-center">
+                  <h4 className="font-semibold text-gray-900 mb-1">Email</h4>
+                  <p className="text-sm text-gray-600">support@autolab.my</p>
+                  <p className="text-xs text-gray-500">Reply within 24hrs</p>
                 </div>
               </div>
             </CardContent>
@@ -328,11 +339,11 @@ export default function ReturnPolicy() {
         {/* CTA */}
         <div className="mt-8 text-center">
           <p className="text-gray-600 mb-4">
-            Ready to start a return?
+            Need to request a return?
           </p>
-          <Link to="/my-orders">
+          <Link to="/return-request">
             <Button className="bg-lime-600 hover:bg-lime-700">
-              Go to My Orders
+              Contact Admin for Return
             </Button>
           </Link>
         </div>

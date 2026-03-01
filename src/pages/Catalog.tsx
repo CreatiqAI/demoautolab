@@ -51,20 +51,11 @@ interface ProductCategory {
   description?: string;
 }
 
-interface Manufacturer {
-  id: string;
-  name: string;
-  description?: string;
-  country?: string;
-  is_active: boolean;
-}
-
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedBrand, setSelectedBrand] = useState<string>(searchParams.get('brand') || 'all');
   const [selectedCategory, setSelectedCategory] = useState<string>(searchParams.get('category') || 'all');
-  const [selectedManufacturer, setSelectedManufacturer] = useState<string>(searchParams.get('manufacturer') || 'all');
   const navigate = useNavigate();
 
   // Mobile pagination settings
@@ -90,7 +81,7 @@ const Catalog = () => {
 
   // Fetch products with pricing based on customer type
   const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['products', searchTerm, selectedBrand, selectedCategory, selectedManufacturer],
+    queryKey: ['products', searchTerm, selectedBrand, selectedCategory],
     queryFn: async () => {
       // Direct query to get products with categories and manufacturers
       const { data: directData, error: directError } = await supabase
@@ -160,10 +151,6 @@ const Catalog = () => {
         filteredData = filteredData.filter((item: any) => item.category?.id === selectedCategory);
       }
 
-      if (selectedManufacturer !== 'all') {
-        filteredData = filteredData.filter((item: any) => item.manufacturer_id === selectedManufacturer);
-      }
-
       // Ensure product_images is always an array
       return filteredData.map((item: any) => ({
         ...item,
@@ -172,17 +159,16 @@ const Catalog = () => {
     },
   });
 
-  // Reset to first page when search, brand, category, or manufacturer changes
+  // Reset to first page when search, brand, or category changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedBrand, selectedCategory, selectedManufacturer]);
+  }, [searchTerm, selectedBrand, selectedCategory]);
 
   // Update search term, selected brand, category, and manufacturer when URL changes
   useEffect(() => {
     const searchFromUrl = searchParams.get('search');
     const brandFromUrl = searchParams.get('brand') || 'all';
     const categoryFromUrl = searchParams.get('category') || 'all';
-    const manufacturerFromUrl = searchParams.get('manufacturer') || 'all';
 
     if (searchFromUrl !== searchTerm) {
       setSearchTerm(searchFromUrl || '');
@@ -195,11 +181,7 @@ const Catalog = () => {
     if (categoryFromUrl !== selectedCategory) {
       setSelectedCategory(categoryFromUrl);
     }
-
-    if (manufacturerFromUrl !== selectedManufacturer) {
-      setSelectedManufacturer(manufacturerFromUrl);
-    }
-  }, [searchParams, searchTerm, selectedBrand, selectedCategory, selectedManufacturer]);
+  }, [searchParams, searchTerm, selectedBrand, selectedCategory]);
 
   // Update URL when brand changes
   const handleBrandChange = (brand: string) => {
@@ -219,17 +201,6 @@ const Catalog = () => {
       searchParams.delete('category');
     } else {
       searchParams.set('category', category);
-    }
-    setSearchParams(searchParams);
-  };
-
-  // Update URL when manufacturer changes
-  const handleManufacturerChange = (manufacturer: string) => {
-    setSelectedManufacturer(manufacturer);
-    if (manufacturer === 'all') {
-      searchParams.delete('manufacturer');
-    } else {
-      searchParams.set('manufacturer', manufacturer);
     }
     setSearchParams(searchParams);
   };
@@ -294,31 +265,6 @@ const Catalog = () => {
       }
     },
   });
-
-  // Fetch manufacturers
-  const { data: manufacturers = [] } = useQuery({
-    queryKey: ['manufacturers'],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('manufacturers')
-          .select('id, name, description, country, is_active')
-          .eq('is_active', true)
-          .order('display_order', { ascending: true });
-
-        if (!error && data) {
-          return data as Manufacturer[];
-        } else {
-          console.warn('Manufacturers query failed:', error);
-          return [];
-        }
-      } catch (error) {
-        console.warn('Manufacturers query failed:', error);
-        return [];
-      }
-    },
-  });
-
 
   const getPrimaryImage = (images: Product['product_images']) => {
     const primaryImage = images.find(img => img.is_primary) || images[0];
@@ -407,9 +353,9 @@ const Catalog = () => {
           {/* Mobile Filters - Shows only on small screens */}
           <div className="lg:hidden mb-6">
             <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 shadow-md">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Search Input */}
-                <div className="sm:col-span-3">
+                <div className="sm:col-span-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
@@ -455,26 +401,10 @@ const Catalog = () => {
                   </SelectContent>
                 </Select>
 
-                {/* Manufacturer Filter */}
-                <Select value={selectedManufacturer} onValueChange={handleManufacturerChange}>
-                  <SelectTrigger className="h-10 bg-gray-50 border-gray-200 rounded-lg text-sm">
-                    <SelectValue placeholder="Manufacturer" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border border-gray-200 rounded-xl shadow-lg max-h-[280px]">
-                    <SelectItem value="all" className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
-                      All Manufacturers
-                    </SelectItem>
-                    {manufacturers.map((manufacturer) => (
-                      <SelectItem key={manufacturer.id} value={manufacturer.id} className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
-                        {manufacturer.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               {/* Active Filters Mobile */}
-              {(selectedCategory !== 'all' || selectedBrand !== 'all' || selectedManufacturer !== 'all' || searchTerm) && (
+              {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
                 <div className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-2 flex-wrap">
                   {selectedCategory !== 'all' && (
                     <button onClick={() => handleCategoryChange('all')} className="flex items-center gap-1 px-2 py-1 bg-lime-50 text-lime-700 text-[10px] font-bold rounded-lg hover:bg-lime-100">
@@ -485,12 +415,6 @@ const Catalog = () => {
                   {selectedBrand !== 'all' && (
                     <button onClick={() => handleBrandChange('all')} className="flex items-center gap-1 px-2 py-1 bg-lime-50 text-lime-700 text-[10px] font-bold rounded-lg hover:bg-lime-100">
                       {brands.find(b => b.id === selectedBrand)?.name}
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                  {selectedManufacturer !== 'all' && (
-                    <button onClick={() => handleManufacturerChange('all')} className="flex items-center gap-1 px-2 py-1 bg-lime-50 text-lime-700 text-[10px] font-bold rounded-lg hover:bg-lime-100">
-                      {manufacturers.find(m => m.id === selectedManufacturer)?.name}
                       <X className="h-3 w-3" />
                     </button>
                   )}
@@ -505,7 +429,6 @@ const Catalog = () => {
                       setSearchTerm('');
                       setSelectedBrand('all');
                       setSelectedCategory('all');
-                      setSelectedManufacturer('all');
                       setSearchParams(new URLSearchParams());
                     }}
                     className="ml-auto text-[10px] font-bold uppercase tracking-wide text-lime-600 hover:text-lime-700"
@@ -594,44 +517,15 @@ const Catalog = () => {
                   </div>
                 </div>
 
-                {/* Manufacturer Filter */}
-                <div className="mb-5">
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Manufacturer</label>
-                  <div className="flex flex-col gap-1.5 max-h-[240px] overflow-y-auto pr-1">
-                    <button
-                      onClick={() => handleManufacturerChange('all')}
-                      className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedManufacturer === 'all'
-                        ? 'bg-lime-500 text-white shadow-sm'
-                        : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
-                        }`}
-                    >
-                      All Manufacturers
-                    </button>
-                    {manufacturers.map((manufacturer) => (
-                      <button
-                        key={manufacturer.id}
-                        onClick={() => handleManufacturerChange(manufacturer.id)}
-                        className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedManufacturer === manufacturer.id
-                          ? 'bg-lime-500 text-white shadow-sm'
-                          : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
-                          }`}
-                      >
-                        {manufacturer.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Clear All Filters */}
-                {(selectedCategory !== 'all' || selectedBrand !== 'all' || selectedManufacturer !== 'all' || searchTerm) && (
+                {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
                   <div className="pt-3 border-t border-gray-200">
                     <button
                       onClick={() => {
                         setSearchTerm('');
                         setSelectedBrand('all');
                         setSelectedCategory('all');
-                        setSelectedManufacturer('all');
-                        setSearchParams(new URLSearchParams());
+                          setSearchParams(new URLSearchParams());
                       }}
                       className="w-full px-3 py-2 bg-gray-900 text-white text-xs font-bold uppercase tracking-wide rounded-lg hover:bg-lime-600 transition-colors"
                     >
@@ -649,13 +543,12 @@ const Catalog = () => {
                 <h2 className="text-base font-bold text-gray-900 uppercase">
                   {totalProducts} Products
                 </h2>
-                {(selectedCategory !== 'all' || selectedBrand !== 'all' || selectedManufacturer !== 'all' || searchTerm) && (
+                {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
                   <button
                     onClick={() => {
                       setSearchTerm('');
                       setSelectedBrand('all');
                       setSelectedCategory('all');
-                      setSelectedManufacturer('all');
                       setSearchParams(new URLSearchParams());
                     }}
                     className="text-xs font-bold uppercase tracking-wide text-lime-600 hover:text-lime-700 transition-colors"
@@ -694,7 +587,6 @@ const Catalog = () => {
                       setSearchTerm('');
                       setSelectedBrand('all');
                       setSelectedCategory('all');
-                      setSelectedManufacturer('all');
                       setSearchParams(new URLSearchParams());
                     }}
                     className="px-6 py-3 bg-gray-900 text-white font-bold uppercase tracking-wide text-sm hover:bg-lime-600 transition-all rounded-lg"
