@@ -121,7 +121,7 @@ const MerchantConsole = () => {
             .from('premium_partnerships' as any)
             .select('*')
             .eq('merchant_id', profile.id)
-            .single();
+            .maybeSingle();
 
           if (!partnershipError && partnershipData) {
             const plan = (partnershipData as any).subscription_plan;

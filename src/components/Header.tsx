@@ -127,7 +127,7 @@ const Header = () => {
               .from('premium_partnerships' as any)
               .select('subscription_end_date, subscription_status, admin_approved, subscription_plan')
               .eq('merchant_id', profile.id)
-              .single();
+              .maybeSingle();
 
             if (!partnershipError) {
               setPartnership(partnershipData);

@@ -92,7 +92,7 @@ export default function ShopDetails() {
         .eq('id', shopId)
         .eq('subscription_status', 'ACTIVE')
         .eq('admin_approved', true)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 

@@ -186,7 +186,7 @@ export default function PremiumPartner() {
         .from('premium_partnerships' as any)
         .select('*')
         .eq('merchant_id', (profile as any).id)
-        .single();
+        .maybeSingle();
 
       if (existingPartnership) {
         setPartnership(existingPartnership as any);

@@ -215,7 +215,7 @@ export default function Customers() {
           .from('premium_partnerships' as any)
           .select('id')
           .eq('merchant_id', application.customer_id)
-          .single();
+          .maybeSingle();
 
         if (!existingPartnership) {
           const { error: partnershipError } = await supabase
