@@ -181,7 +181,6 @@ export default function NotificationSettings() {
         setWhatsappOptIn(false);
       }
     } catch (error: any) {
-      console.error('Error loading settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to load notification settings',
@@ -240,7 +239,6 @@ export default function NotificationSettings() {
         variant: 'default'
       });
     } catch (error: any) {
-      console.error('Error toggling notification:', error);
       toast({
         title: 'Error',
         description: 'Failed to update notification preference',
@@ -306,7 +304,6 @@ export default function NotificationSettings() {
         variant: 'default'
       });
     } catch (error: any) {
-      console.error('Error saving WhatsApp settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to save WhatsApp settings',
@@ -353,7 +350,6 @@ export default function NotificationSettings() {
         variant: 'default'
       });
     } catch (error: any) {
-      console.error('Error enabling all:', error);
       toast({
         title: 'Error',
         description: 'Failed to enable notifications',
@@ -388,7 +384,6 @@ export default function NotificationSettings() {
         variant: 'default'
       });
     } catch (error: any) {
-      console.error('Error disabling all:', error);
       toast({
         title: 'Error',
         description: 'Failed to disable notifications',

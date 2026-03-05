@@ -116,7 +116,6 @@ export class PDFProcessingService {
       };
 
     } catch (error) {
-      console.error('Error uploading PDF:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -162,7 +161,6 @@ export class PDFProcessingService {
       }, 1000);
 
     } catch (error) {
-      console.error('Error starting AI processing:', error);
       
       // Update status to failed
       await supabase
@@ -255,7 +253,6 @@ export class PDFProcessingService {
         .eq('id', documentId);
 
     } catch (error) {
-      console.error('Error processing document with AI:', error);
       
       // Update job as failed
       await supabase
@@ -318,7 +315,6 @@ export class PDFProcessingService {
         estimated_cost: parseFloat(data[0].estimated_cost) || 0
       };
     } catch (error) {
-      console.error('Error getting processing status:', error);
       return null;
     }
   }
@@ -343,7 +339,6 @@ export class PDFProcessingService {
 
       return data || [];
     } catch (error) {
-      console.error('Error getting document entries:', error);
       return [];
     }
   }
@@ -357,7 +352,6 @@ export class PDFProcessingService {
 
       return !error;
     } catch (error) {
-      console.error('Error approving entry:', error);
       return false;
     }
   }
@@ -386,7 +380,6 @@ export class PDFProcessingService {
 
       return !error;
     } catch (error) {
-      console.error('Error deleting document:', error);
       return false;
     }
   }

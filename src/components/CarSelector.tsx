@@ -75,14 +75,12 @@ export default function CarSelector({
         .order('sort_order', { ascending: true });
 
       if (error) {
-        console.error('Error fetching car makes:', error);
         // Set empty array on error - user can skip vehicle selection
         setMakes([]);
         return;
       }
       setMakes(data || []);
     } catch (error) {
-      console.error('Error fetching car makes:', error);
       setMakes([]);
     } finally {
       setLoadingMakes(false);
@@ -99,13 +97,11 @@ export default function CarSelector({
         .order('sort_order', { ascending: true });
 
       if (error) {
-        console.error('Error fetching car models:', error);
         setModels([]);
         return;
       }
       setModels(data || []);
     } catch (error) {
-      console.error('Error fetching car models:', error);
       setModels([]);
     } finally {
       setLoadingModels(false);

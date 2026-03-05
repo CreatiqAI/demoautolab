@@ -106,7 +106,6 @@ export default function Dashboard() {
 
         if (data) productsData = data;
       } catch (error) {
-        console.warn('Component library table may not exist:', error);
       }
 
       // Fetch customers using RPC to bypass RLS
@@ -116,7 +115,6 @@ export default function Dashboard() {
 
         if (data) customersData = data;
       } catch (error) {
-        console.warn('Customer profiles table may not exist:', error);
       }
 
       // Calculate time-based metrics (Today vs Yesterday)
@@ -176,7 +174,6 @@ export default function Dashboard() {
           .eq('admin_approved', false);
         pendingMerchants = count || 0;
       } catch (error) {
-        console.warn('Premium partnerships table may not exist:', error);
       }
 
       // Fetch pending reviews
@@ -188,7 +185,6 @@ export default function Dashboard() {
           .eq('status', 'pending');
         pendingReviews = count || 0;
       } catch (error) {
-        console.warn('Product reviews table may not exist:', error);
       }
 
       // Calculate today's best seller
@@ -203,7 +199,6 @@ export default function Dashboard() {
           try {
             items = JSON.parse(items);
           } catch (e) {
-            console.error('Failed to parse items:', e);
           }
         }
 
@@ -241,7 +236,6 @@ export default function Dashboard() {
 
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
     } finally {
       setLoading(false);
     }

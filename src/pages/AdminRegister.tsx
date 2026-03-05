@@ -89,7 +89,6 @@ export default function AdminRegister() {
         } as any]);
 
       if (profileError) {
-        console.error('Profile creation error:', profileError);
         toast({
           title: "Registration Failed",
           description: "Failed to create admin account. Username might already exist.",
@@ -106,7 +105,6 @@ export default function AdminRegister() {
       }
 
     } catch (error: any) {
-      console.error('Registration error:', error);
       toast({
         title: "Registration Failed",
         description: error.message || "Failed to create admin account. Please try again.",

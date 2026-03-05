@@ -112,7 +112,6 @@ const Catalog = () => {
         .order('created_at', { ascending: false });
 
       if (directError) {
-        console.error('Error fetching products:', directError);
         return [];
       }
 
@@ -232,11 +231,9 @@ const Catalog = () => {
           const uniqueBrands = [...new Set((data as any).map((item: any) => item.brand).filter(Boolean))] as string[];
           return uniqueBrands.map(brand => ({ id: brand, name: brand }));
         } else {
-          console.warn('Brands query failed:', error);
           return [];
         }
       } catch (error) {
-        console.warn('Brands query failed:', error);
         return [];
       }
     },
@@ -256,11 +253,9 @@ const Catalog = () => {
         if (!error && data) {
           return data;
         } else {
-          console.warn('Categories query failed:', error);
           return [];
         }
       } catch (error) {
-        console.warn('Categories query failed:', error);
         return [];
       }
     },

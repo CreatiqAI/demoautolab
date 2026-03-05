@@ -83,6 +83,8 @@ export default function ProductsPro() {
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewProduct, setPreviewProduct] = useState<any>(null);
@@ -201,7 +203,6 @@ export default function ProductsPro() {
 
       // If the join fails, try without category join
       if (error) {
-        console.warn('Category join failed, fetching products without categories:', error);
         const fallbackResult = await supabase
           .from('products_new' as any)
           .select('*')
@@ -215,7 +216,6 @@ export default function ProductsPro() {
       setProducts((data as any) || []);
       setFilteredProducts((data as any) || []);
     } catch (error: any) {
-      console.error('Error fetching products:', error);
       toast({
         title: "Error",
         description: "Failed to load products",
@@ -237,12 +237,32 @@ export default function ProductsPro() {
       if (error) throw error;
       setCategories((data as any) || []);
     } catch (error: any) {
-      console.error('Error fetching categories:', error);
       toast({
         title: "Error",
         description: "Failed to load categories",
         variant: "destructive"
       });
+    }
+  };
+
+  const createCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    try {
+      const slug = newCategoryName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const { data, error } = await supabase
+        .from('categories' as any)
+        .insert({ name: newCategoryName.trim(), slug, active: true })
+        .select()
+        .single();
+
+      if (error) throw error;
+      setCategories(prev => [...prev, data as any].sort((a, b) => a.name.localeCompare(b.name)));
+      setFormData(prev => ({ ...prev, category_id: (data as any).id }));
+      setNewCategoryName('');
+      setIsCreatingCategory(false);
+      toast({ title: "Category created", description: `"${newCategoryName.trim()}" has been added` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to create category", variant: "destructive" });
     }
   };
 
@@ -257,7 +277,6 @@ export default function ProductsPro() {
         return;
       }
 
-      console.warn('Helper function failed, trying direct query:', functionError);
 
       // Fallback to direct table query
       const { data, error } = await supabase
@@ -269,7 +288,6 @@ export default function ProductsPro() {
       if (error) throw error;
       setAllComponents((data as any) || []);
     } catch (error: any) {
-      console.error('Error fetching components:', error);
       toast({
         title: "Error",
         description: "Failed to load components. Please check permissions and ensure the database schema is updated.",
@@ -287,7 +305,6 @@ export default function ProductsPro() {
       if (error) throw error;
       setSearchResults((data as any) || []);
     } catch (error: any) {
-      console.error('Component search error:', error);
       // Fallback to direct query if function doesn't exist
       const { data, error: fallbackError } = await supabase
         .from('component_library' as any)
@@ -324,7 +341,6 @@ export default function ProductsPro() {
       if (error) throw error;
       return data || '';
     } catch (error) {
-      console.error('Error generating slug:', error);
       return name.toLowerCase()
         .replace(/[^a-zA-Z0-9\s]/g, '')
         .replace(/\s+/g, '-')
@@ -483,7 +499,6 @@ export default function ProductsPro() {
           }]);
 
         if (linkError) {
-          console.warn('Component already linked to product or other linking error:', linkError);
         }
       }
 
@@ -504,7 +519,6 @@ export default function ProductsPro() {
           .upsert(installationData, { onConflict: 'product_id' });
 
         if (installError) {
-          console.warn('Error saving installation guide:', installError);
         }
       } else {
         // Remove installation guide if unchecked
@@ -523,7 +537,6 @@ export default function ProductsPro() {
       resetForm();
       fetchProducts();
     } catch (error: any) {
-      console.error('Error saving product:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to save product",
@@ -591,9 +604,6 @@ export default function ProductsPro() {
         .eq('product_id', product.id)
         .single();
 
-      if (compError) console.error('Error loading components:', compError);
-      if (imgError) console.error('Error loading images:', imgError);
-      if (installError && installError.code !== 'PGRST116') console.error('Error loading installation guide:', installError);
 
       const components = (productComponents as any)?.map((pc: any) => ({
         ...pc.component_library,
@@ -676,8 +686,6 @@ export default function ProductsPro() {
         .eq('product_id', product.id)
         .order('sort_order');
 
-      if (compError) console.error('Error loading components:', compError);
-      if (imgError) console.error('Error loading images:', imgError);
 
       // Transform components data same as ProductDetails.tsx
       const transformedComponents = (productComponentData || []).map((item: any, index: number) => {
@@ -704,7 +712,6 @@ export default function ProductsPro() {
       setPreviewProduct(enhancedProduct);
       setIsPreviewOpen(true);
     } catch (error: any) {
-      console.error('Error loading product preview:', error);
       // Still show preview but without components/images
       setPreviewProduct(product);
       setIsPreviewOpen(true);
@@ -717,13 +724,13 @@ export default function ProductsPro() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Products</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Products</h1>
           <p className="text-muted-foreground">Create products using components from your library</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchProducts}>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={fetchProducts}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
@@ -734,7 +741,7 @@ export default function ProductsPro() {
                 Create Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
               <DialogHeader>
                 <DialogTitle>{editingProduct ? 'Edit Product' : 'Create New Product'}</DialogTitle>
                 <DialogDescription>
@@ -744,7 +751,7 @@ export default function ProductsPro() {
 
               <form onSubmit={handleSubmit}>
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-4">
+                  <TabsList className="flex w-full overflow-x-auto">
                     <TabsTrigger value="basic">Product Details</TabsTrigger>
                     <TabsTrigger value="components">
                       Components ({formData.selectedComponents.length})
@@ -758,7 +765,7 @@ export default function ProductsPro() {
 
                   {/* Basic Product Info */}
                   <TabsContent value="basic" className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="name">Product Name *</Label>
                         <Input
@@ -780,22 +787,45 @@ export default function ProductsPro() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="category_id">Category</Label>
-                        <Select
-                          value={formData.category_id}
-                          onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="no-category">No Category</SelectItem>
-                            {categories.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
-                                {category.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {isCreatingCategory ? (
+                          <div className="flex gap-2">
+                            <Input
+                              value={newCategoryName}
+                              onChange={(e) => setNewCategoryName(e.target.value)}
+                              placeholder="New category name"
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createCategory(); } }}
+                              autoFocus
+                            />
+                            <Button type="button" size="sm" onClick={createCategory} disabled={!newCategoryName.trim()}>
+                              Add
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => setIsCreatingCategory(false)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Select
+                              value={formData.category_id}
+                              onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: value }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="no-category">No Category</SelectItem>
+                                {categories.map((category) => (
+                                  <SelectItem key={category.id} value={category.id}>
+                                    {category.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setIsCreatingCategory(true)}>
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="brand">Brand *</Label>
@@ -919,7 +949,7 @@ export default function ProductsPro() {
                     <div className="pt-6 pb-8 border-t">
                       <div className="space-y-4">
                         <h4 className="font-medium text-gray-900">Product Settings</h4>
-                        <div className="flex gap-8">
+                        <div className="flex flex-wrap gap-4 sm:gap-8">
                           <div className="flex items-start space-x-3">
                             <Switch
                               checked={formData.active}
@@ -978,7 +1008,7 @@ export default function ProductsPro() {
                             )}
                             
                             {(searchTerm ? searchResults : allComponents).map((component) => (
-                              <div key={component.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                              <div key={component.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 border rounded-lg hover:bg-gray-50">
                                 <div className="flex items-center space-x-3">
                                   {component.default_image_url ? (
                                     <img 
@@ -1012,8 +1042,27 @@ export default function ProductsPro() {
                             ))}
                             
                             {!searchLoading && (searchTerm ? searchResults : allComponents).length === 0 && (
-                              <div className="text-center py-8 text-muted-foreground">
-                                {searchTerm ? 'No components found matching your search.' : 'No components available. Create components in the Component Library first.'}
+                              <div className="text-center py-8 space-y-3">
+                                <Package className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                                <p className="text-muted-foreground">
+                                  {searchTerm ? 'No components found matching your search.' : 'No components available yet.'}
+                                </p>
+                                {!searchTerm && (
+                                  <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">
+                                      Components are the building blocks of your products (e.g., screens, speakers, cables).
+                                    </p>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => window.open('/admin/component-library', '_blank')}
+                                    >
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Go to Component Library
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </CardContent>
@@ -1080,7 +1129,7 @@ export default function ProductsPro() {
                   <TabsContent value="images" className="space-y-4">
                     <div>
                       <h3 className="text-lg font-medium mb-4">Product Images</h3>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {[...Array(4)].map((_, index) => (
                           <div key={index} className="space-y-2">
                             <Label>Image {index + 1} {index === 0 && '(Primary)'}</Label>
@@ -1126,7 +1175,7 @@ export default function ProductsPro() {
                       {formData.installation.has_installation_guide && (
                         <>
                           {/* Installation Details Grid */}
-                          <div className="grid grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="space-y-2">
                               <Label className="flex items-center gap-1">
                                 <Clock className="h-4 w-4" />
@@ -1358,9 +1407,9 @@ export default function ProductsPro() {
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Select value={brandFilter} onValueChange={setBrandFilter}>
-                  <SelectTrigger className="w-[150px]">
+                  <SelectTrigger className="w-full sm:w-[150px]">
                     <SelectValue placeholder="All Brands" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1371,7 +1420,7 @@ export default function ProductsPro() {
                   </SelectContent>
                 </Select>
                 <Select value={screenSizeFilter} onValueChange={setScreenSizeFilter}>
-                  <SelectTrigger className="w-[150px]">
+                  <SelectTrigger className="w-full sm:w-[150px]">
                     <SelectValue placeholder="All Sizes" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1382,7 +1431,7 @@ export default function ProductsPro() {
                   </SelectContent>
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[150px]">
+                  <SelectTrigger className="w-full sm:w-[150px]">
                     <SelectValue placeholder="All Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1404,7 +1453,7 @@ export default function ProductsPro() {
           ) : (
             <div className="space-y-4">
               {filteredProducts.map((product) => (
-                <div key={product.id} className="flex justify-between items-center p-4 border rounded-lg">
+                <div key={product.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 p-4 border rounded-lg">
                   <div>
                     <h3 className="font-medium">{product.name}</h3>
                     <p className="text-sm text-muted-foreground">
@@ -1431,7 +1480,7 @@ export default function ProductsPro() {
                       {product.featured && <Badge variant="outline">Featured</Badge>}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 self-end sm:self-auto">
                     <Button 
                       size="sm" 
                       variant="ghost"
@@ -1459,7 +1508,6 @@ export default function ProductsPro() {
                               .rpc as any)('delete_product', { product_id: product.id });
 
                             if (functionError) {
-                              console.error('Function delete error:', functionError);
                               // Fallback to direct deletion if function fails
                               const { error: directError } = await supabase
                                 .from('products_new' as any)
@@ -1488,7 +1536,6 @@ export default function ProductsPro() {
 
                             fetchProducts();
                           } catch (error: any) {
-                            console.error('Error deleting product:', error);
                             toast({
                               title: "Error",
                               description: error.message || "Failed to delete product",

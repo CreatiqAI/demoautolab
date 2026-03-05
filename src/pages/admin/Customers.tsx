@@ -110,7 +110,6 @@ export default function Customers() {
       setCustomers((data as any) || []);
 
     } catch (error: any) {
-      console.error('Error fetching customers:', error);
       toast({
         title: "Error",
         description: "Failed to fetch customers",
@@ -176,7 +175,6 @@ export default function Customers() {
 
       setApplications(enrichedApplications);
     } catch (error: any) {
-      console.error('Error fetching applications:', error);
       toast({
         title: "Error",
         description: `Failed to fetch merchant applications: ${error.message}`,
@@ -238,11 +236,9 @@ export default function Customers() {
             }]);
 
           if (partnershipError) {
-            console.error('Error creating professional subscription:', partnershipError);
           }
         }
       } catch (partnershipErr) {
-        console.error('Error checking/creating partnership:', partnershipErr);
       }
 
       // 3. Auto-create RM50 Welcome Voucher for this merchant
@@ -276,11 +272,9 @@ export default function Customers() {
             }]);
 
           if (voucherError) {
-            console.error('Error creating welcome voucher:', voucherError);
           }
         }
       } catch (voucherErr) {
-        console.error('Error checking/creating welcome voucher:', voucherErr);
       }
 
       toast({
@@ -292,7 +286,6 @@ export default function Customers() {
       fetchMerchantApplications();
       fetchCustomers();
     } catch (error: any) {
-      console.error('Error approving application:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to approve application",
@@ -335,7 +328,6 @@ export default function Customers() {
       setRejectionReason('');
       fetchMerchantApplications();
     } catch (error: any) {
-      console.error('Error rejecting application:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to reject application",
@@ -395,7 +387,6 @@ export default function Customers() {
 
       setOrderStats({ totalOrders, totalSpent });
     } catch (error: any) {
-      console.error('Error fetching order stats:', error);
     }
   };
 
@@ -432,7 +423,6 @@ export default function Customers() {
 
       setCustomerOrders(data || []);
     } catch (error: any) {
-      console.error('Error fetching customer orders:', error);
       toast({
         title: 'Error',
         description: 'Failed to load customer orders',
@@ -471,7 +461,6 @@ export default function Customers() {
         setMerchantDetails(null);
       }
     } catch (error) {
-      console.error('Error fetching merchant details:', error);
       setMerchantDetails(null);
     }
   };
@@ -501,7 +490,6 @@ export default function Customers() {
       setCustomerToAction(null);
       fetchCustomers();
     } catch (error: any) {
-      console.error('Error suspending customer:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to suspend account',
@@ -531,7 +519,6 @@ export default function Customers() {
 
       fetchCustomers();
     } catch (error: any) {
-      console.error('Error reactivating customer:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to reactivate account',
@@ -565,7 +552,6 @@ export default function Customers() {
       setCustomerToAction(null);
       fetchCustomers();
     } catch (error: any) {
-      console.error('Error deleting customer:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to delete customer',

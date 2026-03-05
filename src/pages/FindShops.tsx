@@ -123,7 +123,6 @@ export default function FindShops() {
 
       setShops((data as any) || []);
     } catch (error: any) {
-      console.error('Error fetching shops:', error);
       toast({
         title: 'Error',
         description: 'Failed to load authorized Panel shops',

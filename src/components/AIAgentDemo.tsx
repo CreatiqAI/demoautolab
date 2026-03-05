@@ -57,7 +57,6 @@ export const AIAgentDemo: React.FC = () => {
       setMessages(prev => [...prev, aiMessage]);
 
     } catch (error) {
-      console.error('Error getting AI response:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',

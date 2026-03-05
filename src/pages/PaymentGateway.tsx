@@ -130,7 +130,6 @@ export default function PaymentGateway() {
 
         // If function doesn't exist, fall back to direct order update
         if (error?.code === '42883') { // Function does not exist
-          console.warn('⚠️ Payment processing function not found, updating order directly');
 
           if (success) {
             // For successful payment, update to SUCCESS and PROCESSING status
@@ -153,7 +152,6 @@ export default function PaymentGateway() {
               .select();
 
             if (updateError) {
-              console.error('❌ Order update error:', updateError);
               throw updateError;
             }
 
@@ -176,12 +174,10 @@ export default function PaymentGateway() {
               .select();
 
             if (updateError) {
-              console.error('Order update error:', updateError);
             }
 
           }
         } else if (error && success) {
-          console.error('❌ Payment processing error:', error);
           throw error;
         } else if (!error && success) {
         }
@@ -196,13 +192,11 @@ export default function PaymentGateway() {
 
 
           if (verifyError) {
-            console.error('❌ Error verifying payment update:', verifyError);
             throw new Error('Failed to verify payment update');
           }
 
           // Check if payment_state was actually updated to SUCCESS
           if (verifyData.payment_state !== 'SUCCESS') {
-            console.error('❌ Payment state not updated! Current state:', verifyData.payment_state);
             throw new Error(`Payment update failed - payment state is still ${verifyData.payment_state}`);
           }
 
@@ -241,7 +235,6 @@ export default function PaymentGateway() {
             .eq('id', partnershipId);
 
           if (renewalError) {
-            console.error('Error renewing subscription:', renewalError);
             throw renewalError;
           }
 
@@ -265,7 +258,6 @@ export default function PaymentGateway() {
           });
 
           if (confirmError) {
-            console.error('Error confirming history access:', confirmError);
           }
 
           toast({
@@ -342,7 +334,6 @@ export default function PaymentGateway() {
       }
 
     } catch (error: any) {
-      console.error('Payment processing error:', error);
       toast({
         title: "Payment Error",
         description: error.message || "An unexpected error occurred during payment processing",

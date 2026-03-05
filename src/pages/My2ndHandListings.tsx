@@ -136,7 +136,6 @@ export default function My2ndHandListings() {
       // Fetch listings
       await fetchListings(profile.id);
     } catch (error) {
-      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -150,7 +149,6 @@ export default function My2ndHandListings() {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching listings:', error);
       toast({
         title: 'Error',
         description: 'Failed to load your listings',
@@ -204,7 +202,6 @@ export default function My2ndHandListings() {
         description: `${files.length} image(s) uploaded successfully`
       });
     } catch (error: any) {
-      console.error('Upload error:', error);
       toast({
         title: 'Upload Failed',
         description: error.message || 'Failed to upload images',
@@ -297,7 +294,6 @@ export default function My2ndHandListings() {
       await fetchListings(merchantProfileId!);
       setActiveTab('listings');
     } catch (error: any) {
-      console.error('Submit error:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to create listing',

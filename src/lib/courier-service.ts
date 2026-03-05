@@ -140,7 +140,6 @@ export class JNTExpressService {
    */
   async createShipment(request: ShipmentRequest): Promise<ShipmentResponse> {
     // MOCK IMPLEMENTATION - Replace with actual API call
-    console.log('🚚 Creating J&T Express shipment:', request);
 
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -223,7 +222,6 @@ export class JNTExpressService {
    */
   async trackShipment(trackingNumber: string): Promise<TrackingInfo> {
     // MOCK IMPLEMENTATION
-    console.log('📍 Tracking J&T shipment:', trackingNumber);
 
     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -262,7 +260,6 @@ export class JNTExpressService {
    */
   async cancelShipment(trackingNumber: string): Promise<{ success: boolean; message: string }> {
     // MOCK IMPLEMENTATION
-    console.log('❌ Cancelling J&T shipment:', trackingNumber);
 
     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -291,7 +288,6 @@ export class LalamoveService {
    */
   async createShipment(request: ShipmentRequest): Promise<ShipmentResponse> {
     // MOCK IMPLEMENTATION
-    console.log('🚚 Creating Lalamove delivery:', request);
 
     await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -379,7 +375,6 @@ export class LalamoveService {
    */
   async trackShipment(trackingNumber: string): Promise<TrackingInfo> {
     // MOCK IMPLEMENTATION
-    console.log('📍 Tracking Lalamove delivery:', trackingNumber);
 
     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -412,7 +407,6 @@ export class LalamoveService {
    */
   async cancelShipment(trackingNumber: string): Promise<{ success: boolean; message: string }> {
     // MOCK IMPLEMENTATION
-    console.log('❌ Cancelling Lalamove delivery:', trackingNumber);
 
     await new Promise(resolve => setTimeout(resolve, 500));
 

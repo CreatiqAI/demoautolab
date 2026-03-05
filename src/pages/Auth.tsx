@@ -157,7 +157,7 @@ const Auth = () => {
 
     setLoading(true);
     const normalizedPhone = normalizePhone(merchantOtpForm.phone);
-    const { error, code } = await sendPhoneOTP(normalizedPhone);
+    const { error } = await sendPhoneOTP(normalizedPhone);
 
     if (error) {
       toast.error(error.message || 'Failed to send OTP. Please try again.');
@@ -165,12 +165,7 @@ const Auth = () => {
       return;
     }
 
-    // Show the dummy OTP code (for testing)
-    if (code) {
-      toast.success(`OTP sent! For testing, use code: ${code}`, { duration: 10000 });
-    } else {
-      toast.success('OTP sent to your phone!');
-    }
+    toast.success('OTP sent to your phone!');
 
     setOtpSent(true);
     setAuthStep('merchant-otp');
@@ -221,16 +216,12 @@ const Auth = () => {
 
     setLoading(true);
     const normalizedPhone = normalizePhone(merchantOtpForm.phone);
-    const { error, code } = await sendPhoneOTP(normalizedPhone);
+    const { error } = await sendPhoneOTP(normalizedPhone);
 
     if (error) {
       toast.error('Failed to resend OTP');
     } else {
-      if (code) {
-        toast.success(`OTP resent! For testing, use code: ${code}`, { duration: 10000 });
-      } else {
-        toast.success('OTP resent to your phone!');
-      }
+      toast.success('OTP resent to your phone!');
       setResendTimer(60);
     }
     setLoading(false);

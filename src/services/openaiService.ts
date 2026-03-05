@@ -85,7 +85,6 @@ export class OpenAIService {
       };
 
     } catch (error) {
-      console.error('Error analyzing PDF with OpenAI:', error);
       
       return {
         success: false,
@@ -181,7 +180,6 @@ Make sure each entry is complete, accurate, and would be helpful for answering c
         summary: parsed.summary || 'Analysis completed'
       };
     } catch (error) {
-      console.error('Error parsing OpenAI response:', error);
       
       // Fallback parsing - try to extract some basic information
       return {
@@ -276,7 +274,6 @@ Please respond with a JSON object:
         };
       }
     } catch (error) {
-      console.error('Error improving knowledge base entry:', error);
     }
 
     return { title, content, tags: [] };
@@ -309,7 +306,6 @@ Please respond with a JSON array of questions:
         return JSON.parse(result);
       }
     } catch (error) {
-      console.error('Error generating questions:', error);
     }
 
     return [];

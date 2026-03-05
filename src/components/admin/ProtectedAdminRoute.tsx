@@ -24,7 +24,6 @@ export default function ProtectedAdminRoute({
           setAdminUser(adminData);
         }
       } catch (error) {
-        console.error('Error parsing admin user:', error);
         localStorage.removeItem('admin_user');
       } finally {
         setLoading(false);

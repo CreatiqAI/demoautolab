@@ -58,7 +58,6 @@ export default function UserManagement() {
       if (!functionError && functionData) {
         usersData = functionData;
       } else {
-        console.warn('Admin function failed, trying fallback approach:', functionError);
         
         // Fallback: try to query admin profiles directly
         const { data: viewData, error: viewError } = await supabase
@@ -69,7 +68,6 @@ export default function UserManagement() {
         if (!viewError && viewData) {
           usersData = viewData;
         } else {
-          console.warn('Admin profiles query failed, trying basic approach:', viewError);
           // Create mock data if tables don't exist
           usersData = [];
         }
@@ -102,7 +100,6 @@ export default function UserManagement() {
       setUsers(transformedUsers);
 
     } catch (error: any) {
-      console.error('Error fetching admin users:', error);
       setUsers([]);
       // Don't show error toast since this is expected when database isn't fully set up
     } finally {
@@ -125,7 +122,6 @@ export default function UserManagement() {
       setIsDeleteDialogOpen(false);
       
     } catch (error: any) {
-      console.error('Error deleting user:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to delete user",

@@ -84,7 +84,6 @@ export default function OrderVerification() {
 
       setOrders(orderData || []);
     } catch (error: any) {
-      console.error('Error fetching pending orders:', error);
       toast({
         title: "Error",
         description: "Failed to fetch pending orders",
@@ -181,7 +180,6 @@ export default function OrderVerification() {
 
       return true;
     } catch (error) {
-      console.error('❌ Error sending WhatsApp notification webhook:', error);
       // Don't throw error here as it shouldn't block the main approval process
       return false;
     }
@@ -215,7 +213,6 @@ export default function OrderVerification() {
         });
 
       if (error) {
-        console.error('Payment verification error:', error);
         throw error;
       }
 
@@ -258,7 +255,6 @@ export default function OrderVerification() {
       fetchPendingOrders();
 
     } catch (error: any) {
-      console.error('Error verifying payment:', error);
       toast({
         title: "Verification Failed",
         description: error.message || "Failed to process payment verification",

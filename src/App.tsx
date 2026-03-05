@@ -37,8 +37,6 @@ import UserSettings from './pages/Settings';
 import AdminLayout from './components/admin/AdminLayout';
 import ProtectedAdminRoute from './components/admin/ProtectedAdminRoute';
 import Dashboard from './pages/admin/Dashboard';
-import Products from './pages/admin/Products';
-import ProductsAdvanced from './pages/admin/ProductsAdvanced';
 import ComponentLibraryPro from './pages/admin/ComponentLibraryPro';
 import ProductsPro from './pages/admin/ProductsPro';
 import Orders from './pages/admin/Orders';
@@ -51,8 +49,6 @@ import KnowledgeBase from './pages/admin/KnowledgeBase';
 import InventoryAlerts from './pages/admin/InventoryAlerts';
 import VoucherManagement from './pages/admin/VoucherManagement';
 import ReviewModeration from './pages/admin/ReviewModeration';
-import ReviewsDebug from './pages/admin/ReviewsDebug';
-import DebugShops from './pages/admin/DebugShops';
 import PremiumPartners from './pages/admin/PremiumPartners';
 import CustomerTiers from './pages/admin/CustomerTiers';
 import SecondhandModeration from './pages/admin/SecondhandModeration';
@@ -145,9 +141,7 @@ const App = () => (
                   }>
                     <Route index element={<Dashboard />} />
                     <Route path="analytics" element={<Analytics />} />
-                    <Route path="products" element={<Products />} />
-                    <Route path="products-advanced" element={<ProductsAdvanced />} />
-                    <Route path="products-enhanced" element={<ProductsPro />} />
+                    <Route path="products" element={<ProductsPro />} />
                     <Route path="component-library" element={<ComponentLibraryPro />} />
                     <Route path="orders" element={<Orders />} />
                     <Route path="archived-orders" element={<ArchivedOrders />} />
@@ -155,8 +149,6 @@ const App = () => (
                     <Route path="inventory-alerts" element={<InventoryAlerts />} />
                     <Route path="customers" element={<Customers />} />
                     <Route path="review-moderation" element={<ReviewModeration />} />
-                    <Route path="reviews-debug" element={<ReviewsDebug />} />
-                    <Route path="debug-shops" element={<DebugShops />} />
                     <Route path="vouchers" element={<VoucherManagement />} />
                     <Route path="premium-partners" element={<PremiumPartners />} />
                     <Route path="customer-tiers" element={<CustomerTiers />} />

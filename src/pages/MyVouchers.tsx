@@ -57,7 +57,6 @@ export default function MyVouchers() {
 
       setVouchers((data as any) || []);
     } catch (error: any) {
-      console.error('Error fetching vouchers:', error);
       toast({
         title: 'Error',
         description: 'Failed to load vouchers',

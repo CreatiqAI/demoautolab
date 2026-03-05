@@ -106,7 +106,6 @@ export default function SecondhandModeration() {
 
       setListings(data || []);
     } catch (error: any) {
-      console.error('Error fetching listings:', error);
       toast({
         title: 'Error',
         description: 'Failed to load listings',
@@ -163,7 +162,6 @@ export default function SecondhandModeration() {
       await fetchListings();
       setShowDetailModal(false);
     } catch (error: any) {
-      console.error('Approve error:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to approve listing',
@@ -211,7 +209,6 @@ export default function SecondhandModeration() {
       setShowDetailModal(false);
       setRejectReason('');
     } catch (error: any) {
-      console.error('Reject error:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to reject listing',

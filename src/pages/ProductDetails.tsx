@@ -164,7 +164,6 @@ const ProductDetails = () => {
         .single();
 
       if (error) {
-        console.error('Error fetching product:', error);
         navigate('/catalog');
         return;
       }
@@ -176,7 +175,6 @@ const ProductDetails = () => {
 
       setProduct(productData);
     } catch (error) {
-      console.error('Error fetching product:', error);
       navigate('/catalog');
     }
   };
@@ -198,7 +196,6 @@ const ProductDetails = () => {
         .order('display_order', { ascending: true });
 
       if (productComponentError) {
-        console.error('Error fetching product components:', productComponentError);
         setComponents([]);
         return;
       }
@@ -225,7 +222,6 @@ const ProductDetails = () => {
 
       setComponents(transformedComponents);
     } catch (error: any) {
-      console.error('Error fetching components:', error);
       setComponents([]);
     } finally {
       setLoading(false);

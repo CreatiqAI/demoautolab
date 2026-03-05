@@ -57,7 +57,6 @@ export class AIAgentIntegration {
     const startTime = Date.now();
     
     try {
-      console.log('Processing customer question:', query.question);
       
       // Step 1: Find relevant knowledge base entries
       const relevantEntries = await this.searchKnowledgeBase(query);
@@ -75,7 +74,6 @@ export class AIAgentIntegration {
       return aiResponse;
       
     } catch (error) {
-      console.error('Error processing customer question:', error);
       return this.createErrorResponse(startTime);
     }
   }
@@ -85,13 +83,11 @@ export class AIAgentIntegration {
    */
   private async searchKnowledgeBase(query: CustomerQuery): Promise<KnowledgeSource[]> {
     try {
-      console.log('Searching knowledge base for:', query.question);
       
       // For now, use basic search since commercial function isn't deployed yet
       return await this.basicKnowledgeSearch(query);
       
     } catch (error) {
-      console.error('Error in knowledge base search:', error);
       return await this.basicKnowledgeSearch(query);
     }
   }
@@ -101,15 +97,12 @@ export class AIAgentIntegration {
    */
   private async basicKnowledgeSearch(query: CustomerQuery): Promise<KnowledgeSource[]> {
     try {
-      console.log('Starting basic knowledge search...');
       
       // Smart keyword extraction with stop words filtering
       const searchTerms = this.extractKeywords(query.question);
       
-      console.log('Search terms:', searchTerms);
       
       if (searchTerms.length === 0) {
-        console.log('No valid search terms found');
         return [];
       }
       
@@ -130,10 +123,8 @@ export class AIAgentIntegration {
           
           if (!phraseError && phraseResults && phraseResults.length > 0) {
             results = [...results, ...phraseResults];
-            console.log('Found', phraseResults.length, 'results from phrase search');
           }
         } catch (err) {
-          console.warn('Phrase search failed:', err);
         }
       }
       
@@ -157,10 +148,8 @@ export class AIAgentIntegration {
             !results.some(existing => existing.id === item.id)
           );
           results = [...results, ...newResults];
-          console.log('Found', newResults.length, 'new results from keyword search');
         }
       } catch (err) {
-        console.warn('Keyword search failed:', err);
       }
       
       // Strategy 3: If no approved results, search all entries
@@ -179,16 +168,13 @@ export class AIAgentIntegration {
           
           if (!allError && allResults) {
             results = allResults;
-            console.log('Found', results.length, 'results from all entries search');
           }
         } catch (err) {
-          console.warn('All entries search failed:', err);
         }
       }
       
       // Strategy 4: Fallback - get any entries if nothing found
       if (results.length === 0) {
-        console.log('No keyword matches found, trying fallback search...');
         try {
           const { data: fallbackResults, error: fallbackError } = await supabase
             .from('knowledge_base')
@@ -198,14 +184,11 @@ export class AIAgentIntegration {
           
           if (!fallbackError && fallbackResults) {
             results = fallbackResults;
-            console.log('Using fallback results:', results.length, 'entries');
           }
         } catch (err) {
-          console.warn('Fallback search failed:', err);
         }
       }
       
-      console.log('Total search results:', results.length);
       
       // Convert to KnowledgeSource format and calculate relevance
       const sources = results.map(entry => {
@@ -227,11 +210,9 @@ export class AIAgentIntegration {
         return bScore - aScore;
       });
       
-      console.log('Returning', sources.length, 'processed sources');
       return sources.slice(0, 5); // Return top 5 results
       
     } catch (error) {
-      console.error('Error in basic search:', error);
       return [];
     }
   }
@@ -243,8 +224,6 @@ export class AIAgentIntegration {
     const responseTime = Date.now();
     
     try {
-      console.log('Generating AI response for:', query.question);
-      console.log('Using', sources.length, 'knowledge sources');
       
       // Build context from relevant entries
       const context = this.buildContext(sources);
@@ -266,7 +245,6 @@ export class AIAgentIntegration {
       };
       
     } catch (error) {
-      console.error('Error generating AI response:', error);
       throw error;
     }
   }
@@ -280,7 +258,6 @@ export class AIAgentIntegration {
         return "I couldn't find specific information about your question in our knowledge base. Please contact our support team for personalized assistance.";
       }
 
-      console.log('Using AI to generate intelligent response...');
 
       // Prepare the prompt for AI
       const prompt = this.buildAIPrompt(query.question, sources, context);
@@ -289,18 +266,15 @@ export class AIAgentIntegration {
       try {
         const aiResponse = await this.callOpenAIService(query.question, sources);
         if (aiResponse && aiResponse.trim()) {
-          console.log('AI response generated successfully');
           return aiResponse;
         }
       } catch (aiError) {
-        console.warn('OpenAI service call failed, using structured fallback:', aiError);
       }
       
       // Fallback to structured response if AI fails
       return this.generateStructuredAnswer(query, sources, context);
       
     } catch (error) {
-      console.error('Error in intelligent response generation:', error);
       return this.generateStructuredAnswer(query, sources, context);
     }
   }
@@ -310,7 +284,6 @@ export class AIAgentIntegration {
    */
   private async callOpenAIService(question: string, sources: KnowledgeSource[]): Promise<string> {
     try {
-      console.log('Calling customer service AI edge function...');
       
       // Use dedicated customer service edge function
       const { data, error } = await supabase.functions.invoke('customer-service-ai', {
@@ -326,25 +299,20 @@ export class AIAgentIntegration {
       });
 
       if (error) {
-        console.error('Customer service AI error:', error);
         throw new Error(`AI service error: ${error.message}`);
       }
 
       if (data && data.success && data.response) {
-        console.log('AI response received successfully');
-        console.log('Tokens used:', data.tokens_used);
         return data.response;
       }
 
       if (data && data.fallback_response) {
-        console.log('Using fallback response from AI service');
         return data.fallback_response;
       }
 
       throw new Error('No response from AI service');
       
     } catch (error) {
-      console.error('AI service call failed:', error);
       throw error;
     }
   }
@@ -430,7 +398,6 @@ Your Response:`;
         timestamp: new Date().toISOString()
       };
       
-      console.log('AI Interaction Log:', interactionLog);
       
       // Database logging disabled - using console only for now
       // Uncomment below if you want to try database logging
@@ -448,17 +415,13 @@ Your Response:`;
           });
         
         if (error) {
-          console.log('Database logging not available:', error.message);
         } else {
-          console.log('Successfully logged to database');
         }
       } catch (dbError) {
-        console.log('Database logging failed:', dbError);
       }
       */
       
     } catch (error) {
-      console.error('Error logging interaction:', error);
     }
   }
 
@@ -653,7 +616,6 @@ Your Response:`;
       };
       
     } catch (error) {
-      console.error('Error getting interaction stats:', error);
       return null;
     }
   }
@@ -670,7 +632,6 @@ Your Response:`;
       
       return !error;
     } catch (error) {
-      console.error('Error recording feedback:', error);
       return false;
     }
   }

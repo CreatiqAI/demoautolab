@@ -26,7 +26,6 @@ class CustomAuthStorage {
         }
       }
     } catch (error) {
-      console.warn(`Could not restore from ${storageType}:`, error);
     }
   }
 
@@ -37,7 +36,6 @@ class CustomAuthStorage {
         const storage = window[storageType as 'sessionStorage' | 'localStorage'];
         storage.setItem(key, value);
       } catch (error) {
-        console.warn(`Could not sync to ${storageType}:`, error);
       }
     });
   }
@@ -48,7 +46,6 @@ class CustomAuthStorage {
         const storage = window[storageType as 'sessionStorage' | 'localStorage'];
         storage.removeItem(key);
       } catch (error) {
-        console.warn(`Could not remove from ${storageType}:`, error);
       }
     });
   }
@@ -64,7 +61,6 @@ class CustomAuthStorage {
           this.storage.set(key, value);
         }
       } catch (error) {
-        console.warn('Could not restore from storage:', error);
       }
     }
     
@@ -88,7 +84,6 @@ class CustomAuthStorage {
         const storage = window[storageType as 'sessionStorage' | 'localStorage'];
         storage.clear();
       } catch (error) {
-        console.warn(`Could not clear ${storageType}:`, error);
       }
     });
   }

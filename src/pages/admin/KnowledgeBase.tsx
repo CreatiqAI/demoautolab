@@ -124,7 +124,6 @@ export default function KnowledgeBase() {
     try {
       await Promise.all([fetchEntries(), fetchDocuments()]);
     } catch (error) {
-      console.error('Error fetching data:', error);
       toast({
         title: "Error",
         description: "Failed to fetch knowledge base data",
@@ -234,7 +233,6 @@ export default function KnowledgeBase() {
         throw new Error(result.error);
       }
     } catch (error) {
-      console.error('Error uploading PDF:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to upload PDF",
@@ -303,7 +301,6 @@ export default function KnowledgeBase() {
       resetEntryForm();
       fetchEntries();
     } catch (error) {
-      console.error('Error saving knowledge base entry:', error);
       toast({
         title: "Error",
         description: "Failed to save knowledge base entry",
@@ -345,7 +342,6 @@ export default function KnowledgeBase() {
       
       fetchEntries();
     } catch (error) {
-      console.error('Error deleting knowledge base entry:', error);
       toast({
         title: "Error",
         description: "Failed to delete knowledge base entry",
@@ -376,7 +372,6 @@ export default function KnowledgeBase() {
         throw new Error(result.error || 'Failed to download document');
       }
     } catch (error) {
-      console.error('Error downloading document:', error);
       toast({
         title: "Error",
         description: "Failed to download document",
@@ -398,7 +393,6 @@ export default function KnowledgeBase() {
         throw new Error('Failed to delete document');
       }
     } catch (error) {
-      console.error('Error deleting document:', error);
       toast({
         title: "Error",
         description: "Failed to delete document",
@@ -444,7 +438,6 @@ export default function KnowledgeBase() {
         throw new Error(result.error);
       }
     } catch (error) {
-      console.error('Error processing text:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to process text",
@@ -466,7 +459,6 @@ export default function KnowledgeBase() {
       
       fetchDocuments();
     } catch (error) {
-      console.error('Error starting processing:', error);
       toast({
         title: "Error",
         description: "Failed to start AI processing",

@@ -64,7 +64,6 @@ export class OpenAIServiceEdge {
       };
 
     } catch (error) {
-      console.error('Error analyzing PDF with Edge Function:', error);
       
       return {
         success: false,
@@ -103,7 +102,6 @@ export class OpenAIServiceEdge {
         tags: data.tags || []
       };
     } catch (error) {
-      console.error('Error improving knowledge base entry:', error);
       return { title, content, tags: [] };
     }
   }
@@ -123,7 +121,6 @@ export class OpenAIServiceEdge {
 
       return data.questions || [];
     } catch (error) {
-      console.error('Error generating questions:', error);
       return [];
     }
   }

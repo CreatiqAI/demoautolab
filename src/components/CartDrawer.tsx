@@ -98,7 +98,6 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     try {
       // Look up product by component SKU using product_name stored in cart
       // The product_name in cart is actually the product name from when item was added
-      console.log('🔍 Looking for product with name:', item.product_name);
 
       const { data: products, error } = await supabase
         .from('products_new')
@@ -107,20 +106,16 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         .limit(1);
 
       if (error) {
-        console.error('Error finding product:', error);
         return;
       }
 
       if (products && products.length > 0) {
         // Navigate to the product details page
-        console.log('✅ Found product:', products[0]);
         onClose();
         navigate(`/product/${products[0].id}`);
       } else {
-        console.log('⚠️ No product found for:', item.product_name);
       }
     } catch (error) {
-      console.error('Error navigating to product:', error);
     }
   };
 

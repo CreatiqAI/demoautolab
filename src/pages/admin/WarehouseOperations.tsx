@@ -166,7 +166,6 @@ export default function WarehouseOperations() {
       if (!ordersError && ordersWithItems) {
         ordersData = ordersWithItems;
       } else {
-        console.warn('Warehouse orders with items query failed, trying basic approach:', ordersError);
 
         // Fallback: Get orders without items first
         const { data: basicData, error: basicError } = await supabase
@@ -178,7 +177,6 @@ export default function WarehouseOperations() {
         if (!basicError && basicData) {
           ordersData = (basicData as any[]).map((order: any) => ({ ...order, order_items: [] }));
         } else {
-          console.warn('Direct warehouse query failed, trying all orders and filtering:', basicError);
 
           // Final fallback: Get all orders and filter in JavaScript
           const { data: allData, error: allError } = await supabase
@@ -191,7 +189,6 @@ export default function WarehouseOperations() {
               .filter((order: any) => warehouseStatuses.includes(order.status))
               .map((order: any) => ({ ...order, order_items: [] }));
           } else {
-            console.error('❌ All warehouse order queries failed:', allError);
           }
         }
       }
@@ -226,7 +223,6 @@ export default function WarehouseOperations() {
 
       setOrders(transformedOrders);
     } catch (error: any) {
-      console.error('Error fetching warehouse orders:', error);
       setOrders([]);
       // Don't show error toast since this is expected when database isn't fully set up
     } finally {
@@ -478,7 +474,6 @@ export default function WarehouseOperations() {
       fetchWarehouseOrders();
 
     } catch (error: any) {
-      console.error('Error bulk updating orders:', error);
       toast({
         title: "Update Failed",
         description: error.message || "Failed to update orders",
@@ -526,7 +521,6 @@ export default function WarehouseOperations() {
       fetchWarehouseOrders();
 
     } catch (error: any) {
-      console.error('Error updating order status:', error);
       toast({
         title: "Update Failed",
         description: error.message || "Failed to update order status",
@@ -577,7 +571,6 @@ export default function WarehouseOperations() {
       const rates = await getCourierRates(shipmentRequest);
       setCourierRates(rates);
     } catch (error) {
-      console.error('Error fetching courier rates:', error);
     }
   };
 
@@ -677,7 +670,6 @@ export default function WarehouseOperations() {
       fetchWarehouseOrders();
 
     } catch (error: any) {
-      console.error('Error creating shipment:', error);
       toast({
         title: "Shipment Failed",
         description: error.message || "Failed to create shipment",
@@ -724,7 +716,6 @@ export default function WarehouseOperations() {
         });
       }
     } catch (error: any) {
-      console.error('Error tracking shipment:', error);
       toast({
         title: "Tracking Failed",
         description: error.message || "Failed to track shipment",

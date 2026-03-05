@@ -100,7 +100,6 @@ export class PDFProcessingServiceFallback {
       };
 
     } catch (error) {
-      console.error('Error uploading PDF:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -145,7 +144,6 @@ export class PDFProcessingServiceFallback {
       }, 1000);
 
     } catch (error) {
-      console.error('Error starting AI processing:', error);
       
       // Update status to failed
       await supabase
@@ -181,9 +179,6 @@ export class PDFProcessingServiceFallback {
       await this.updateProcessingProgress(jobId, 30, 'Analyzing content with AI...');
 
       // Process with OpenAI
-      console.log('Starting AI analysis for document:', document.title);
-      console.log('Text length:', document.extracted_text?.length || 0);
-      console.log('Options:', options);
       
       let analysisResult: PDFAnalysisResult;
       
@@ -194,7 +189,6 @@ export class PDFProcessingServiceFallback {
           options
         );
       } catch (edgeError) {
-        console.warn('Edge function failed, trying direct fallback:', edgeError);
         // Use direct processing as fallback
         analysisResult = await this.directTextProcessing(
           document.extracted_text,
@@ -203,11 +197,6 @@ export class PDFProcessingServiceFallback {
         );
       }
 
-      console.log('AI analysis result:', {
-        success: analysisResult.success,
-        entriesCount: analysisResult.entries?.length || 0,
-        error: analysisResult.error
-      });
 
       if (!analysisResult.success) {
         throw new Error(analysisResult.error || 'AI analysis failed');
@@ -215,23 +204,17 @@ export class PDFProcessingServiceFallback {
 
       // If AI returned no entries, use direct fallback processing
       if (!analysisResult.entries || analysisResult.entries.length === 0) {
-        console.log('AI returned no entries, using direct fallback processing');
         analysisResult = await this.directTextProcessing(
           document.extracted_text,
           document.title,
           options.maxEntries || 50
         );
         
-        console.log('Fallback processing result:', {
-          success: analysisResult.success,
-          entriesCount: analysisResult.entries?.length || 0
-        });
       }
 
       await this.updateProcessingProgress(jobId, 60, 'Creating knowledge base entries...');
 
       // Insert generated knowledge base entries
-      console.log('Processing', analysisResult.entries.length, 'entries for insertion');
       
       const knowledgeBaseEntries = analysisResult.entries.map((entry, index) => ({
         title: entry.title,
@@ -248,7 +231,6 @@ export class PDFProcessingServiceFallback {
         // Removed customer_scenarios, related_questions, key_points, priority - these columns don't exist yet
       }));
 
-      console.log('First entry example:', knowledgeBaseEntries[0]);
 
       if (knowledgeBaseEntries.length === 0) {
         throw new Error('No knowledge base entries were generated from the analysis');
@@ -260,11 +242,9 @@ export class PDFProcessingServiceFallback {
         .select();
 
       if (entriesError) {
-        console.error('Database insertion error:', entriesError);
         throw new Error(`Failed to save knowledge base entries: ${entriesError.message}`);
       }
 
-      console.log('Successfully inserted', insertedEntries?.length || 0, 'entries');
 
       await this.updateProcessingProgress(jobId, 90, 'Finalizing...');
 
@@ -288,7 +268,6 @@ export class PDFProcessingServiceFallback {
         .eq('id', documentId);
 
     } catch (error) {
-      console.error('Error processing document with AI:', error);
       
       // Update job as failed
       await supabase
@@ -351,7 +330,6 @@ export class PDFProcessingServiceFallback {
         estimated_cost: parseFloat(data[0].estimated_cost) || 0
       };
     } catch (error) {
-      console.error('Error getting processing status:', error);
       return null;
     }
   }
@@ -376,7 +354,6 @@ export class PDFProcessingServiceFallback {
 
       return data || [];
     } catch (error) {
-      console.error('Error getting document entries:', error);
       return [];
     }
   }
@@ -390,7 +367,6 @@ export class PDFProcessingServiceFallback {
 
       return !error;
     } catch (error) {
-      console.error('Error approving entry:', error);
       return false;
     }
   }
@@ -432,7 +408,6 @@ export class PDFProcessingServiceFallback {
         return { success: false, error: 'Failed to decode file data' };
       }
     } catch (error) {
-      console.error('Error downloading document:', error);
       return { success: false, error: 'Failed to download document' };
     }
   }
@@ -444,14 +419,12 @@ export class PDFProcessingServiceFallback {
     maxEntries: number
   ): Promise<PDFAnalysisResult> {
     try {
-      console.log('Direct processing - text sample:', text.substring(0, 200) + '...');
       
       // Simple pattern-based extraction for terms and conditions
       const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 5);
       const entries = [];
       let entryCount = 0;
 
-      console.log('Found', lines.length, 'lines to process');
 
       // First pass: Look for ANY meaningful content that could be useful
       for (let i = 0; i < lines.length && entryCount < maxEntries; i++) {
@@ -513,14 +486,12 @@ export class PDFProcessingServiceFallback {
               section_reference: `Line ${i + 1}`
             });
             entryCount++;
-            console.log(`Added entry ${entryCount}: ${cleanTitle}`);
           }
         }
       }
 
       // Second pass: If we still don't have enough entries, be more aggressive
       if (entries.length < 3) {
-        console.log('Not enough entries found, using more aggressive extraction');
         
         // Split by sentences and look for meaningful content
         const sentences = text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 20);
@@ -539,14 +510,12 @@ export class PDFProcessingServiceFallback {
               section_reference: `Sentence ${i + 1}`
             });
             entryCount++;
-            console.log(`Added sentence entry ${entryCount}: ${title}`);
           }
         }
       }
 
       // Third pass: If still not enough, split by paragraphs
       if (entries.length < 2) {
-        console.log('Still not enough entries, using paragraph extraction');
         const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 30);
         
         for (let i = 0; i < Math.min(paragraphs.length, maxEntries) && entryCount < maxEntries; i++) {
@@ -562,14 +531,12 @@ export class PDFProcessingServiceFallback {
             section_reference: `Paragraph ${i + 1}`
           });
           entryCount++;
-          console.log(`Added paragraph entry ${entryCount}: ${title}`);
         }
       }
 
       // Fourth pass: If we still have very few entries and the text seems corrupted, 
       // create comprehensive template entries for common terms and conditions
       if (entries.length < 5 && (text.includes('reportlab') || text.length < 500)) {
-        console.log('Text appears to be corrupted/insufficient, creating comprehensive template entries');
         
         const templateEntries = [
           {
@@ -655,10 +622,8 @@ export class PDFProcessingServiceFallback {
         ];
         
         entries.push(...templateEntries);
-        console.log('Added', templateEntries.length, 'comprehensive template entries for manual editing');
       }
 
-      console.log(`Direct processing completed with ${entries.length} entries`);
 
       return {
         success: true,
@@ -669,7 +634,6 @@ export class PDFProcessingServiceFallback {
         processing_time: 0
       };
     } catch (error) {
-      console.error('Direct processing error:', error);
       return {
         success: false,
         entries: [],
@@ -690,8 +654,6 @@ export class PDFProcessingServiceFallback {
     } = {}
   ): Promise<{ success: boolean; error?: string; entriesCount?: number }> {
     try {
-      console.log('Processing text content directly with AI:', title);
-      console.log('Text length:', text.length);
 
       // Use the AI service to analyze the text directly
       const analysisResult = await OpenAIService.analyzePDFContent(
@@ -701,12 +663,10 @@ export class PDFProcessingServiceFallback {
       );
 
       if (!analysisResult.success) {
-        console.error('AI analysis failed:', analysisResult.error);
         return { success: false, error: analysisResult.error || 'AI analysis failed' };
       }
 
       if (!analysisResult.entries || analysisResult.entries.length === 0) {
-        console.log('AI returned no entries, using direct processing');
         
         // Use direct text processing as fallback
         const fallbackResult = await this.directTextProcessing(text, title, options.maxEntries || 50);
@@ -735,14 +695,12 @@ export class PDFProcessingServiceFallback {
           .insert(knowledgeBaseEntries);
 
         if (entriesError) {
-          console.error('Database insertion error:', entriesError);
           return { success: false, error: `Failed to save knowledge base entries: ${entriesError.message}` };
         }
 
         return { success: true, entriesCount: knowledgeBaseEntries.length };
       }
 
-      console.log('AI analysis successful, creating entries:', analysisResult.entries.length);
 
       // Insert AI-generated entries
       const knowledgeBaseEntries = analysisResult.entries.map(entry => ({
@@ -764,15 +722,12 @@ export class PDFProcessingServiceFallback {
         .insert(knowledgeBaseEntries);
 
       if (entriesError) {
-        console.error('Database insertion error:', entriesError);
         return { success: false, error: `Failed to save knowledge base entries: ${entriesError.message}` };
       }
 
-      console.log('Successfully processed text and created', knowledgeBaseEntries.length, 'entries');
       return { success: true, entriesCount: knowledgeBaseEntries.length };
 
     } catch (error) {
-      console.error('Error processing text content:', error);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error occurred' 
@@ -791,7 +746,6 @@ export class PDFProcessingServiceFallback {
     } = {}
   ): Promise<{ success: boolean; error?: string; processingResult?: ProcessingResult; document_id?: string }> {
     try {
-      console.log('Starting commercial document processing for:', file.name);
 
       // Step 1: Process document with commercial processor
       const processingResult = await commercialDocumentProcessor.processDocument(file);
@@ -833,7 +787,6 @@ export class PDFProcessingServiceFallback {
         .single();
 
       if (documentError) {
-        console.error('Document insertion error:', documentError);
         return { success: false, error: `Failed to save document: ${documentError.message}` };
       }
 
@@ -861,16 +814,10 @@ export class PDFProcessingServiceFallback {
           .insert(knowledgeBaseEntries);
 
         if (entriesError) {
-          console.error('Knowledge base insertion error:', entriesError);
           return { success: false, error: `Failed to save knowledge base entries: ${entriesError.message}` };
         }
       }
 
-      console.log(`Commercial processing completed successfully:
-        - Document ID: ${documentData.id}
-        - Entries created: ${knowledgeBaseEntries.length}
-        - Document type: ${processingResult.analysis.documentType}
-        - Confidence: ${processingResult.analysis.confidence}`);
 
       return { 
         success: true, 
@@ -879,7 +826,6 @@ export class PDFProcessingServiceFallback {
       };
 
     } catch (error) {
-      console.error('Commercial document processing error:', error);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error occurred' 
@@ -898,7 +844,6 @@ export class PDFProcessingServiceFallback {
 
       return !error;
     } catch (error) {
-      console.error('Error deleting document:', error);
       return false;
     }
   }

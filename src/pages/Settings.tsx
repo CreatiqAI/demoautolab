@@ -199,7 +199,6 @@ export default function Settings() {
         });
       }
     } catch (error: any) {
-      console.error('Error fetching data:', error);
       toast({
         title: 'Error',
         description: 'Failed to load settings',
@@ -238,7 +237,6 @@ export default function Settings() {
         description: 'Notification preferences saved successfully!'
       });
     } catch (error: any) {
-      console.error('Error saving notifications:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to save notification preferences',

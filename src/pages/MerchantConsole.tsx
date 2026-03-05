@@ -159,7 +159,6 @@ const MerchantConsole = () => {
 
       setIsMerchant(true);
     } catch (error) {
-      console.error('Error fetching merchant data:', error);
     } finally {
       setLoading(false);
     }

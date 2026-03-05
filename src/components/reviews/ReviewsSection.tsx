@@ -76,7 +76,6 @@ export const ReviewsSection = ({ productId, onWriteReview }: ReviewsSectionProps
         setStats(data[0]);
       }
     } catch (error) {
-      console.error("Error fetching review stats:", error);
     }
   };
 
@@ -93,7 +92,6 @@ export const ReviewsSection = ({ productId, onWriteReview }: ReviewsSectionProps
       if (error) throw error;
       setReviews(data || []);
     } catch (error) {
-      console.error("Error fetching reviews:", error);
     } finally {
       setLoading(false);
     }
@@ -146,7 +144,6 @@ export const ReviewsSection = ({ productId, onWriteReview }: ReviewsSectionProps
         });
       }
     } catch (error) {
-      console.error("Error marking review as helpful:", error);
       toast({
         title: "Error",
         description: "Could not record your feedback. Please try again.",

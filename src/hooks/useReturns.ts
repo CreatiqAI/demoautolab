@@ -136,7 +136,6 @@ export function useReturns() {
       if (fetchError) throw fetchError;
       setReturns((data as Return[]) || []);
     } catch (err: any) {
-      console.error('Error fetching returns:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -152,7 +151,6 @@ export function useReturns() {
         .rpc('check_return_eligibility', { p_order_id: orderId });
 
       if (error) {
-        console.error('Error checking eligibility:', error);
         // Fallback: manual check
         return await checkEligibilityFallback(orderId);
       }
@@ -163,7 +161,6 @@ export function useReturns() {
 
       return null;
     } catch (err) {
-      console.error('Error in checkEligibility:', err);
       return await checkEligibilityFallback(orderId);
     }
   };
@@ -240,7 +237,6 @@ export function useReturns() {
         delivery_date: deliveryDate
       };
     } catch (err) {
-      console.error('Fallback eligibility check error:', err);
       return null;
     }
   };
@@ -304,7 +300,6 @@ export function useReturns() {
         .insert(returnItems);
 
       if (itemsError) {
-        console.error('Error adding return items:', itemsError);
         // Don't fail the whole operation, items might be added manually
       }
 
@@ -318,7 +313,6 @@ export function useReturns() {
 
       return returnRecord as Return;
     } catch (err: any) {
-      console.error('Error creating return:', err);
       toast({
         title: 'Error',
         description: err.message || 'Failed to create return request',
@@ -348,7 +342,6 @@ export function useReturns() {
           .upload(fileName, file);
 
         if (uploadError) {
-          console.error('Error uploading image:', uploadError);
           continue;
         }
 
@@ -369,13 +362,11 @@ export function useReturns() {
           .single();
 
         if (dbError) {
-          console.error('Error saving image record:', dbError);
           continue;
         }
 
         uploadedImages.push(imageRecord as ReturnImage);
       } catch (err) {
-        console.error('Error processing image:', err);
       }
     }
 
@@ -412,7 +403,6 @@ export function useReturns() {
       await fetchReturns();
       return true;
     } catch (err: any) {
-      console.error('Error updating tracking:', err);
       toast({
         title: 'Error',
         description: err.message || 'Failed to update tracking information',
@@ -446,7 +436,6 @@ export function useReturns() {
       await fetchReturns();
       return true;
     } catch (err: any) {
-      console.error('Error cancelling return:', err);
       toast({
         title: 'Error',
         description: err.message || 'Failed to cancel return',
@@ -474,7 +463,6 @@ export function useReturns() {
       if (error) throw error;
       return data as Return;
     } catch (err) {
-      console.error('Error fetching return:', err);
       return null;
     }
   };
@@ -504,7 +492,6 @@ export function useReturns() {
       if (error) throw error;
       return (data as Return[]) || [];
     } catch (err) {
-      console.error('Error fetching all returns:', err);
       return [];
     }
   };
@@ -531,7 +518,6 @@ export function useReturns() {
 
       return true;
     } catch (err: any) {
-      console.error('Error approving return:', err);
       toast({
         title: 'Error',
         description: err.message || 'Failed to approve return',
@@ -563,7 +549,6 @@ export function useReturns() {
 
       return true;
     } catch (err: any) {
-      console.error('Error rejecting return:', err);
       toast({
         title: 'Error',
         description: err.message || 'Failed to reject return',
@@ -609,7 +594,6 @@ export function useReturns() {
 
       return true;
     } catch (err: any) {
-      console.error('Error updating return status:', err);
       toast({
         title: 'Error',
         description: err.message || 'Failed to update return status',

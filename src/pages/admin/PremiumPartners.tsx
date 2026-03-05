@@ -105,7 +105,6 @@ export default function PremiumPartners() {
 
       setPartnerships((data as unknown as Partnership[]) || []);
     } catch (error: any) {
-      console.error('Error fetching partnerships:', error);
       toast({
         title: 'Error',
         description: 'Failed to load partnerships',
@@ -189,7 +188,6 @@ export default function PremiumPartners() {
           .eq('id', selectedPartnership.merchant_id);
 
         if (profileError) {
-          console.error('Error updating customer profile:', profileError);
           // Don't fail the whole operation, but log it
         }
       }
@@ -204,7 +202,6 @@ export default function PremiumPartners() {
       setSubscriptionDuration('1');
       fetchPartnerships();
     } catch (error: any) {
-      console.error('Error reviewing partnership:', error);
       toast({
         title: 'Error',
         description: 'Failed to review partnership',
@@ -232,7 +229,6 @@ export default function PremiumPartners() {
 
       fetchPartnerships();
     } catch (error: any) {
-      console.error('Error updating status:', error);
       toast({
         title: 'Error',
         description: 'Failed to update status',
@@ -261,7 +257,6 @@ export default function PremiumPartners() {
 
       fetchPartnerships();
     } catch (error: any) {
-      console.error('Error toggling featured:', error);
       toast({
         title: 'Error',
         description: 'Failed to update featured status',
@@ -315,7 +310,6 @@ export default function PremiumPartners() {
       setIsEditModalOpen(false);
       fetchPartnerships();
     } catch (error: any) {
-      console.error('Error updating partnership:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to update partnership',
@@ -388,7 +382,6 @@ export default function PremiumPartners() {
         } as any]);
 
       if (historyError) {
-        console.error('Error logging renewal history:', historyError);
         // Don't fail the whole operation if history logging fails
       }
 
@@ -400,7 +393,6 @@ export default function PremiumPartners() {
       setIsExtendModalOpen(false);
       fetchPartnerships();
     } catch (error: any) {
-      console.error('Error extending subscription:', error);
       toast({
         title: 'Error',
         description: 'Failed to extend subscription',
@@ -422,7 +414,6 @@ export default function PremiumPartners() {
       setRenewalHistory(data || []);
       setShowHistoryFor(partnershipId);
     } catch (error: any) {
-      console.error('Error fetching renewal history:', error);
       toast({
         title: 'Error',
         description: 'Failed to load renewal history',

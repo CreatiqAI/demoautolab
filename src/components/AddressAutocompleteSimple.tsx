@@ -40,7 +40,6 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
           autocompleteService.current = new window.google.maps.places.AutocompleteService();
           setIsGoogleMapsLoaded(true);
         } catch (error) {
-          console.error('Error initializing Google Maps:', error);
         }
         return;
       }
@@ -60,12 +59,10 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
             autocompleteService.current = new window.google.maps.places.AutocompleteService();
             setIsGoogleMapsLoaded(true);
           } catch (error) {
-            console.error('Error in callback:', error);
           }
         };
         
         script.onerror = () => {
-          console.error('Failed to load Google Maps API - check your API key and billing settings');
         };
         
         document.head.appendChild(script);
@@ -124,7 +121,6 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
         setLoading(false);
       });
     } catch (error) {
-      console.error('Error fetching address suggestions:', error);
       setLoading(false);
       setSuggestions([]);
     }

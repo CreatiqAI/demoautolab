@@ -99,7 +99,6 @@ export default function ShopDetails() {
       setShop(data as any);
       await (supabase.rpc as any)('increment_partnership_views', { p_partnership_id: shopId });
     } catch (error) {
-      console.error('Error fetching shop:', error);
       toast({
         title: 'Error',
         description: 'Failed to load shop details',
@@ -157,7 +156,6 @@ export default function ShopDetails() {
       setIsInquiryModalOpen(false);
       setInquiryForm({ customer_name: '', customer_phone: '', customer_email: '', message: '' });
     } catch (error) {
-      console.error('Error sending inquiry:', error);
       toast({
         title: 'Error',
         description: 'Failed to send inquiry. Please try again.',

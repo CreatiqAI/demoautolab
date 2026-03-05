@@ -20,7 +20,6 @@ export default function AuthCallback() {
         const errorDescription = searchParams.get('error_description');
 
         if (errorParam) {
-          console.error('OAuth error:', { errorParam, errorDescription });
           let errorMessage = errorDescription?.replace(/\+/g, ' ') || errorParam;
           setError(errorMessage);
           setStatus('Authentication failed');
@@ -43,7 +42,6 @@ export default function AuthCallback() {
           });
 
           if (sessionError) {
-            console.error('Error setting session:', sessionError);
             setError('Failed to establish session. Please try again.');
             setStatus('Authentication failed');
             return;
@@ -69,12 +67,10 @@ export default function AuthCallback() {
         }
 
         // No session found
-        console.error('No session could be established');
         setError('Login failed. Could not establish session. Please try again.');
         setStatus('Authentication failed');
 
       } catch (err) {
-        console.error('Auth callback error:', err);
         setError('An unexpected error occurred during login. Please try again.');
         setStatus('Error during login');
       }
@@ -86,7 +82,6 @@ export default function AuthCallback() {
       const { isNewUser, error: profileError } = await checkAndCreateProfile();
 
       if (profileError && profileError.message !== 'No user logged in') {
-        console.error('Error checking profile:', profileError);
         setError(profileError.message || 'Error processing login');
         setStatus('Error processing login');
         return;

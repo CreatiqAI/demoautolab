@@ -45,7 +45,6 @@ export default function DirectAdminSetup() {
         return data.user.id;
       }
     } catch (error: any) {
-      console.error('Error creating auth user:', error);
       toast({
         title: "Error",
         description: error.message,
@@ -72,7 +71,6 @@ export default function DirectAdminSetup() {
           description: "Cannot query profiles due to RLS policies. Use the SQL method instead.",
           variant: "destructive"
         });
-        console.error('RLS Error:', error);
       } else {
         toast({
           title: "Success!",
@@ -80,7 +78,6 @@ export default function DirectAdminSetup() {
         });
       }
     } catch (error: any) {
-      console.error('Error checking profiles:', error);
       toast({
         title: "Error",
         description: error.message,

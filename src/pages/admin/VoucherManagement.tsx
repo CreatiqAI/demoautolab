@@ -73,7 +73,6 @@ const VoucherManagement = () => {
       if (error) throw error;
       setVouchers((data as unknown as Voucher[]) || []);
     } catch (error: any) {
-      console.error('Error fetching vouchers:', error);
       toast({
         title: 'Error',
         description: 'Failed to load vouchers',
@@ -138,7 +137,6 @@ const VoucherManagement = () => {
       setIsCreateModalOpen(false);
       fetchVouchers();
     } catch (error: any) {
-      console.error('Error creating voucher:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to create voucher',
@@ -180,7 +178,6 @@ const VoucherManagement = () => {
       setIsCreateModalOpen(false);
       fetchVouchers();
     } catch (error: any) {
-      console.error('Error updating voucher:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to update voucher',

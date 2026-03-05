@@ -2,42 +2,35 @@
 
 export async function extractTextFromPDF(file: File): Promise<string> {
   try {
-    console.log('Starting PDF text extraction for:', file.name);
     
     // Method 1: Try advanced stream decoding
     const text1 = await advancedStreamExtraction(file);
     if (text1.length > 50 && !text1.includes('reportlab') && /[a-zA-Z\s]{10,}/.test(text1)) {
-      console.log('Advanced extraction succeeded, length:', text1.length);
       return text1;
     }
 
     // Method 2: Try basic PDF extraction
     const text2 = await basicPDFExtraction(file);
     if (text2.length > 50 && !text2.includes('reportlab') && /[a-zA-Z\s]{10,}/.test(text2)) {
-      console.log('Basic extraction succeeded, length:', text2.length);
       return text2;
     }
 
     // Method 3: Try regex-based extraction
     const text3 = await regexPDFExtraction(file);
     if (text3.length > 50 && !text3.includes('reportlab') && /[a-zA-Z\s]{10,}/.test(text3)) {
-      console.log('Regex extraction succeeded, length:', text3.length);
       return text3;
     }
 
     // Method 4: Try raw text extraction (for simple PDFs)
     const text4 = await rawTextExtraction(file);
     if (text4.length > 50 && !text4.includes('reportlab') && /[a-zA-Z\s]{10,}/.test(text4)) {
-      console.log('Raw extraction succeeded, length:', text4.length);
       return text4;
     }
 
     // Method 5: If all else fails, return a message indicating the PDF needs manual processing
-    console.warn('All extraction methods failed, creating manual entry prompt');
     return createManualEntryPrompt(file.name);
 
   } catch (error) {
-    console.error('Error in PDF text extraction:', error);
     return createManualEntryPrompt(file.name);
   }
 }
@@ -72,7 +65,6 @@ async function basicPDFExtraction(file: File): Promise<string> {
   const decoder = new TextDecoder('utf-8', { fatal: false });
   const rawText = decoder.decode(arrayBuffer);
   
-  console.log('PDF raw text sample:', rawText.substring(0, 500));
   
   let extractedText = '';
   
@@ -92,8 +84,6 @@ async function basicPDFExtraction(file: File): Promise<string> {
     extractedText = allText;
   }
   
-  console.log('Complete extracted text length:', extractedText.length);
-  console.log('Text preview:', extractedText.substring(0, 300));
   
   return cleanText(extractedText);
 }
@@ -103,7 +93,6 @@ async function regexPDFExtraction(file: File): Promise<string> {
   const decoder = new TextDecoder('utf-8', { fatal: false });
   const rawText = decoder.decode(arrayBuffer);
   
-  console.log('Regex extraction - extracting ALL text patterns...');
   
   let extractedText = '';
   
@@ -161,15 +150,12 @@ async function regexPDFExtraction(file: File): Promise<string> {
     }
   }
   
-  console.log('Complete extraction length:', extractedText.length);
-  console.log('Sample extracted text:', extractedText.substring(0, 500));
   
   return cleanText(extractedText);
 }
 
 // Advanced stream extraction method
 async function advancedStreamExtraction(file: File): Promise<string> {
-  console.log('Trying advanced stream extraction...');
   const arrayBuffer = await file.arrayBuffer();
   const decoder = new TextDecoder('utf-8', { fatal: false });
   const rawText = decoder.decode(arrayBuffer);
@@ -179,7 +165,6 @@ async function advancedStreamExtraction(file: File): Promise<string> {
   // Look for stream objects and try to extract readable content
   const streamMatches = rawText.match(/stream\s*\r?\n([\s\S]*?)\r?\n\s*endstream/g);
   if (streamMatches) {
-    console.log('Found', streamMatches.length, 'streams');
     
     for (const streamMatch of streamMatches) {
       let streamContent = streamMatch.replace(/stream\s*\r?\n|\r?\n\s*endstream/g, '');
@@ -218,13 +203,11 @@ async function advancedStreamExtraction(file: File): Promise<string> {
     }
   }
   
-  console.log('Advanced extraction found text length:', extractedText.length);
   return cleanText(extractedText);
 }
 
 // Raw text extraction for simple PDFs
 async function rawTextExtraction(file: File): Promise<string> {
-  console.log('Trying raw text extraction...');
   const arrayBuffer = await file.arrayBuffer();
   
   // Try different encodings
@@ -245,11 +228,9 @@ async function rawTextExtraction(file: File): Promise<string> {
         }
       }
     } catch (error) {
-      console.log(`Failed to decode with ${encoding}:`, error);
     }
   }
   
-  console.log('Raw extraction found text length:', bestText.length);
   return cleanText(bestText);
 }
 
@@ -291,7 +272,6 @@ export async function estimatePDFPageCount(file: File): Promise<number> {
     return Math.min(sizeBasedEstimate, 500); // Cap at 500 pages
     
   } catch (error) {
-    console.error('Error estimating page count:', error);
     return 1;
   }
 }

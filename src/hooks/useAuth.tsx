@@ -15,20 +15,15 @@ interface RegistrationData {
   carModelName?: string;
 }
 
-// Store for simulated OTP codes (in production, this would be handled by Twilio/SMS provider)
-const otpStore: Map<string, { code: string; expiresAt: number; userId?: string }> = new Map();
-
-// Generate a random 6-digit OTP
-const generateOTP = (): string => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
+// Normalize phone: strip +, spaces, dashes for iSMS format (e.g. 60164502380)
+const normalizePhone = (phone: string): string => phone.replace(/[\s\-\+]/g, '');
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  // Phone OTP methods (simulated/dummy for testing)
-  sendPhoneOTP: (phone: string) => Promise<{ error: any; code?: string }>;
+  // Phone OTP methods (via iSMS Edge Function)
+  sendPhoneOTP: (phone: string) => Promise<{ error: any }>;
   verifyPhoneOTP: (phone: string, token: string) => Promise<{ error: any; isNewUser?: boolean; existingUserEmail?: string }>;
   signUpWithPhoneOTP: (phone: string, token: string, userData: RegistrationData) => Promise<{ error: any }>;
   // Email/Password sign in (used after phone OTP verification for existing users)
@@ -79,7 +74,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
       } catch (error) {
-        console.error('Auth initialization error:', error);
         // Don't logout on errors - keep user logged in
         if (isMounted) {
           setLoading(false);
@@ -104,116 +98,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ============================================
-  // PHONE OTP METHODS (Simulated/Dummy for testing)
-  // In production, replace with Twilio or other SMS provider
+  // PHONE OTP METHODS (via iSMS Edge Function)
   // ============================================
 
-  // Send simulated OTP to phone number
-  const sendPhoneOTP = async (phone: string): Promise<{ error: any; code?: string }> => {
+  // Send OTP via iSMS SMS gateway (server-side Edge Function)
+  const sendPhoneOTP = async (phone: string): Promise<{ error: any }> => {
     try {
-      // Generate OTP code
-      const code = generateOTP();
-      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes expiry
+      const { data, error } = await supabase.functions.invoke('send-otp-sms', {
+        body: { phone: normalizePhone(phone) },
+      });
 
-      // Store OTP in memory (in production, this would be stored server-side)
-      otpStore.set(phone, { code, expiresAt });
+      if (error) {
+        return { error: { message: error.message || 'Failed to send OTP' } };
+      }
 
-      // Also store in localStorage for persistence across page reloads (development only)
-      localStorage.setItem('pending_phone_auth', JSON.stringify({
-        phone,
-        code,
-        expiresAt
-      }));
+      if (data?.error) {
+        return { error: { message: data.error } };
+      }
 
-      // In production, you would call Twilio/SMS API here:
-      // await twilioClient.messages.create({
-      //   body: `Your AutoLab verification code is: ${code}`,
-      //   to: phone,
-      //   from: TWILIO_PHONE_NUMBER
-      // });
-
-      return { error: null, code }; // Return code for testing purposes
+      return { error: null };
     } catch (error) {
-      console.error('Error sending OTP:', error);
       return { error };
     }
   };
 
-  // Verify Phone OTP - handles both login and registration
-  // Returns email for existing users so they can complete login with password
+
+
+  // Verify Phone OTP via server-side Edge Function
   const verifyPhoneOTP = async (phone: string, token: string): Promise<{
     error: any;
     isNewUser?: boolean;
     existingUserEmail?: string;
   }> => {
     try {
-      // Get stored OTP
-      let storedOTP = otpStore.get(phone);
+      const { data, error } = await supabase.functions.invoke('verify-otp-sms', {
+        body: { phone: normalizePhone(phone), code: token },
+      });
 
-      // Fallback to localStorage
-      if (!storedOTP) {
-        const stored = localStorage.getItem('pending_phone_auth');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.phone === phone) {
-            storedOTP = parsed;
-          }
-        }
+      if (error) {
+        return { error: { message: error.message || 'Failed to verify OTP' } };
       }
 
-      if (!storedOTP) {
-        return { error: { message: 'No OTP found. Please request a new code.' } };
+      if (!data?.valid) {
+        return { error: { message: data?.error || 'Invalid OTP code.' } };
       }
 
-      // Check if OTP is expired
-      if (Date.now() > storedOTP.expiresAt) {
-        otpStore.delete(phone);
-        localStorage.removeItem('pending_phone_auth');
-        return { error: { message: 'OTP has expired. Please request a new code.' } };
-      }
-
-      // Verify OTP code
-      if (storedOTP.code !== token) {
-        return { error: { message: 'Invalid OTP code. Please try again.' } };
-      }
-
-      // OTP is valid - check if user exists
-      // Query customer_profiles to find user by phone
-      let existingCustomer = null;
-      try {
-        const { data, error } = await supabase
-          .from('customer_profiles')
-          .select('id, user_id, email')
-          .eq('phone', phone)
-          .single();
-
-        // Only use the result if there's no error
-        if (!error) {
-          existingCustomer = data;
-        }
-        // If error, treat as new user to allow registration
-      } catch (queryError) {
-        // Query failed (possibly due to RLS) - treat as new user
-      }
-
-      if (existingCustomer?.user_id) {
-        // Existing user found - return their email so they can complete login with password
-        // The OTP verification proves they own the phone, now they need password for security
-
-        // Keep OTP data for a short while in case they need to retry
-        // (will be cleared after successful login or after expiry)
-
-        return {
-          error: null,
-          isNewUser: false,
-          existingUserEmail: existingCustomer.email || undefined
-        };
-      }
-
-      // New user (or couldn't verify due to RLS) - keep OTP valid for registration completion
-      return { error: null, isNewUser: true };
+      return {
+        error: null,
+        isNewUser: data.isNewUser,
+        existingUserEmail: data.existingUserEmail || undefined,
+      };
     } catch (error) {
-      console.error('Error verifying OTP:', error);
       return { error };
     }
   };
@@ -231,7 +166,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Clear any pending phone OTP data on successful login
-      otpStore.clear();
       localStorage.removeItem('pending_phone_auth');
 
       // Update auth state
@@ -242,7 +176,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { error: null };
     } catch (error) {
-      console.error('Error signing in with password:', error);
       return { error };
     }
   };
@@ -254,21 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userData: RegistrationData
   ): Promise<{ error: any }> => {
     try {
-      // Verify OTP one more time
-      let storedOTP = otpStore.get(phone);
-      if (!storedOTP) {
-        const stored = localStorage.getItem('pending_phone_auth');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.phone === phone) {
-            storedOTP = parsed;
-          }
-        }
-      }
-
-      if (!storedOTP || storedOTP.code !== token) {
-        return { error: { message: 'Invalid or expired OTP. Please try again.' } };
-      }
+      // OTP was already verified server-side via verifyPhoneOTP
 
       // Create auth user with email (required by Supabase)
       // Use a generated email if not provided
@@ -319,7 +238,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
       if (profileError) {
-        console.error('Error creating customer profile:', profileError);
         // Profile might already exist from trigger, try update instead
         const { error: updateError } = await supabase
           .from('customer_profiles')
@@ -336,12 +254,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq('user_id', authData.user.id);
 
         if (updateError) {
-          console.error('Error updating customer profile:', updateError);
         }
       }
 
-      // Clear OTP data
-      otpStore.delete(phone);
+      // Clear any pending auth data
       localStorage.removeItem('pending_phone_auth');
 
       // Update user state
@@ -350,7 +266,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { error: null };
     } catch (error) {
-      console.error('Error completing phone registration:', error);
       return { error };
     }
   };
@@ -460,7 +375,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq('user_id', currentUser.id);
 
         if (updateError) {
-          console.error('Error updating profile:', updateError);
           return { error: updateError };
         }
       } else {
@@ -482,7 +396,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
 
         if (profileError) {
-          console.error('Error creating profile:', profileError);
           return { error: profileError };
         }
       }

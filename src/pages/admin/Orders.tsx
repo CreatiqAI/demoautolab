@@ -142,7 +142,6 @@ export default function Orders() {
         .order('created_at', { ascending: false });
 
       if (ordersError) {
-        console.warn('❌ Direct orders query failed:', ordersError);
 
         // Fallback: Basic orders query without items
         const { data: basicData, error: basicError } = await supabase
@@ -156,7 +155,6 @@ export default function Orders() {
             order_items: [] // No items in fallback
           }));
         } else {
-          console.error('❌ All order queries failed:', basicError);
 
           // Let's also try without ordering to see if that's the issue
           const { data: simpleData, error: simpleError } = await supabase
@@ -170,7 +168,6 @@ export default function Orders() {
               order_items: []
             }));
           } else {
-            console.error('❌ Even simple query failed:', simpleError);
 
             // Check table existence and permissions
             const { count, error: countError } = await supabase
@@ -222,7 +219,6 @@ export default function Orders() {
       setOrders(transformedOrders);
 
     } catch (error: any) {
-      console.error('❌ Error fetching orders:', error);
       setOrders([]);
       // Don't show error toast since this is expected when database isn't fully set up
     } finally {
@@ -256,7 +252,6 @@ export default function Orders() {
       setIsEditDialogOpen(false);
       fetchOrders();
     } catch (error: any) {
-      console.error('Error updating order:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to update order",
@@ -300,7 +295,6 @@ export default function Orders() {
           description: `Order #${order.order_no} has been marked as completed and moved to archive.`
         });
       } else {
-        console.warn('⚠️ Update completed but no data returned');
         toast({
           title: "Order Status Updated",
           description: `Order #${order.order_no} status updated. Please refresh to see changes.`
@@ -311,7 +305,6 @@ export default function Orders() {
       fetchOrders();
 
     } catch (error: any) {
-      console.error('❌ Mark complete error:', error);
       toast({
         title: "Failed to Complete Order",
         description: error.message || "Failed to mark order as complete",
@@ -339,7 +332,6 @@ export default function Orders() {
         .eq('order_id', order.id);
 
       if (voucherUsageError) {
-        console.warn('Could not delete voucher usage:', voucherUsageError);
       }
 
       // Then delete order items
@@ -349,7 +341,6 @@ export default function Orders() {
         .eq('order_id', order.id);
 
       if (itemsError) {
-        console.warn('Could not delete order items:', itemsError);
       }
 
       // Finally delete the order
@@ -372,7 +363,6 @@ export default function Orders() {
       fetchOrders();
 
     } catch (error: any) {
-      console.error('Delete order error:', error);
       toast({
         title: "Delete Failed",
         description: error.message || "Failed to delete order",

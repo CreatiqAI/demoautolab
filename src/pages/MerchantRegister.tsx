@@ -81,7 +81,6 @@ const MerchantRegister = () => {
 
       if (error) {
         toast.error('Failed to validate code');
-        console.error(error);
         setLoading(false);
         return;
       }
@@ -100,7 +99,6 @@ const MerchantRegister = () => {
         toast.error('Invalid salesman code. Please contact your sales representative.');
       }
     } catch (error: any) {
-      console.error('Code validation error:', error);
       toast.error('Failed to validate code');
     }
 
@@ -118,7 +116,6 @@ const MerchantRegister = () => {
         .upload(fileName, file, { upsert: true });
 
       if (error) {
-        console.error('Upload error:', error);
         return null;
       }
 
@@ -128,7 +125,6 @@ const MerchantRegister = () => {
 
       return urlData.publicUrl;
     } catch (error) {
-      console.error('File upload error:', error);
       return null;
     }
   };
@@ -400,7 +396,6 @@ const MerchantRegister = () => {
           .single();
 
         if (createProfileError) {
-          console.error('Profile creation error:', createProfileError);
           toast.error('Failed to create customer profile');
           setLoading(false);
           return;
@@ -447,7 +442,6 @@ const MerchantRegister = () => {
         } as any);
 
       if (registrationError) {
-        console.error('Registration error:', registrationError);
         toast.error(`Failed to submit merchant application: ${registrationError.message}`);
         setLoading(false);
         return;
@@ -460,7 +454,6 @@ const MerchantRegister = () => {
       }, 2000);
 
     } catch (error: any) {
-      console.error('Merchant signup error:', error);
       toast.error('An error occurred during registration');
     }
 

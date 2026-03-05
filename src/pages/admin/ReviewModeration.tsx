@@ -80,7 +80,6 @@ export default function ReviewModeration() {
 
 
       if (error) {
-        console.error('Supabase error details:', error);
         throw error;
       }
 
@@ -116,7 +115,6 @@ export default function ReviewModeration() {
       setApprovedReviews(transformedReviews.filter((r: Review) => r.status === 'approved'));
       setRejectedReviews(transformedReviews.filter((r: Review) => r.status === 'rejected'));
     } catch (error: any) {
-      console.error('Error fetching reviews:', error);
       toast({
         title: 'Error',
         description: 'Failed to load reviews. Please try again.',
@@ -150,7 +148,6 @@ export default function ReviewModeration() {
 
       await fetchReviews();
     } catch (error: any) {
-      console.error('Error approving review:', error);
       toast({
         title: 'Error',
         description: 'Failed to approve review. Please try again.',
@@ -178,7 +175,6 @@ export default function ReviewModeration() {
 
       await fetchReviews();
     } catch (error: any) {
-      console.error('Error rejecting review:', error);
       toast({
         title: 'Error',
         description: 'Failed to reject review. Please try again.',
@@ -206,7 +202,6 @@ export default function ReviewModeration() {
 
       await fetchReviews();
     } catch (error: any) {
-      console.error('Error deleting review:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete review. Please try again.',

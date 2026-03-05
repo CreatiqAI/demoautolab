@@ -144,7 +144,6 @@ export default function AdminReturns() {
       const { data, error } = await query;
 
       if (error) {
-        console.warn('Primary query failed, trying fallback:', error);
         // Try simpler query
         const { data: basicData, error: basicError } = await supabase
           .from('returns' as any)
@@ -158,7 +157,6 @@ export default function AdminReturns() {
         setReturns((data as ExtendedReturn[]) || []);
       }
     } catch (err) {
-      console.error('Error fetching returns:', err);
       toast({
         title: 'Error',
         description: 'Failed to load returns',

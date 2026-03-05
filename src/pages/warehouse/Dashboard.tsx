@@ -84,7 +84,6 @@ export default function WarehouseDashboard() {
           filter: 'status=in.(PROCESSING,PACKING,READY_FOR_DELIVERY)'
         },
         (payload) => {
-          console.log('Order change detected:', payload);
 
           // Play sound for new orders
           if (payload.eventType === 'INSERT' ||
@@ -166,7 +165,6 @@ export default function WarehouseDashboard() {
 
       setOrders(newOrders);
     } catch (error: any) {
-      console.error('Error fetching orders:', error);
       toast({
         title: 'Error',
         description: 'Failed to fetch orders',
@@ -198,7 +196,6 @@ export default function WarehouseDashboard() {
 
       setStats(stats);
     } catch (error) {
-      console.error('Error fetching stats:', error);
     }
   };
 

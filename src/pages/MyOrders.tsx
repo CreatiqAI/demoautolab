@@ -127,7 +127,6 @@ export default function MyOrders() {
       setIsViewDialogOpen(false);
       fetchMyOrders();
     } catch (error: any) {
-      console.error('Error cancelling order:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to cancel order. Please try again.",
@@ -348,12 +347,10 @@ export default function MyOrders() {
               }));
             } else {
               // If error fetching images, just use orders without images
-              console.warn('Could not fetch component images:', componentsError);
               ordersData = ordersWithItems;
             }
           } catch (error) {
             // Gracefully handle any errors - display orders without images
-            console.warn('Error fetching component images:', error);
             ordersData = ordersWithItems;
           }
         }
@@ -416,7 +413,6 @@ export default function MyOrders() {
       setRecentOrders(recent);
       setArchivedOrders(archived);
     } catch (error: any) {
-      console.error('Error fetching customer orders:', error);
       setOrders([]);
       setRecentOrders([]);
       setArchivedOrders([]);
@@ -557,7 +553,6 @@ export default function MyOrders() {
       });
 
     } catch (error: any) {
-      console.error('Error purchasing history access:', error);
       toast({
         title: "Purchase Failed",
         description: error.message || "Failed to initiate purchase. Please try again.",

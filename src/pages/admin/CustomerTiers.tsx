@@ -113,13 +113,11 @@ export default function CustomerTiers() {
 
 
       if (error) {
-        console.error('[CustomerTiers] Fetch error details:', error);
         throw error;
       }
 
       setTiers(data || []);
     } catch (error: any) {
-      console.error('[CustomerTiers] Error fetching tiers:', error);
       toast({
         title: 'Error',
         description: `Failed to load customer tiers: ${error.message || 'Unknown error'}`,
@@ -193,7 +191,6 @@ export default function CustomerTiers() {
           .select();
 
         if (error) {
-          console.error('Update error:', error);
           throw error;
         }
 
@@ -210,7 +207,6 @@ export default function CustomerTiers() {
           .select();
 
         if (error) {
-          console.error('Insert error:', error);
           throw error;
         }
 
@@ -224,7 +220,6 @@ export default function CustomerTiers() {
       setIsEditModalOpen(false);
       fetchTiers();
     } catch (error: any) {
-      console.error('Error saving tier:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to save tier',
@@ -252,7 +247,6 @@ export default function CustomerTiers() {
       });
       fetchTiers();
     } catch (error: any) {
-      console.error('Error deleting tier:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete tier. There may be customers using this tier.',
@@ -272,7 +266,6 @@ export default function CustomerTiers() {
         .select();
 
       if (error) {
-        console.error('Toggle active error:', error);
         throw error;
       }
 
@@ -283,7 +276,6 @@ export default function CustomerTiers() {
       });
       fetchTiers();
     } catch (error: any) {
-      console.error('Error toggling tier:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to update tier status',

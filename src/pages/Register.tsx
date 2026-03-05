@@ -175,7 +175,6 @@ const Register = () => {
         });
 
       if (profileError) {
-        console.error('Profile creation error:', profileError);
         toast.error('Account created but profile setup failed. Please contact support.');
         setLoading(false);
         return;
@@ -184,7 +183,6 @@ const Register = () => {
       toast.success('Account created successfully! Welcome to AutoLab.');
       navigate('/');
     } catch (err) {
-      console.error('Registration error:', err);
       toast.error('An unexpected error occurred. Please try again.');
     }
 

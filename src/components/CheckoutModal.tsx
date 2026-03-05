@@ -160,7 +160,6 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
           .single();
           
         if (error) {
-          console.warn('No customer profile found:', error);
           return;
         }
         
@@ -180,7 +179,6 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
             });
             setAvailableVouchers(vouchers || []);
           } catch (voucherError) {
-            console.error('Error fetching vouchers:', voucherError);
             setAvailableVouchers([]);
           }
         }
@@ -193,7 +191,6 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
           });
         }
       } catch (error) {
-        console.error('Error fetching customer profile:', error);
       }
     };
     
@@ -299,7 +296,6 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         });
       }
     } catch (error: any) {
-      console.error('Voucher validation error:', error);
       setVoucherValidationMsg('Error validating voucher');
       toast({
         title: "Validation Error",
@@ -421,10 +417,8 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
           });
 
           if (voucherError) {
-            console.error('Error applying voucher:', voucherError);
           }
         } catch (voucherErr) {
-          console.error('Voucher application failed:', voucherErr);
         }
       }
 
@@ -452,7 +446,6 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
       });
 
     } catch (error: any) {
-      console.error('Error placing order:', error);
       toast({
         title: "Order Failed",
         description: error.message || "Failed to place order. Please try again.",

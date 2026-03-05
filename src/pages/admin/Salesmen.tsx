@@ -107,7 +107,6 @@ export default function Salesmen() {
       if (error) throw error;
       setSalesmen(data || []);
     } catch (error: any) {
-      console.error('Error fetching salesmen:', error);
       toast({
         title: 'Error',
         description: 'Failed to load salesmen. The table may not exist yet.',
@@ -163,7 +162,6 @@ export default function Salesmen() {
       setFormData(initialFormData);
       fetchSalesmen();
     } catch (error: any) {
-      console.error('Error creating salesman:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to create salesman',
@@ -213,7 +211,6 @@ export default function Salesmen() {
       setFormData(initialFormData);
       fetchSalesmen();
     } catch (error: any) {
-      console.error('Error updating salesman:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to update salesman',
@@ -241,7 +238,6 @@ export default function Salesmen() {
       setSelectedSalesman(null);
       fetchSalesmen();
     } catch (error: any) {
-      console.error('Error deleting salesman:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to delete salesman',
@@ -267,7 +263,6 @@ export default function Salesmen() {
       });
       fetchSalesmen();
     } catch (error: any) {
-      console.error('Error toggling salesman status:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to update status',

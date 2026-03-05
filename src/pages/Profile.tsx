@@ -91,7 +91,6 @@ const Profile = () => {
             setProfile(adminProfile);
             return;
           } catch (parseError) {
-            console.error('Error parsing stored admin user:', parseError);
             localStorage.removeItem('admin_user');
           }
         }
@@ -107,7 +106,6 @@ const Profile = () => {
       });
 
     } catch (error: any) {
-      console.error('Error fetching profile:', error);
       toast({
         title: "Error",
         description: "Failed to load profile information.",
@@ -200,7 +198,6 @@ const Profile = () => {
       setIsEditing(false);
 
     } catch (error: any) {
-      console.error('Error updating profile:', error);
       toast({
         title: "Update Failed",
         description: error.message || "Failed to update profile. Please try again.",

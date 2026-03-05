@@ -49,7 +49,6 @@ export class CommercialDocumentProcessor {
       message,
       details
     });
-    console.log(`[${level.toUpperCase()}] ${message}`, details);
   }
 
   async processDocument(file: File): Promise<ProcessingResult> {

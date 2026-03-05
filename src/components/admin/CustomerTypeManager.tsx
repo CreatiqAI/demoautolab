@@ -77,7 +77,6 @@ export function CustomerTypeManager({ customer, onCustomerTypeUpdate }: Customer
       }));
 
     } catch (error: any) {
-      console.error('Error updating customer type:', error);
       toast({
         title: "Update Failed",
         description: error.message || "Failed to update customer type",

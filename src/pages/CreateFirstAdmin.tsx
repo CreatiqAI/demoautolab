@@ -105,7 +105,6 @@ export default function CreateFirstAdmin() {
         navigate('/auth');
       }
     } catch (error: any) {
-      console.error('Error creating admin:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to create admin account. Check console for details.",

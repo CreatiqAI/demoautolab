@@ -78,7 +78,6 @@ const InventoryAlerts = () => {
       const { data, error } = await query.order('stock_level', { ascending: true });
 
       if (error) {
-        console.error('Error fetching alerts:', error);
         throw error;
       }
 
@@ -202,7 +201,6 @@ const InventoryAlerts = () => {
       });
     },
     onError: (error) => {
-      console.error('Restock error:', error);
       toast({
         title: "Error",
         description: "Failed to create restock order",

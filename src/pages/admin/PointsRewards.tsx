@@ -76,7 +76,6 @@ export default function PointsRewards() {
         fetchAnalytics()
       ]);
     } catch (error) {
-      console.error('Error fetching data:', error);
       toast({
         title: 'Error',
         description: 'Failed to load data',
@@ -126,7 +125,6 @@ export default function PointsRewards() {
           });
 
           if (balanceError) {
-            console.error(`❌ Error fetching balance for ${customer.full_name}:`, balanceError);
           } else {
           }
 
@@ -135,7 +133,6 @@ export default function PointsRewards() {
           });
 
           if (lifetimeError) {
-            console.error(`❌ Error fetching lifetime points for ${customer.full_name}:`, lifetimeError);
           } else {
           }
 
@@ -149,7 +146,6 @@ export default function PointsRewards() {
 
       setCustomers(customersWithPoints.sort((a, b) => b.current_points - a.current_points));
     } else if (error) {
-      console.error('❌ Error fetching customer profiles:', error);
     }
   };
 
@@ -207,7 +203,6 @@ export default function PointsRewards() {
       setItemToDelete(null);
       fetchRewardItems();
     } catch (error: any) {
-      console.error('Error deleting reward item:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to delete reward item',
@@ -726,7 +721,6 @@ function CreateRewardItemDialog({ open, onOpenChange, editingItem, onSuccess }: 
       });
 
     } catch (error: any) {
-      console.error('Upload error:', error);
       toast({
         title: 'Upload Failed',
         description: error.message || 'Failed to upload image',
@@ -788,7 +782,6 @@ function CreateRewardItemDialog({ open, onOpenChange, editingItem, onSuccess }: 
 
       onSuccess();
     } catch (error: any) {
-      console.error('Error saving reward item:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to save reward item',

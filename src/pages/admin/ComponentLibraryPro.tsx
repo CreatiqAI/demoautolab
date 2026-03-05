@@ -82,7 +82,6 @@ export default function ComponentLibraryPro() {
       const uniqueTypes = [...new Set((data || []).map((item: any) => item.component_type))].sort();
       setComponentTypes(uniqueTypes);
     } catch (error: any) {
-      console.error('Error fetching component types:', error);
     }
   };
 
@@ -146,7 +145,6 @@ export default function ComponentLibraryPro() {
       setSearchResults(componentsWithUsage as any);
 
     } catch (error: any) {
-      console.error('Error fetching components:', error);
       toast({
         title: "Error",
         description: "Failed to load components. Please check permissions and ensure the database schema is updated.",
@@ -165,7 +163,6 @@ export default function ComponentLibraryPro() {
       if (error) throw error;
       setSearchResults(data || []);
     } catch (error: any) {
-      console.error('Search error:', error);
       // Fallback to client-side search if function doesn't exist
       const filtered = components.filter(comp => 
         comp.component_sku.toLowerCase().includes(term.toLowerCase()) ||
@@ -272,7 +269,6 @@ export default function ComponentLibraryPro() {
       fetchComponents();
       fetchComponentTypes(); // Refresh types list
     } catch (error: any) {
-      console.error('Error saving component:', error);
       
       if (error.code === '23505') {
         toast({
@@ -352,7 +348,6 @@ export default function ComponentLibraryPro() {
         }
       }
 
-      console.warn('Helper function failed, trying direct delete:', functionError);
       
       // Fallback: Direct hard delete from table
       const { data, error } = await supabase
@@ -376,7 +371,6 @@ export default function ComponentLibraryPro() {
       
       fetchComponents();
     } catch (error: any) {
-      console.error('Error deleting component:', error);
       
       let errorMessage = "Failed to delete component";
       if (error.code === '23503') {
@@ -452,7 +446,6 @@ export default function ComponentLibraryPro() {
       setStockAdjustment({ type: 'add', quantity: 0, reason: '' });
       fetchComponents();
     } catch (error: any) {
-      console.error('Error updating stock:', error);
       toast({
         title: "Error",
         description: "Failed to update stock",

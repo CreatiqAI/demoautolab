@@ -82,7 +82,6 @@ export default function MyPoints() {
         fetchMyRedemptions()
       ]);
     } catch (error) {
-      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
@@ -239,7 +238,6 @@ export default function MyPoints() {
         throw new Error(data.error || 'Redemption failed');
       }
     } catch (error: any) {
-      console.error('Redemption error:', error);
       toast({
         title: 'Redemption Failed',
         description: error.message || 'An error occurred',

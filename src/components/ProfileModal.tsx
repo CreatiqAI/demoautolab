@@ -98,7 +98,6 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
             setProfile(adminProfile);
             return;
           } catch (parseError) {
-            console.error('Error parsing stored admin user:', parseError);
             localStorage.removeItem('admin_user'); // Clean up invalid data
           }
         }
@@ -112,7 +111,6 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
       });
 
     } catch (error: any) {
-      console.error('Error fetching profile:', error);
       toast({
         title: "Error",
         description: "Failed to load profile information.",
@@ -156,15 +154,6 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
     setSaving(true);
     try {
       if (profile.type === 'customer') {
-        console.log('Updating customer profile:', {
-          user_id: user?.id,
-          updates: {
-            full_name: editForm.full_name,
-            email: editForm.email,
-            phone: editForm.phone,
-            address: editForm.address,
-          }
-        });
 
         // Update customer profile
         const { data, error } = await supabase
@@ -179,7 +168,6 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
           .eq('user_id', user?.id)
           .select();
 
-        console.log('Update result:', { data, error });
 
         if (error) throw error;
 
@@ -188,13 +176,6 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
           description: "Your profile has been successfully updated.",
         });
       } else if (profile.type === 'admin') {
-        console.log('Updating admin profile:', {
-          profile_id: profile.id,
-          updates: {
-            username: editForm.username,
-            full_name: editForm.full_name,
-          }
-        });
 
         // Update admin profile
         const { data, error } = await supabase
@@ -207,7 +188,6 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
           .eq('id', profile.id)
           .select();
 
-        console.log('Admin update result:', { data, error });
 
         if (error) throw error;
 
@@ -231,7 +211,6 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
       setIsEditing(false);
 
     } catch (error: any) {
-      console.error('Error updating profile:', error);
       toast({
         title: "Update Failed",
         description: error.message || "Failed to update profile. Please try again.",

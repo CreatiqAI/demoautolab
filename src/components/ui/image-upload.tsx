@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import imageCompression from 'browser-image-compression';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +28,7 @@ export default function ImageUpload({
   placeholder = "Upload an image",
   bucket = "product-images",
   path = "uploads",
-  maxSize = 10 * 1024 * 1024, // 10MB default
+  maxSize = 2 * 1024 * 1024, // 2MB default
   acceptedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
   className = ""
 }: ImageUploadProps) {
@@ -37,52 +38,61 @@ export default function ImageUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const compressImage = async (file: File): Promise<File> => {
+    if (file.type === 'image/gif' || file.size <= 500 * 1024) return file;
+    try {
+      return await imageCompression(file, {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1920,
+        useWebWorker: true,
+        fileType: 'image/webp',
+        initialQuality: 0.85,
+      });
+    } catch {
+      return file;
+    }
+  };
+
   const uploadFile = async (file: File) => {
     try {
       setUploading(true);
       setUploadProgress(0);
 
-      // Validate file size
-      if (file.size > maxSize) {
-        throw new Error(`File size must be less than ${Math.round(maxSize / 1024 / 1024)}MB`);
-      }
-
-      // Validate file type
       if (!acceptedTypes.includes(file.type)) {
         throw new Error(`File type ${file.type} is not supported. Please use: ${acceptedTypes.join(', ')}`);
       }
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error('File is too large. Please select an image under 10MB.');
+      }
 
-      // Check if user is authenticated (either Supabase auth or admin localStorage)
+      setUploadProgress(10);
+      const compressedFile = await compressImage(file);
+      setUploadProgress(30);
+
+      if (compressedFile.size > maxSize) {
+        throw new Error(`Image still too large after compression (${(compressedFile.size / 1024 / 1024).toFixed(1)}MB). Please use a smaller image.`);
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       const adminUser = localStorage.getItem('admin_user');
-      
       if (!user && !adminUser) {
         throw new Error('You must be logged in to upload images');
       }
-      
-      // Use admin user ID if available, otherwise use Supabase user ID
-      const userId = adminUser ? JSON.parse(adminUser).username : user?.id;
 
-      // Generate unique filename
-      const fileExt = file.name.split('.').pop();
+      const fileExt = compressedFile.type === 'image/webp' ? 'webp' : file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `${path}/${fileName}`;
 
-      console.log('Uploading file:', { fileName, filePath, bucket, userId });
-      setUploadProgress(25);
+      setUploadProgress(40);
 
-      // Try to upload with upsert: true to handle potential conflicts
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from(bucket)
-        .upload(filePath, file, {
-          cacheControl: '31536000', // Cache for 1 year (better performance)
-          upsert: true, // Changed to true to overwrite if exists
+        .upload(filePath, compressedFile, {
+          cacheControl: '31536000',
+          upsert: true,
         });
 
       if (error) {
-        console.error('Storage upload error:', error);
-        
-        // Provide more specific error messages
         if (error.message.includes('row-level security')) {
           throw new Error('Storage permissions error. Please contact administrator to fix storage policies.');
         } else if (error.message.includes('not found')) {
@@ -94,29 +104,27 @@ export default function ImageUpload({
         }
       }
 
-      setUploadProgress(75);
+      setUploadProgress(80);
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from(bucket)
         .getPublicUrl(filePath);
 
-      // Call onChange with URL and metadata
       onChange(publicUrl, {
         fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type
+        fileSize: compressedFile.size,
+        mimeType: compressedFile.type
       });
 
       setUploadProgress(100);
-      
+
+      const savedKB = Math.round((file.size - compressedFile.size) / 1024);
       toast({
-        title: "Success",
-        description: "Image uploaded successfully"
+        title: "Image uploaded",
+        description: savedKB > 0 ? `Compressed & uploaded (saved ${savedKB}KB)` : "Uploaded successfully"
       });
 
-    } catch (error: any) {
-      console.error('Upload error:', error);
+    } catch (error) {
       toast({
         title: "Upload Error",
         description: error.message || "Failed to upload image",
@@ -215,8 +223,8 @@ export default function ImageUpload({
                 Drag and drop an image here, or click to select
               </p>
               <p className="text-xs text-gray-400">
-                Supported: {acceptedTypes.map(type => type.split('/')[1]).join(', ')} 
-                • Max size: {Math.round(maxSize / 1024 / 1024)}MB
+                Supported: {acceptedTypes.map(type => type.split('/')[1]).join(', ')}
+                {' '}• Auto-compressed to WebP • Max: {Math.round(maxSize / 1024 / 1024)}MB
               </p>
             </div>
 
@@ -231,7 +239,7 @@ export default function ImageUpload({
             {uploading && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span>Uploading...</span>
+                  <span>{uploadProgress < 30 ? 'Compressing...' : 'Uploading...'}</span>
                   <span>{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} className="w-full" />
@@ -246,7 +254,7 @@ export default function ImageUpload({
               className="w-full"
             >
               <Upload className="mr-2 h-4 w-4" />
-              {uploading ? 'Uploading...' : 'Choose File'}
+              {uploading ? (uploadProgress < 30 ? 'Compressing...' : 'Uploading...') : 'Choose File'}
             </Button>
           </TabsContent>
           

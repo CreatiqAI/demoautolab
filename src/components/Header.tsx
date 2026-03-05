@@ -67,7 +67,6 @@ const Header = () => {
         setCategories(categoriesData || []);
         setBrands(uniqueBrands.map(brand => ({ id: brand, name: brand })));
       } catch (error) {
-        console.error('Error fetching megamenu data:', error);
       }
     };
 
@@ -137,7 +136,6 @@ const Header = () => {
           }
         }
       } catch (error) {
-        console.error('Error checking merchant status:', error);
         setIsMerchant(false);
       }
     };

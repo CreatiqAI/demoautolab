@@ -114,7 +114,6 @@ export default function SecondhandMarketplace() {
       setListings(formattedListings);
       setFilteredListings(formattedListings);
     } catch (error: any) {
-      console.error('Error fetching listings:', error);
       toast({
         title: 'Error',
         description: 'Failed to load listings',
@@ -183,7 +182,6 @@ export default function SecondhandMarketplace() {
         l.id === listing.id ? { ...l, view_count: l.view_count + 1 } : l
       ));
     } catch (error) {
-      console.error('Error updating view count:', error);
     }
   };
 
@@ -255,7 +253,6 @@ export default function SecondhandMarketplace() {
       });
       setShowInquiryDialog(false);
     } catch (error: any) {
-      console.error('Error submitting inquiry:', error);
       toast({
         title: 'Error',
         description: 'Failed to submit inquiry. Please try again.',

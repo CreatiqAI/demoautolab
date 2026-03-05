@@ -217,7 +217,6 @@ export default function PremiumPartner() {
         setIsEditMode(true);
       }
     } catch (error) {
-      console.error('Error checking merchant status:', error);
     } finally {
       setLoading(false);
     }
@@ -292,7 +291,6 @@ export default function PremiumPartner() {
       setPhotoFiles([]);
       return uploadedUrls;
     } catch (error: any) {
-      console.error('Error uploading photos:', error);
       toast({
         title: 'Upload Error',
         description: 'Failed to upload some photos. Please try again.',
@@ -364,7 +362,6 @@ export default function PremiumPartner() {
       setIsEditMode(false);
       await checkMerchantAndFetchPartnership();
     } catch (error: any) {
-      console.error('Error submitting application:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to submit application',

@@ -57,7 +57,6 @@ export function PricingProvider({ children }: PricingProviderProps) {
         });
 
       if (error) {
-        console.error('Error fetching pricing context:', error);
         // Fallback to normal customer
         setPricingData({
           user_id: user.id,
@@ -85,7 +84,6 @@ export function PricingProvider({ children }: PricingProviderProps) {
         }
       }
     } catch (error) {
-      console.error('Error in fetchPricingContext:', error);
       // Fallback to normal customer
       setPricingData({
         user_id: user?.id || null,

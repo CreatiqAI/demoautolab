@@ -84,7 +84,6 @@ export default function ArchivedOrders() {
       if (!error && data) {
         ordersData = data;
       } else if (error) {
-        console.error(`❌ Failed to fetch completed orders:`, error);
         ordersData = [];
       } else {
         ordersData = [];
@@ -118,7 +117,6 @@ export default function ArchivedOrders() {
       setOrders(transformedOrders);
 
     } catch (error: any) {
-      console.error('Error fetching archived orders:', error);
       setOrders([]);
     } finally {
       setLoading(false);
@@ -149,10 +147,6 @@ export default function ArchivedOrders() {
 
 
       if (error) {
-        console.error('❌ Update error details:', error);
-        console.error('❌ Error code:', error.code);
-        console.error('❌ Error hint:', error.hint);
-        console.error('❌ Error details:', error.details);
 
         // Try alternative status values
 
@@ -174,7 +168,6 @@ export default function ArchivedOrders() {
             fetchArchivedOrders();
             return; // Success, exit early
           } else {
-            console.warn(`❌ ${altStatus} failed:`, altError.message);
           }
         }
 
@@ -190,7 +183,6 @@ export default function ArchivedOrders() {
       fetchArchivedOrders();
 
     } catch (error: any) {
-      console.error('Reactivate order error:', error);
       toast({
         title: "Failed to Reactivate Order",
         description: error.message || "Failed to reactivate order",

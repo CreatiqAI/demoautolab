@@ -98,7 +98,6 @@ export const ReviewForm = ({ productId, onSuccess, onCancel }: ReviewFormProps) 
         });
 
       if (uploadError) {
-        console.error('Error uploading image:', uploadError);
         throw uploadError;
       }
 
@@ -194,11 +193,9 @@ export const ReviewForm = ({ productId, onSuccess, onCancel }: ReviewFormProps) 
             .insert(imageRecords);
 
           if (imagesError) {
-            console.error("Error saving image records:", imagesError);
             // Don't fail the whole review submission if images fail
           }
         } catch (imageError) {
-          console.error("Error uploading images:", imageError);
           // Don't fail the whole review submission if images fail
         }
       }
@@ -223,7 +220,6 @@ export const ReviewForm = ({ productId, onSuccess, onCancel }: ReviewFormProps) 
         onSuccess();
       }
     } catch (error: any) {
-      console.error("Error submitting review:", error);
       toast({
         title: "Submission failed",
         description: error.message || "Could not submit your review. Please try again.",
