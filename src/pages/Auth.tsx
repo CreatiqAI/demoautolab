@@ -112,12 +112,19 @@ const Auth = () => {
     try {
       const { data: profile, error: profileError } = await supabase
         .from('customer_profiles')
-        .select('email, user_id')
+        .select('email, user_id, customer_type')
         .eq('phone', normalizedPhone)
         .single();
 
       if (profileError || !profile?.email) {
         toast.error('No account found with this phone number. Please register first.');
+        setLoading(false);
+        return;
+      }
+
+      // Block merchant accounts from logging in through customer portal
+      if (profile.customer_type === 'merchant') {
+        toast.error('This is a merchant account. Please use the Merchant tab and verify with OTP.');
         setLoading(false);
         return;
       }
