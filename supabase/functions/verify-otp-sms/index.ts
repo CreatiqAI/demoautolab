@@ -86,13 +86,18 @@ serve(async (req) => {
     await supabase.from('phone_otp_verifications').delete().eq('id', otpRecord.id);
 
     // Check if user exists by phone number
+    // customer_profiles stores phone with '+' prefix (e.g. +60165230268)
+    // Try both formats to handle any inconsistency
     let isNewUser = true;
     let existingUserEmail: string | null = null;
+
+    const phoneWithPlus = normalizedPhone.startsWith('+') ? normalizedPhone : `+${normalizedPhone}`;
+    const phoneWithoutPlus = normalizedPhone.replace(/^\+/, '');
 
     const { data: existingCustomer } = await supabase
       .from('customer_profiles')
       .select('id, user_id, email')
-      .eq('phone', normalizedPhone)
+      .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
       .maybeSingle();
 
     if (existingCustomer?.user_id) {
