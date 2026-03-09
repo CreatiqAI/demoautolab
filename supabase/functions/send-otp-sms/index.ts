@@ -21,7 +21,7 @@ serve(async (req) => {
       );
     }
 
-    // Normalize phone number: remove +, spaces, dashes — iSMS expects format like 60164502380
+    // Normalize phone number: remove +, spaces, dashes (e.g. 60164502380)
     const normalizedPhone = phone.replace(/[\s\-\+]/g, '');
 
     // Generate 6-digit OTP
@@ -53,41 +53,41 @@ serve(async (req) => {
       throw new Error(`Failed to store OTP: ${insertError.message}`);
     }
 
-    // Send SMS via iSMS.com.my
-    const ismsUsername = Deno.env.get('ISMS_USERNAME');
-    const ismsPassword = Deno.env.get('ISMS_PASSWORD');
-    const ismsSenderId = Deno.env.get('ISMS_SENDER_ID') || '63001';
+    // Send SMS via OneWay SMS (onewaysms.com.my)
+    const apiUsername = Deno.env.get('ONEWAYSMS_API_USERNAME');
+    const apiPassword = Deno.env.get('ONEWAYSMS_API_PASSWORD');
+    const mtUrl = Deno.env.get('ONEWAYSMS_MT_URL') || 'https://gateway.onewaysms.com.my/api.aspx';
 
-    if (!ismsUsername || !ismsPassword) {
-      throw new Error('iSMS credentials not configured');
+    if (!apiUsername || !apiPassword) {
+      throw new Error('OneWay SMS credentials not configured');
     }
 
-    const message = `Your AutoLab verification code is: ${code}. Valid for 5 minutes.`;
+    const message = `RM0.00 Auto Lab : Your verification code is ${code}. Valid for 5 minutes.`;
 
     const params = new URLSearchParams({
-      un: ismsUsername,
-      pwd: ismsPassword,
-      dstno: normalizedPhone,
-      msg: message,
-      type: '1',
-      agreedterm: 'YES',
-      sendid: ismsSenderId,
+      apiusername: apiUsername,
+      apipassword: apiPassword,
+      mobileno: normalizedPhone,
+      senderid: 'INFO',
+      languagetype: '1',
+      message: message,
     });
 
-    const smsResponse = await fetch('https://www.isms.com.my/isms_send_all_id.php', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    });
-
+    const smsResponse = await fetch(`${mtUrl}?${params.toString()}`);
     const smsResult = await smsResponse.text();
+    const resultCode = parseInt(smsResult.trim(), 10);
 
-    // iSMS returns numeric codes: 2000 = success, negative = error
-    // Check if the response indicates success
-    if (smsResult.trim().startsWith('-')) {
-      throw new Error(`iSMS error: ${smsResult.trim()}`);
+    // OneWay SMS: positive value = success (MT ID), negative = error
+    if (isNaN(resultCode) || resultCode < 0) {
+      const errorMessages: Record<number, string> = {
+        [-100]: 'Invalid API credentials',
+        [-200]: 'Invalid sender ID',
+        [-300]: 'Invalid phone number',
+        [-400]: 'Invalid language type',
+        [-500]: 'Invalid message characters',
+        [-600]: 'Insufficient SMS credits',
+      };
+      throw new Error(errorMessages[resultCode] || `OneWay SMS error: ${smsResult.trim()}`);
     }
 
     return new Response(
