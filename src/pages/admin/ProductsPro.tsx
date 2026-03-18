@@ -196,6 +196,11 @@ export default function ProductsPro() {
             id,
             name,
             description
+          ),
+          product_images_new (
+            url,
+            is_primary,
+            sort_order
           )
         `)
         .order('created_at', { ascending: false });
@@ -204,7 +209,14 @@ export default function ProductsPro() {
       if (error) {
         const fallbackResult = await supabase
           .from('products_new' as any)
-          .select('*')
+          .select(`
+            *,
+            product_images_new (
+              url,
+              is_primary,
+              sort_order
+            )
+          `)
           .order('created_at', { ascending: false });
 
         data = fallbackResult.data;
@@ -213,27 +225,15 @@ export default function ProductsPro() {
 
       if (error) throw error;
 
-      // Fetch primary images for all products
-      const productIds = (data as any[])?.map((p: any) => p.id) || [];
-      if (productIds.length > 0) {
-        const { data: allImages } = await supabase
-          .from('product_images_new' as any)
-          .select('product_id, url, is_primary')
-          .in('product_id', productIds)
-          .order('sort_order');
-
-        const imageMap: Record<string, string> = {};
-        (allImages as any[])?.forEach((img: any) => {
-          if (!imageMap[img.product_id] || img.is_primary) {
-            imageMap[img.product_id] = img.url;
-          }
-        });
-
-        data = (data as any[])?.map((p: any) => ({
+      // Attach primary_image_url from joined images
+      data = (data as any[])?.map((p: any) => {
+        const images = p.product_images_new || [];
+        const primary = images.find((img: any) => img.is_primary) || images[0];
+        return {
           ...p,
-          primary_image_url: imageMap[p.id] || null
-        }));
-      }
+          primary_image_url: primary?.url || null
+        };
+      });
 
       setProducts((data as any) || []);
       setFilteredProducts((data as any) || []);
@@ -1480,9 +1480,11 @@ export default function ProductsPro() {
                             alt={product.name}
                             loading="lazy"
                             decoding="async"
-                            width={48}
-                            height={48}
                             className="w-12 h-12 rounded object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = '/placeholder.svg';
+                            }}
                           />
                         ) : (
                           <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center">
