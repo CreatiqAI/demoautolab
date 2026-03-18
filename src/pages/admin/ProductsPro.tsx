@@ -1433,55 +1433,60 @@ export default function ProductsPro() {
               No products created yet. Create your first product!
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-1">
               {filteredProducts.map((product) => (
-                <div key={product.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 p-4 border rounded-lg">
-                  <div>
-                    <h3 className="font-medium">{product.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {product.brand} {product.model} {product.year_from && product.year_to && `(${product.year_from}-${product.year_to})`}
-                    </p>
-                    <div className="flex gap-1 mt-1 flex-wrap">
-                      {(product.categories || product.category) && (
-                        <Badge variant="secondary" className="text-xs">
-                          📂 {(product.categories?.name || product.category?.name || 'Category')}
+                <div key={product.id} className="flex items-center justify-between gap-3 px-3 py-2 border rounded-lg hover:bg-gray-50/50 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-sm truncate">{product.name}</h3>
+                        <Badge variant={product.active ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 h-5 flex-shrink-0">
+                          {product.active ? 'Active' : 'Inactive'}
                         </Badge>
-                      )}
-                      {product.screen_size && product.screen_size.length > 0 &&
-                        product.screen_size.map((size: string) => (
-                          <Badge key={size} variant="outline" className="text-xs">
-                            {size}"
+                        {product.featured && <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 flex-shrink-0">Featured</Badge>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-muted-foreground">
+                          {product.brand} {product.model} {product.year_from && product.year_to && `(${product.year_from}-${product.year_to})`}
+                        </span>
+                        {(product.categories || product.category) && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                            {(product.categories?.name || product.category?.name || 'Category')}
                           </Badge>
-                        ))
-                      }
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <Badge variant={product.active ? 'default' : 'secondary'}>
-                        {product.active ? 'Active' : 'Inactive'}
-                      </Badge>
-                      {product.featured && <Badge variant="outline">Featured</Badge>}
+                        )}
+                        {product.screen_size && product.screen_size.length > 0 &&
+                          product.screen_size.map((size: string) => (
+                            <Badge key={size} variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                              {size}"
+                            </Badge>
+                          ))
+                        }
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2 self-end sm:self-auto">
-                    <Button 
-                      size="sm" 
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button
+                      size="icon"
                       variant="ghost"
+                      className="h-8 w-8"
                       onClick={() => handlePreviewProduct(product)}
                       title="Preview Product"
                     >
                       <Package className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="icon"
                       variant="ghost"
+                      className="h-8 w-8"
                       onClick={() => handleEditProduct(product)}
                       title="Edit Product"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="icon"
                       variant="ghost"
+                      className="h-8 w-8"
                       onClick={async () => {
                         if (confirm(`Are you sure you want to PERMANENTLY DELETE product "${product.name}"? This action cannot be undone and will remove all related components and images.`)) {
                           try {
