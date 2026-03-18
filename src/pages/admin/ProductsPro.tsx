@@ -196,6 +196,10 @@ export default function ProductsPro() {
             id,
             name,
             description
+          ),
+          product_images_new!product_images_new_product_id_fkey(
+            image_url,
+            is_primary
           )
         `)
         .order('created_at', { ascending: false });
@@ -1438,6 +1442,7 @@ export default function ProductsPro() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Image</TableHead>
                     <TableHead>Product Name</TableHead>
                     <TableHead>Brand / Model</TableHead>
                     <TableHead>Category</TableHead>
@@ -1449,6 +1454,22 @@ export default function ProductsPro() {
                 <TableBody>
                   {filteredProducts.map((product) => (
                     <TableRow key={product.id}>
+                      <TableCell>
+                        {(() => {
+                          const primaryImage = product.product_images_new?.find((img: any) => img.is_primary) || product.product_images_new?.[0];
+                          return primaryImage?.image_url ? (
+                            <img
+                              src={primaryImage.image_url}
+                              alt={product.name}
+                              className="w-12 h-12 rounded object-cover"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center">
+                              <Package className="h-5 w-5 text-gray-400" />
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{product.name}</div>
                       </TableCell>
