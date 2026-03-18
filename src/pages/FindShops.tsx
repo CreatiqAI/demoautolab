@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -176,12 +177,12 @@ export default function FindShops() {
 
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
         {/* Page Header */}
-        <div className="mb-6 border-b border-gray-200 pb-4">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic">Find Authorized Shops</h1>
-            <Badge className="bg-purple-600 text-white text-[10px] uppercase font-bold">Panel Members Only</Badge>
+        <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
+          <div className="flex items-center justify-center lg:justify-start gap-3 mb-3">
+            <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide">Find Authorized <span className="text-lime-600 italic">Shops</span></h1>
+            <Badge className="bg-purple-600 text-white text-[10px] uppercase font-bold self-start mt-2">Panel Members Only</Badge>
           </div>
-          <p className="text-sm text-gray-500 uppercase tracking-wider font-medium">Our top 100 authorized Panel shops across Malaysia - invitation only</p>
+          <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Our top 100 authorized Panel shops across Malaysia - invitation only</p>
         </div>
 
         {/* Search & Filters */}
@@ -241,12 +242,13 @@ export default function FindShops() {
               <span className="text-[13px] font-medium uppercase tracking-wide text-gray-500">
                 Showing {filteredShops.length} of {shops.length} shops
               </span>
-              <button
+              <Button
+                variant="ghost"
                 onClick={handleClearFilters}
-                className="text-[13px] font-medium uppercase tracking-wide text-lime-600 hover:text-lime-700 transition-colors"
+                className="text-[13px] font-bold uppercase tracking-wide text-lime-600 hover:text-lime-700 h-8 px-3"
               >
                 Clear Filters
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -269,12 +271,13 @@ export default function FindShops() {
               Try adjusting your filters to see more results
             </p>
             {hasActiveFilters && (
-              <button
+              <Button
+                variant="outline"
                 onClick={handleClearFilters}
-                className="px-6 py-2.5 border border-gray-200 text-gray-700 font-bold uppercase tracking-wide text-[13px] hover:bg-gray-100 transition-all rounded-lg"
+                className="px-6 border-gray-200 rounded-lg text-[13px] h-10"
               >
                 Clear Filters
-              </button>
+              </Button>
             )}
           </div>
         ) : (
@@ -364,9 +367,9 @@ export default function FindShops() {
                     )}
 
                     {/* CTA Button */}
-                    <button className="w-full py-2.5 bg-gray-900 text-white font-bold uppercase tracking-wide text-[13px] hover:bg-lime-600 transition-all rounded-lg">
+                    <Button variant="hero" className="w-full text-[13px] h-10">
                       View Details
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );

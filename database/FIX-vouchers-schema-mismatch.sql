@@ -61,12 +61,12 @@ BEGIN
         is_active
       ) VALUES (
         voucher_code,
-        'Welcome Voucher RM50',
-        'Welcome voucher for new merchant subscription - RM50 off with minimum spend of RM100',
+        'RM50 Merchant Welcome Voucher',
+        'Welcome voucher for newly approved merchant. RM50 off your purchase.',
         'FIXED_AMOUNT',
         50.00,
-        100.00,
-        50.00,
+        0,
+        NULL,
         'MERCHANT',
         NEW.merchant_id,
         ARRAY[NEW.merchant_id]::UUID[],
@@ -74,7 +74,7 @@ BEGIN
         1,
         0,
         NOW(),
-        NOW() + INTERVAL '1 year',
+        NULL,
         true
       );
 

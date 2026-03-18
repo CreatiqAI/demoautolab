@@ -54,8 +54,8 @@ interface ProductFormData {
   brand: string;
   model: string;
   category_id: string;
-  year_from: number;
-  year_to: number;
+  year_from: number | null;
+  year_to: number | null;
   screen_size: string[];
   slug: string;
   active: boolean;
@@ -109,8 +109,8 @@ export default function ProductsPro() {
     brand: '',
     model: '',
     category_id: 'no-category',
-    year_from: new Date().getFullYear(),
-    year_to: new Date().getFullYear() + 5,
+    year_from: null,
+    year_to: null,
     screen_size: [],
     slug: '',
     active: true,
@@ -552,8 +552,8 @@ export default function ProductsPro() {
       brand: '',
       model: '',
       category_id: 'no-category',
-      year_from: new Date().getFullYear(),
-      year_to: new Date().getFullYear() + 5,
+      year_from: null,
+      year_to: null,
       screen_size: [],
       slug: '',
       active: true,
@@ -642,8 +642,8 @@ export default function ProductsPro() {
         brand: product.brand || '',
         model: product.model || '',
         category_id: product.category_id || 'no-category',
-        year_from: product.year_from || new Date().getFullYear(),
-        year_to: product.year_to || new Date().getFullYear() + 5,
+        year_from: product.year_from || null,
+        year_to: product.year_to || null,
         screen_size: product.screen_size || [],
         slug: product.slug || '',
         active: product.active ?? true,
@@ -741,30 +741,39 @@ export default function ProductsPro() {
                 Create Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-              <DialogHeader>
+            <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-4 sm:p-6">
+              <DialogHeader className="flex-shrink-0">
                 <DialogTitle>{editingProduct ? 'Edit Product' : 'Create New Product'}</DialogTitle>
                 <DialogDescription>
                   {editingProduct ? 'Edit your product and its components' : 'Create a product by adding components from your library'}
                 </DialogDescription>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit}>
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                  <TabsList className="flex w-full overflow-x-auto">
-                    <TabsTrigger value="basic">Product Details</TabsTrigger>
-                    <TabsTrigger value="components">
-                      Components ({formData.selectedComponents.length})
+              <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col min-h-0 flex-1">
+                  <TabsList className="grid w-full grid-cols-4 flex-shrink-0">
+                    <TabsTrigger value="basic" className="text-xs sm:text-sm px-1 sm:px-3">
+                      <span className="hidden sm:inline">Product Details</span>
+                      <span className="sm:hidden">Details</span>
                     </TabsTrigger>
-                    <TabsTrigger value="images">Product Images</TabsTrigger>
-                    <TabsTrigger value="installation">
-                      <Wrench className="h-4 w-4 mr-1" />
-                      Installation
+                    <TabsTrigger value="components" className="text-xs sm:text-sm px-1 sm:px-3">
+                      <span className="hidden sm:inline">Components</span>
+                      <span className="sm:hidden">Parts</span>
+                      <span className="ml-1">({formData.selectedComponents.length})</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="images" className="text-xs sm:text-sm px-1 sm:px-3">
+                      <span className="hidden sm:inline">Product Images</span>
+                      <span className="sm:hidden">Images</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="installation" className="text-xs sm:text-sm px-1 sm:px-3">
+                      <Wrench className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
+                      <span className="hidden sm:inline">Installation</span>
+                      <span className="sm:hidden">Install</span>
                     </TabsTrigger>
                   </TabsList>
 
                   {/* Basic Product Info */}
-                  <TabsContent value="basic" className="space-y-4">
+                  <TabsContent value="basic" className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="name">Product Name *</Label>
@@ -848,32 +857,9 @@ export default function ProductsPro() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Year Range</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label htmlFor="year_from" className="text-sm text-muted-foreground">From</Label>
-                            <Input
-                              id="year_from"
-                              type="number"
-                              value={formData.year_from}
-                              onChange={(e) => setFormData(prev => ({ ...prev, year_from: parseInt(e.target.value) || new Date().getFullYear() }))}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="year_to" className="text-sm text-muted-foreground">To</Label>
-                            <Input
-                              id="year_to"
-                              type="number"
-                              value={formData.year_to}
-                              onChange={(e) => setFormData(prev => ({ ...prev, year_to: parseInt(e.target.value) || new Date().getFullYear() }))}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
                         <Label>Screen Size</Label>
-                        <Select 
-                          value={formData.screen_size[0] || ''} 
+                        <Select
+                          value={formData.screen_size[0] || ''}
                           onValueChange={(value) => setFormData(prev => ({ ...prev, screen_size: value ? [value] : [] }))}
                         >
                           <SelectTrigger>
@@ -888,25 +874,50 @@ export default function ProductsPro() {
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        value={formData.description}
-                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                        placeholder="Detailed product description..."
-                        rows={4}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="keywords">SEO Keywords (Max 5)</Label>
                       <div className="space-y-2">
+                        <Label>Year Range</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label htmlFor="year_from" className="text-sm text-muted-foreground">From</Label>
+                            <Input
+                              id="year_from"
+                              type="number"
+                              value={formData.year_from ?? ''}
+                              onChange={(e) => setFormData(prev => ({ ...prev, year_from: e.target.value ? parseInt(e.target.value) : null }))}
+                              placeholder="e.g., 2020"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="year_to" className="text-sm text-muted-foreground">To</Label>
+                            <Input
+                              id="year_to"
+                              type="number"
+                              value={formData.year_to ?? ''}
+                              onChange={(e) => setFormData(prev => ({ ...prev, year_to: e.target.value ? parseInt(e.target.value) : null }))}
+                              placeholder="e.g., 2025"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea
+                          id="description"
+                          value={formData.description}
+                          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="Detailed product description..."
+                          rows={3}
+                          className="resize-none"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="keywords">SEO Keywords ({formData.keywords.length}/5)</Label>
                         <Input
                           id="keywords"
-                          placeholder="Enter keyword and press Enter to add"
+                          placeholder="Type keyword and press Enter"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
@@ -919,9 +930,9 @@ export default function ProductsPro() {
                           }}
                         />
                         {formData.keywords.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1.5">
                             {formData.keywords.map((keyword, index) => (
-                              <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                              <Badge key={index} variant="secondary" className="flex items-center gap-1 text-xs">
                                 {keyword}
                                 <button
                                   type="button"
@@ -931,7 +942,7 @@ export default function ProductsPro() {
                                       keywords: prev.keywords.filter((_, i) => i !== index)
                                     }));
                                   }}
-                                  className="ml-1 text-xs hover:text-red-500"
+                                  className="ml-0.5 hover:text-red-500"
                                   title="Remove keyword"
                                 >
                                   ×
@@ -941,36 +952,32 @@ export default function ProductsPro() {
                           </div>
                         )}
                         <p className="text-xs text-muted-foreground">
-                          Keywords help customers find your product. Press Enter after typing each keyword. {formData.keywords.length}/5 keywords used.
+                          Press Enter after typing each keyword.
                         </p>
                       </div>
                     </div>
 
-                    <div className="pt-6 pb-8 border-t">
-                      <div className="space-y-4">
-                        <h4 className="font-medium text-gray-900">Product Settings</h4>
-                        <div className="flex flex-wrap gap-4 sm:gap-8">
-                          <div className="flex items-start space-x-3">
-                            <Switch
-                              checked={formData.active}
-                              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, active: checked }))}
-                              className="mt-1"
-                            />
-                            <div>
-                              <Label className="text-base font-medium">Active</Label>
-                              <p className="text-sm text-muted-foreground">Product is available for customers to purchase</p>
-                            </div>
+                    <div className="mt-6 pt-5 pb-2 border-t">
+                      <h4 className="font-medium text-gray-900 mb-4">Product Settings</h4>
+                      <div className="flex flex-wrap gap-8">
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            checked={formData.active}
+                            onCheckedChange={(checked) => setFormData(prev => ({ ...prev, active: checked }))}
+                          />
+                          <div>
+                            <Label className="font-medium">Active</Label>
+                            <p className="text-xs text-muted-foreground">Available for purchase</p>
                           </div>
-                          <div className="flex items-start space-x-3">
-                            <Switch
-                              checked={formData.featured}
-                              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, featured: checked }))}
-                              className="mt-1"
-                            />
-                            <div>
-                              <Label className="text-base font-medium">Featured</Label>
-                              <p className="text-sm text-muted-foreground">Highlight this product on homepage and promotions</p>
-                            </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            checked={formData.featured}
+                            onCheckedChange={(checked) => setFormData(prev => ({ ...prev, featured: checked }))}
+                          />
+                          <div>
+                            <Label className="font-medium">Featured</Label>
+                            <p className="text-xs text-muted-foreground">Show on homepage</p>
                           </div>
                         </div>
                       </div>
@@ -978,155 +985,179 @@ export default function ProductsPro() {
                   </TabsContent>
 
                   {/* Component Selection */}
-                  <TabsContent value="components" className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-medium mb-4">Component Library</h3>
-                      <div className="space-y-4">
-                        {/* SKU Search */}
-                        <div className="relative">
-                          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <TabsContent value="components" className="flex-1 min-h-0">
+                    {/* Selected Components Summary Bar */}
+                    {formData.selectedComponents.length > 0 && (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-green-800">
+                            {formData.selectedComponents.length} component{formData.selectedComponents.length !== 1 ? 's' : ''} selected
+                          </span>
+                          <span className="text-xs text-green-600">
+                            Total: RM{formData.selectedComponents.reduce((sum, c) => sum + c.normal_price, 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex gap-1 flex-wrap justify-end max-w-[60%]">
+                          {formData.selectedComponents.map((c) => (
+                            <Badge
+                              key={c.id}
+                              variant="secondary"
+                              className="text-[10px] px-1.5 py-0 h-5 bg-white border border-green-200 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors group"
+                              onClick={() => removeComponent(c.id)}
+                              title={`Remove ${c.name}`}
+                            >
+                              {c.component_sku}
+                              <span className="ml-0.5 group-hover:text-red-500">×</span>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 h-[calc(55vh-3rem)] lg:h-[55vh]">
+                      {/* Left: Component Library */}
+                      <div className="flex flex-col min-h-0 h-[35vh] sm:h-[40vh] lg:h-full">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium text-sm">
+                            {searchTerm ? `Results (${searchResults.length})` : `Library (${allComponents.length})`}
+                          </h4>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => window.open('/admin/component-library', '_blank')}
+                          >
+                            <Plus className="mr-1 h-3 w-3" />
+                            New Component
+                          </Button>
+                        </div>
+                        <div className="relative mb-2">
+                          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                           <Input
-                            placeholder="Search by SKU, name, or description..."
+                            placeholder="Search SKU, name, or type..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-9"
+                            className="pl-8 h-9"
                           />
                         </div>
-
-                        {/* All Components Display */}
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">
-                              {searchTerm ? `Search Results (${searchResults.length})` : `All Components (${allComponents.length})`}
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            {searchLoading && (
-                              <div className="text-center py-4 text-muted-foreground">
-                                Searching components...
-                              </div>
-                            )}
-                            
-                            {(searchTerm ? searchResults : allComponents).map((component) => (
-                              <div key={component.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 border rounded-lg hover:bg-gray-50">
-                                <div className="flex items-center space-x-3">
+                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-0">
+                          {searchLoading && (
+                            <div className="text-center py-4 text-sm text-muted-foreground">
+                              Searching...
+                            </div>
+                          )}
+                          {(searchTerm ? searchResults : allComponents).map((component) => {
+                            const isAdded = formData.selectedComponents.some(c => c.id === component.id);
+                            return (
+                              <div
+                                key={component.id}
+                                className={`flex items-center justify-between gap-2 px-3 py-2 border-b last:border-b-0 hover:bg-gray-50 transition-colors ${isAdded ? 'bg-green-50/50' : ''}`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
                                   {component.default_image_url ? (
-                                    <img 
-                                      src={component.default_image_url} 
-                                      alt={component.name}
-                                      className="w-10 h-10 rounded object-cover"
-                                    />
+                                    <img src={component.default_image_url} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
                                   ) : (
-                                    <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center">
-                                      <Package className="h-5 w-5 text-gray-500" />
+                                    <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                      <Package className="h-4 w-4 text-gray-400" />
                                     </div>
                                   )}
-                                  <div>
-                                    <div className="font-mono text-sm text-blue-600">{component.component_sku}</div>
-                                    <div className="font-medium">{component.name}</div>
-                                    <div className="flex gap-2 mt-1">
-                                      <Badge variant="secondary">{component.component_type}</Badge>
-                                      <Badge variant="outline">Stock: {component.stock_level}</Badge>
-                                      <Badge variant="outline">RM{component.normal_price}</Badge>
+                                  <div className="min-w-0">
+                                    <div className="font-mono text-xs text-blue-600">{component.component_sku}</div>
+                                    <div className="text-sm font-medium truncate">{component.name}</div>
+                                    <div className="flex gap-1 mt-0.5 flex-wrap">
+                                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">{component.component_type}</Badge>
+                                      <span className="text-[10px] text-muted-foreground">Stock: {component.stock_level}</span>
+                                      <span className="text-[10px] text-muted-foreground">RM{component.normal_price}</span>
                                     </div>
                                   </div>
                                 </div>
-                                <Button 
+                                <Button
+                                  type="button"
                                   size="sm"
+                                  variant={isAdded ? 'secondary' : 'default'}
+                                  className="h-7 text-xs flex-shrink-0"
                                   onClick={() => addComponentToProduct(component)}
-                                  disabled={formData.selectedComponents.find(c => c.id === component.id) ? true : false}
+                                  disabled={isAdded}
                                 >
-                                  {formData.selectedComponents.find(c => c.id === component.id) ? 'Added' : 'Add'}
+                                  {isAdded ? 'Added' : 'Add'}
                                 </Button>
                               </div>
-                            ))}
-                            
-                            {!searchLoading && (searchTerm ? searchResults : allComponents).length === 0 && (
-                              <div className="text-center py-8 space-y-3">
-                                <Package className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                                <p className="text-muted-foreground">
-                                  {searchTerm ? 'No components found matching your search.' : 'No components available yet.'}
-                                </p>
-                                {!searchTerm && (
-                                  <div className="space-y-2">
-                                    <p className="text-sm text-muted-foreground">
-                                      Components are the building blocks of your products (e.g., screens, speakers, cables).
-                                    </p>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => window.open('/admin/component-library', '_blank')}
-                                    >
-                                      <Plus className="mr-2 h-4 w-4" />
-                                      Go to Component Library
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        {/* Selected Components */}
-                        {formData.selectedComponents.length > 0 && (
-                          <div>
-                            <h4 className="font-medium mb-3">Selected Components ({formData.selectedComponents.length})</h4>
-                            <div className="space-y-3">
-                              {formData.selectedComponents.map((component) => (
-                                <Card key={component.id} className="border-green-200 bg-green-50">
-                                  <CardContent className="p-4">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center space-x-3">
-                                        {component.default_image_url ? (
-                                          <img 
-                                            src={component.default_image_url} 
-                                            alt={component.name}
-                                            className="w-12 h-12 rounded object-cover"
-                                          />
-                                        ) : (
-                                          <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center">
-                                            <Package className="h-6 w-6 text-gray-500" />
-                                          </div>
-                                        )}
-                                        <div>
-                                          <div className="font-mono text-sm text-blue-600 font-medium">{component.component_sku}</div>
-                                          <div className="font-medium">{component.name}</div>
-                                          <div className="text-sm text-muted-foreground">{component.description}</div>
-                                          <div className="flex gap-2 mt-1">
-                                            <Badge variant="secondary">{component.component_type}</Badge>
-                                            <div className="flex items-center text-sm">
-                                              <span className="text-xs">RM</span>
-                                              <span className="font-medium ml-1">{component.normal_price}</span>
-                                              <span className="text-muted-foreground ml-1">(cost: RM{component.merchant_price})</span>
-                                            </div>
-                                            <Badge variant={component.stock_level > 10 ? 'default' : 'secondary'}>
-                                              Stock: {component.stock_level}
-                                            </Badge>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <Button 
-                                        size="sm" 
-                                        variant="destructive"
-                                        onClick={() => removeComponent(component.id)}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              ))}
+                            );
+                          })}
+                          {!searchLoading && (searchTerm ? searchResults : allComponents).length === 0 && (
+                            <div className="text-center py-8">
+                              <Package className="mx-auto h-10 w-10 text-muted-foreground/40 mb-2" />
+                              <p className="text-sm text-muted-foreground">
+                                {searchTerm ? 'No components found.' : 'No components yet.'}
+                              </p>
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
+                      </div>
 
+                      {/* Right: Selected Components */}
+                      <div className="flex flex-col min-h-0 h-[25vh] sm:h-[30vh] lg:h-full">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium text-sm">
+                            Selected ({formData.selectedComponents.length})
+                          </h4>
+                          {formData.selectedComponents.length > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              Total: RM{formData.selectedComponents.reduce((sum, c) => sum + c.normal_price, 0).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-0 bg-gray-50/50">
+                          {formData.selectedComponents.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                              <Package className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                              <p className="text-sm text-muted-foreground">No components selected</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                <span className="hidden lg:inline">Add components from the library on the left</span>
+                                <span className="lg:hidden">Add components from the library above</span>
+                              </p>
+                            </div>
+                          ) : (
+                            formData.selectedComponents.map((component) => (
+                              <div key={component.id} className="flex items-center justify-between gap-2 px-3 py-2 border-b last:border-b-0 bg-white hover:bg-green-50/50">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  {component.default_image_url ? (
+                                    <img src={component.default_image_url} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                      <Package className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="font-mono text-xs text-blue-600">{component.component_sku}</div>
+                                    <div className="text-sm font-medium truncate">{component.name}</div>
+                                    <div className="flex gap-1 mt-0.5 flex-wrap">
+                                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">{component.component_type}</Badge>
+                                      <span className="text-[10px]">RM{component.normal_price}</span>
+                                      <span className="text-[10px] text-muted-foreground">(cost: RM{component.merchant_price})</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                                  onClick={() => removeComponent(component.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
                     </div>
                   </TabsContent>
 
                   {/* Product Images */}
-                  <TabsContent value="images" className="space-y-4">
+                  <TabsContent value="images" className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1">
                     <div>
                       <h3 className="text-lg font-medium mb-4">Product Images</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1153,7 +1184,7 @@ export default function ProductsPro() {
                   </TabsContent>
 
                   {/* Installation Guide */}
-                  <TabsContent value="installation" className="space-y-6">
+                  <TabsContent value="installation" className="space-y-6 overflow-y-auto flex-1 min-h-0 pr-1">
                     <div className="space-y-4">
                       {/* Enable/Disable Toggle */}
                       <div className="flex items-center space-x-3 pb-4 border-b">
@@ -1364,12 +1395,12 @@ export default function ProductsPro() {
                   </TabsContent>
                 </Tabs>
 
-                <div className="flex gap-4 pt-6 border-t">
+                <div className="flex gap-3 pt-4 mt-4 border-t flex-shrink-0 bg-background sticky bottom-0">
                   <Button type="submit" className="flex-1">
-                    Create Product
+                    {editingProduct ? 'Save Changes' : 'Create Product'}
                   </Button>
-                  <Button 
-                    type="button" 
+                  <Button
+                    type="button"
                     variant="outline"
                     onClick={() => { setIsDialogOpen(false); resetForm(); }}
                   >

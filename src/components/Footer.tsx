@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Star, Phone, MessageCircle, Mail, MapPin } from 'lucide-react';
+import { Phone, MessageCircle, Mail, MapPin, Facebook, Instagram } from 'lucide-react';
 
 const Footer = () => {
   return (
@@ -19,12 +19,6 @@ const Footer = () => {
             <p className="text-gray-400 leading-relaxed text-sm">
               Malaysia's trusted destination for premium automotive parts and accessories since 2007. Quality OEM and aftermarket parts with fast delivery nationwide.
             </p>
-            <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star key={star} className="h-4 w-4 fill-lime-400 text-lime-400" />
-              ))}
-              <span className="text-xs text-gray-500 ml-2">4.9/5 Rating</span>
-            </div>
           </div>
 
           {/* Quick Links */}
@@ -75,24 +69,24 @@ const Footer = () => {
           {/* Follow Us */}
           <div>
             <h4 className="font-heading text-sm font-bold uppercase tracking-widest text-white mb-6">Follow Us</h4>
-            <div className="flex flex-col space-y-3">
-              <a href="#" className="flex items-center gap-3 group">
-                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center group-hover:bg-blue-500 transition-colors">
-                  <span className="text-white font-bold text-sm">f</span>
+            <div className="space-y-4">
+              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-lime-400 transition-colors text-sm">
+                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                  <Facebook className="w-4 h-4" />
                 </div>
-                <span className="text-gray-400 group-hover:text-white transition-colors text-sm">Facebook</span>
+                Facebook
               </a>
-              <a href="#" className="flex items-center gap-3 group">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center group-hover:from-purple-400 group-hover:to-pink-400 transition-all">
-                  <span className="text-white font-bold text-sm">@</span>
+              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-lime-400 transition-colors text-sm">
+                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                  <Instagram className="w-4 h-4" />
                 </div>
-                <span className="text-gray-400 group-hover:text-white transition-colors text-sm">Instagram</span>
+                Instagram
               </a>
-              <a href="#" className="flex items-center gap-3 group">
-                <div className="w-10 h-10 bg-lime-600 rounded-lg flex items-center justify-center group-hover:bg-lime-500 transition-colors">
-                  <MessageCircle className="w-5 h-5 text-white" />
+              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-lime-400 transition-colors text-sm">
+                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                  <MessageCircle className="w-4 h-4" />
                 </div>
-                <span className="text-gray-400 group-hover:text-white transition-colors text-sm">WhatsApp</span>
+                WhatsApp
               </a>
             </div>
           </div>
@@ -102,7 +96,7 @@ const Footer = () => {
         <div className="border-t border-gray-800 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-gray-500 text-sm">
-              &copy; 2024 Auto Lab Sdn Bhd. All rights reserved.
+              &copy; 2026 Auto Lab Sdn Bhd. All rights reserved.
             </p>
             <div className="flex items-center gap-6 text-sm">
               <Link to="/privacy" className="text-gray-500 hover:text-lime-400 transition-colors">

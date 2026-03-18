@@ -285,14 +285,12 @@ export default function MyPoints() {
 
       <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         {/* Page Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-            <Award className="h-7 w-7 sm:h-8 sm:w-8 text-primary" />
-            My Points & Rewards
+        <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
+          <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3 flex items-center justify-center lg:justify-start gap-3">
+            <Award className="h-10 w-10 md:h-12 md:w-12 text-lime-600" />
+            My <span className="text-lime-600 italic">Points & Rewards</span>
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Earn points with every purchase, redeem amazing rewards
-          </p>
+          <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Earn points with every purchase, redeem amazing rewards</p>
         </div>
 
         {/* Points Balance Cards */}
@@ -471,7 +469,8 @@ export default function MyPoints() {
                         </div>
 
                         <Button
-                          className="w-full"
+                          className="w-full h-10 text-[13px]"
+                          variant="hero"
                           onClick={() => handleRedeemClick(item)}
                           disabled={!canAfford}
                         >
@@ -504,7 +503,7 @@ export default function MyPoints() {
                   <p className="text-sm text-muted-foreground mt-2">
                     Browse the rewards catalog to redeem your first reward!
                   </p>
-                  <Button className="mt-4" onClick={() => setActiveTab('catalog')}>
+                  <Button variant="hero" className="mt-4 h-10 px-6 text-[13px]" onClick={() => setActiveTab('catalog')}>
                     Browse Rewards
                   </Button>
                 </CardContent>

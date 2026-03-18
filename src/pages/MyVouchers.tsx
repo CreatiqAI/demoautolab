@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tag, Calendar, Percent, DollarSign, Copy, Check, ShoppingCart, AlertCircle, Ticket, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
@@ -116,9 +117,9 @@ export default function MyVouchers() {
         </Link>
 
         {/* Page Header */}
-        <div className="mb-6 border-b border-gray-200 pb-4">
-          <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic mb-2">My Vouchers</h1>
-          <p className="text-sm text-gray-500 uppercase tracking-wider font-medium">Redeem your available discount codes at checkout.</p>
+        <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
+          <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3">My <span className="text-lime-600 italic">Vouchers</span></h1>
+          <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Redeem your available discount codes at checkout</p>
         </div>
 
         {loading ? (
@@ -137,13 +138,12 @@ export default function MyVouchers() {
             <p className="text-[15px] text-gray-500 mb-6 max-w-md mx-auto">
               There are currently no vouchers available for your account. Check back later for exclusive deals!
             </p>
-            <Link
-              to="/catalog"
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-lime-600 text-white font-bold uppercase tracking-wide text-[13px] hover:bg-lime-700 transition-all rounded-lg"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              Start Shopping
-            </Link>
+            <Button asChild variant="hero" className="mt-2 text-[13px] h-10 px-6">
+              <Link to="/catalog">
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Start Shopping
+              </Link>
+            </Button>
           </div>
         ) : (
           <>
@@ -243,22 +243,23 @@ export default function MyVouchers() {
                     {/* Status & Action */}
                     <div className="pt-2">
                       {voucher.can_still_use ? (
-                        <button
+                        <Button
+                          variant="hero"
                           onClick={() => handleCopyCode(voucher.code)}
-                          className="w-full py-2.5 bg-lime-600 text-white font-bold uppercase tracking-wide text-[13px] hover:bg-lime-700 transition-all rounded-lg flex items-center justify-center gap-1.5"
+                          className="w-full text-[13px] h-10"
                         >
                           {copiedCode === voucher.code ? (
                             <>
-                              <Check className="h-4 w-4" />
+                              <Check className="h-4 w-4 mr-1.5" />
                               Copied!
                             </>
                           ) : (
                             <>
-                              <Copy className="h-4 w-4" />
+                              <Copy className="h-4 w-4 mr-1.5" />
                               Copy & Use
                             </>
                           )}
-                        </button>
+                        </Button>
                       ) : (
                         <div className="w-full py-2.5 bg-gray-100 text-gray-500 font-bold uppercase tracking-wide text-[13px] rounded-lg flex items-center justify-center gap-1.5">
                           <AlertCircle className="h-4 w-4" />

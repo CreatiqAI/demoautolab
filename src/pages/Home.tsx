@@ -7,32 +7,32 @@ import {
   Shield,
   Users,
   Package,
-  Target,
-  Lightbulb,
-  Handshake,
-  MessageCircle,
-  Phone,
-  MapPin,
   ArrowRight,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  ChevronRight,
+  Gauge,
+  Cpu,
+  Star
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { motion, Variants, useScroll, useTransform } from 'framer-motion';
+import { motion, useScroll, useTransform, Variants } from 'framer-motion';
 
 const Home = () => {
   const navigate = useNavigate();
-  const containerRef = useRef(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end end"]
   });
 
-  const y = useTransform(scrollYProgress, [0, 1], ["0%", "50%"]);
+  const heroY = useTransform(scrollYProgress, [0, 0.5], ["0%", "40%"]);
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
 
   const fadeInUp: Variants = {
-    hidden: { opacity: 0, y: 30 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
+    hidden: { opacity: 0, y: 40 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } }
   };
 
   const staggerContainer: Variants = {
@@ -40,155 +40,181 @@ const Home = () => {
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.2
+        staggerChildren: 0.15
       }
     }
   };
 
-  // Car brands for the scrolling ticker
   const carBrands = [
     "TOYOTA", "HONDA", "NISSAN", "MAZDA", "BMW", "MERCEDES", "AUDI", "VOLKSWAGEN",
     "HYUNDAI", "KIA", "SUBARU", "MITSUBISHI", "FORD", "PROTON", "PERODUA"
   ];
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-background overflow-x-hidden font-sans">
+    <div ref={containerRef} className="min-h-screen bg-[#070707] overflow-x-hidden font-sans text-white">
       <SEOHead
-        title="Car Parts Malaysia | Auto Parts Kuala Lumpur | AUTO LAB"
-        description="Premium car parts & automotive parts in Malaysia. Located in Cheras, KL. Honda, Toyota, brake pads, engine oil & more. Fast delivery. Call 03-4297 7668"
-        keywords="car parts Malaysia, auto parts KL, automotive parts, brake pads, engine oil, Honda parts, Toyota parts, Cheras, Kuala Lumpur"
+        title="Car Parts Malaysia | Premium Automotive Parts | AUTO LAB"
+        description="Premium car parts & automotive parts in Malaysia. Located in Cheras, KL. Fast delivery. Elevate your ride with Auto Lab."
+        keywords="car parts Malaysia, auto parts KL, automotive parts, performance parts, Cheras, Kuala Lumpur"
         canonical="https://autolabs.my/"
       />
       <Header />
 
-      {/* Hero Section */}
-      <section className="relative w-full h-[100dvh] min-h-[700px] overflow-hidden bg-gray-900 flex items-center">
-        {/* Parallax Background */}
-        <motion.div style={{ y }} className="absolute inset-0 w-full h-[120%] -top-[10%]">
-          <img
-            src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&q=80&w=2000"
-            alt="Sports Car"
-            className="w-full h-full object-cover opacity-70"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/60 to-transparent/30"></div>
-          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent"></div>
-        </motion.div>
+      {/* Hero Section: Refined Premium Aesthetic */}
+      <section className="relative w-full h-screen min-h-[750px] overflow-hidden bg-[#070707]">
+        {/* Background Image Layer */}
+        <div className="absolute inset-0 z-0">
+          <motion.div
+            initial={{ scale: 1.1, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            className="w-full h-full"
+          >
+            <img
+              src="https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?auto=format&fit=crop&q=80&w=2000"
+              alt="Luxury Sports Car Detail"
+              className="w-full h-full object-cover opacity-40 grayscale-[0.5]"
+            />
+            {/* Soft Ambient Overlays */}
+            <div className="absolute inset-0 bg-gradient-to-r from-[#070707] via-transparent to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-[#070707] via-transparent to-black/20"></div>
+          </motion.div>
+        </div>
 
-        {/* Hero Content */}
-        <div className="relative z-10 container mx-auto px-6 pt-20">
+        {/* Hero Content: Asymmetrical Layout */}
+        <div className="relative z-10 container mx-auto px-6 h-full flex flex-col justify-center">
           <motion.div
             initial="hidden"
             animate="visible"
             variants={staggerContainer}
             className="max-w-4xl"
           >
-            <motion.div variants={fadeInUp} className="flex items-center gap-4 mb-6">
-              <div className="h-[2px] w-12 md:w-20 bg-lime-500 shadow-[0_0_15px_rgba(132,204,22,0.8)]"></div>
-              <span className="text-sm md:text-base font-bold uppercase tracking-[0.3em] text-lime-400 drop-shadow-md">
-                Premium Automotive Upgrades
-              </span>
+            {/* Accent badge */}
+            <motion.div
+              variants={fadeInUp}
+              className="flex items-center gap-4 mb-8"
+            >
+              <div className="h-[1px] w-12 bg-lime-500/50"></div>
+              <span className="text-xs uppercase tracking-[0.5em] text-lime-400 font-medium">Est. 2007 • Authority in Parts</span>
             </motion.div>
 
-            {/* Fixed clipping issue by adding extra padding-right and overflow-visible */}
-            <motion.h1 variants={fadeInUp} className="text-5xl md:text-7xl lg:text-8xl font-heading font-bold text-white tracking-tight mb-8 leading-[1.1] italic drop-shadow-2xl pr-8 overflow-visible">
-              UPGRADE <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-400 via-lime-500 to-green-600 filter drop-shadow-lg inline-block pr-6">
-                YOUR RIDE
+            {/* Main Headline: Refined Scale & Wording */}
+            <motion.h1
+              variants={fadeInUp}
+              className="text-5xl md:text-7xl lg:text-8xl font-heading font-black text-white leading-[0.9] mb-8 tracking-tighter"
+            >
+              <span className="block opacity-90">THE AUTO LAB</span>
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/40 italic pr-8">
+                COLLECTIVE
               </span>
             </motion.h1>
 
-            <motion.p variants={fadeInUp} className="max-w-xl text-lg md:text-xl text-gray-300 font-light leading-relaxed mb-10 border-l-4 border-lime-500 pl-6">
-              Experience the perfect fusion of technology and performance.
-              From precision chassis reinforcement to advanced Android systems.
-            </motion.p>
+            {/* Sub-headline / Description */}
+            <motion.div variants={fadeInUp} className="max-w-xl mb-12">
+              <p className="text-lg md:text-xl text-gray-400 leading-relaxed font-light">
+                AutoLab represents the pinnacle of automotive enhancement. We curate and engineer the world's most <span className="text-white border-b border-lime-500/30">exclusive components</span> for those who transcend the ordinary.
+              </p>
+            </motion.div>
 
-            <motion.div variants={fadeInUp} className="flex flex-wrap gap-4">
+            {/* Actions: Ultra-Sleek Interaction */}
+            <motion.div
+              variants={fadeInUp}
+              className="flex items-center gap-10"
+            >
               <Button
                 onClick={() => navigate('/catalog')}
-                className="group relative h-14 px-8 bg-gradient-to-r from-lime-600 to-lime-500 hover:from-lime-500 hover:to-lime-400 text-white text-sm font-bold uppercase tracking-widest rounded-full shadow-[0_0_20px_rgba(101,163,13,0.4)] hover:shadow-[0_0_35px_rgba(101,163,13,0.6)] transition-all hover:scale-105 border border-lime-400/30 overflow-hidden"
+                className="group relative h-16 px-10 bg-white text-black hover:bg-lime-500 hover:text-white rounded-none transition-all duration-700 overflow-hidden min-w-[240px]"
               >
-                <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] z-0"></div>
-                <span className="relative z-10 flex items-center">
-                  Shop Now <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                {/* Minimalist Slide Effect */}
+                <div className="absolute inset-0 bg-lime-600 translate-x-[-101%] group-hover:translate-x-0 transition-transform duration-700 ease-[0.22,1,0.36,1]"></div>
+
+                <span className="relative z-10 font-bold uppercase tracking-[0.2em] flex items-center justify-between w-full transition-colors duration-500 text-sm">
+                  EXPLORE CATALOGUE
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-500" />
                 </span>
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => document.getElementById('categories')?.scrollIntoView({ behavior: 'smooth' })}
-                className="group relative h-14 px-8 bg-white/5 text-white border-white/20 hover:bg-white/10 hover:text-white text-sm font-bold uppercase tracking-widest rounded-full backdrop-blur-md transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] overflow-hidden"
-              >
-                <div className="absolute inset-0 rounded-full border border-white/50 scale-105 opacity-0 group-hover:animate-ping"></div>
-                <span className="relative z-10">Explore Categories</span>
               </Button>
             </motion.div>
           </motion.div>
         </div>
 
-        {/* Scroll Indicator */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1, duration: 1 }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
-        >
-          <span className="text-[10px] uppercase tracking-widest text-white/50">Scroll to Explore</span>
-          <div className="w-[1px] h-16 bg-gradient-to-b from-lime-500 to-transparent opacity-50"></div>
-        </motion.div>
+        {/* Technical Sidebar - Right side */}
+        <div className="absolute right-0 top-0 h-full w-24 hidden xl:flex flex-col items-center justify-center border-l border-white/5 space-y-24">
+          <div className="rotate-90 origin-center text-[10px] uppercase tracking-[1em] text-white/20 whitespace-nowrap">
+            PREMIUM • PRECISION • POWER
+          </div>
+          <div className="flex flex-col gap-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className={`w-1 h-1 rounded-full ${i === 1 ? 'bg-lime-500' : 'bg-white/10'}`}></div>
+            ))}
+          </div>
+        </div>
       </section>
 
-      {/* Brand Ticker - New Section */}
-      <section className="bg-black py-8 border-y border-white/10 overflow-hidden relative z-20">
-        <div className="flex animate-scroll whitespace-nowrap">
+      <section className="bg-[#0f0f0f] py-4 border-y border-white/5 relative z-20 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+        <div className="flex animate-scroll whitespace-nowrap opacity-30">
           {[...carBrands, ...carBrands, ...carBrands].map((brand, idx) => (
-            <div key={idx} className="mx-8 md:mx-12 text-gray-600 font-heading font-bold text-xl md:text-2xl uppercase tracking-widest hover:text-lime-500 transition-colors cursor-default">
+            <div key={idx} className="mx-6 md:mx-10 text-gray-400 font-heading font-black text-xl md:text-2xl uppercase tracking-[0.2em] hover:text-lime-500 transition-all cursor-default">
               {brand}
             </div>
           ))}
         </div>
       </section>
 
-      {/* Featured Categories */}
-      <section id="categories" className="py-24 bg-background relative z-20">
-        <div className="container mx-auto px-6">
+      {/* Grid-based Avant-Garde Categories */}
+      <section id="categories" className="py-32 relative z-20 bg-[#070707] overflow-hidden">
+        {/* Glow behind grid */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-lime-600/10 rounded-[100%] blur-[120px] pointer-events-none"></div>
+
+        <div className="container mx-auto px-6 relative z-10">
           <motion.div
             initial="hidden"
             whileInView="visible"
-            viewport={{ once: true }}
+            viewport={{ once: true, margin: "-100px" }}
             variants={fadeInUp}
-            className="text-center mb-16"
+            className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16"
           >
-            <h2 className="font-heading text-4xl md:text-5xl font-bold italic mb-4 text-gray-900">
-              SHOP BY <span className="text-lime-600">CATEGORY</span>
-            </h2>
-            <div className="h-1 w-24 bg-lime-500 mx-auto rounded-full"></div>
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-[1px] bg-lime-500"></div>
+                <span className="uppercase tracking-[0.3em] text-lime-500 font-bold text-[10px]">Discover</span>
+              </div>
+              <h2 className="font-heading text-4xl md:text-5xl lg:text-6xl font-black text-white uppercase tracking-tighter">
+                Premium <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-400 to-lime-600">Categories</span>
+              </h2>
+            </div>
+            <Button variant="outline" className="rounded-none border-white/10 text-white hover:bg-white hover:text-black w-fit px-8 h-10 uppercase tracking-[0.2em] font-bold text-xs transition-all duration-500" onClick={() => navigate('/catalog')}>
+              View All Parts
+            </Button>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-[350px]">
             {[
-              { title: "Performance", img: "https://images.unsplash.com/photo-1600706432502-77c0e78c1c1a?auto=format&fit=crop&q=80&w=600", count: "120+ Items" },
-              { title: "Audio & Video", img: "https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&q=80&w=600", count: "85+ Items" },
-              { title: "Interior", img: "https://images.unsplash.com/photo-1563720360172-67b8f3dce741?auto=format&fit=crop&q=80&w=600", count: "200+ Items" },
-              { title: "Exterior", img: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=600", count: "150+ Items" }
+              { title: "Performance Tuning", img: "https://images.unsplash.com/photo-1616788494707-ec28f08d05a1?auto=format&fit=crop&q=80&w=1200", colSpan: "lg:col-span-2" },
+              { title: "Smart Media", img: "https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&q=80&w=600", colSpan: "lg:col-span-1" },
+              { title: "Luxury Interior", img: "https://images.unsplash.com/photo-1563720360172-67b8f3dce741?auto=format&fit=crop&q=80&w=600", colSpan: "lg:col-span-1" },
+              { title: "Aero Exterior", img: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800", colSpan: "lg:col-span-2" }
             ].map((cat, idx) => (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                whileInView={{ opacity: 1, scale: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: idx * 0.1 }}
-                className="group relative h-[360px] rounded-2xl overflow-hidden cursor-pointer shadow-lg"
+                transition={{ duration: 0.6, delay: idx * 0.1 }}
+                className={`group relative rounded-[2rem] overflow-hidden cursor-pointer glass-dark-panel hover:border-lime-500/50 transition-all duration-500 ${cat.colSpan}`}
                 onClick={() => navigate('/catalog')}
               >
-                <img src={cat.img} alt={cat.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
-                <div className="absolute bottom-0 left-0 p-8 w-full">
-                  <h3 className="text-3xl font-heading font-bold text-white italic mb-2 group-hover:text-lime-400 transition-colors">{cat.title}</h3>
-                  <p className="text-gray-300 text-sm font-medium flex items-center justify-between border-t border-white/20 pt-4 mt-2">
-                    {cat.count}
-                    <span className="w-8 h-8 rounded-full bg-lime-600 flex items-center justify-center transform translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
-                      <ArrowRight className="w-4 h-4 text-white" />
-                    </span>
-                  </p>
+                <img src={cat.img} alt={cat.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60 group-hover:opacity-40 filter grayscale group-hover:grayscale-0" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+
+                {/* Content */}
+                <div className="absolute inset-0 p-8 md:p-10 flex flex-col justify-end">
+                  <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
+                    <h3 className="text-2xl md:text-3xl font-heading font-black text-white uppercase tracking-tight mb-2 tracking-wide">{cat.title}</h3>
+                    <div className="flex items-center gap-2 text-lime-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
+                      <span className="uppercase tracking-[0.2em] text-[10px] font-bold">Explore</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             ))}
@@ -196,45 +222,37 @@ const Home = () => {
         </div>
       </section>
 
-      {/* About Us Preview Section */}
-      <section className="py-24 bg-gray-50 relative overflow-hidden">
+      {/* Feature Split - Asymmetrical */}
+      <section className="py-24 bg-[#0a0a0a] relative overflow-hidden">
+        <div className="absolute right-0 top-0 w-1/3 h-full bg-lime-600/5 blur-[150px] pointer-events-none"></div>
         <div className="container mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="grid lg:grid-cols-2 gap-16 lg:gap-24 items-center">
+
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="relative"
+              className="relative aspect-square lg:aspect-[4/5] rounded-[2rem] overflow-hidden group border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
             >
-              <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl border-4 border-white">
-                <img
-                  src="https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&q=80&w=800"
-                  alt="Auto Lab Team"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              {/* Decorative Elements */}
-              <div className="absolute -top-10 -left-10 w-40 h-40 bg-lime-500/10 rounded-full blur-3xl"></div>
-              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
+              <img
+                src="https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&q=80&w=800"
+                alt="Auto Lab Workshop"
+                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-tr from-black/80 via-transparent to-lime-500/20 mix-blend-overlay"></div>
 
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                whileInView={{ scale: 1, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.4 }}
-                className="absolute -bottom-6 -right-6 bg-white p-6 rounded-2xl shadow-xl border border-gray-100 z-20"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="bg-lime-100 p-3 rounded-full">
-                    <Shield className="w-8 h-8 text-lime-600" />
+              <div className="absolute bottom-10 left-10 right-10 p-6 glass-dark-panel rounded-2xl border border-white/10">
+                <div className="flex items-center gap-5">
+                  <div className="text-lime-500">
+                    <span className="text-5xl font-heading font-black">17+</span>
                   </div>
                   <div>
-                    <div className="font-heading text-3xl font-bold text-gray-900">17+</div>
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Years of Trust</div>
+                    <h4 className="text-white font-bold text-lg uppercase tracking-[0.1em] mb-1">Years of Authority</h4>
+                    <p className="text-gray-400 text-xs">Trusted wholesale partner since 2007</p>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             </motion.div>
 
             <motion.div
@@ -242,174 +260,93 @@ const Home = () => {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="space-y-8"
+              className="space-y-10"
             >
               <div>
-                <span className="text-lime-600 font-bold tracking-widest uppercase text-sm mb-2 block">Who We Are</span>
-                <h2 className="font-heading text-4xl md:text-5xl font-bold text-gray-900 italic leading-tight mb-6">
-                  MALAYSIA'S PREMIER <br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-600 to-green-700">AUTO ACCESSORIES</span>
+                <motion.div className="flex items-center gap-3 mb-5">
+                  <div className="w-8 h-[1px] bg-lime-500"></div>
+                  <span className="uppercase tracking-[0.3em] text-lime-500 font-bold text-[10px]">The Masterclass</span>
+                </motion.div>
+                <h2 className="font-heading text-4xl md:text-5xl lg:text-6xl font-black text-white uppercase leading-[1.1] mb-6 tracking-tighter">
+                  ENGINEERED FOR <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-400 to-green-600">PERFECTION.</span>
                 </h2>
-                <p className="text-gray-600 text-lg leading-relaxed">
-                  Since 2007, Auto Lab Sdn Bhd has been the trusted wholesale partner for automotive accessories across Malaysia. We deliver quality products and exceptional service to retailers nationwide.
+                <p className="text-gray-400 text-lg leading-relaxed font-light">
+                  We don't just supply parts. We architect driving experiences. Our curated selection undergoes extreme scrutiny to guarantee unmatched reliability and performance.
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                  <Users className="w-8 h-8 text-lime-600 mb-4" />
-                  <div className="font-bold text-3xl text-gray-900 mb-1">500+</div>
-                  <div className="text-sm text-gray-500 font-medium uppercase">Active Partners</div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                  <Package className="w-8 h-8 text-lime-600 mb-4" />
-                  <div className="font-bold text-3xl text-gray-900 mb-1">1000+</div>
-                  <div className="text-sm text-gray-500 font-medium uppercase">Products In Stock</div>
-                </div>
-              </div>
-
-              <Button
-                onClick={() => navigate('/about')}
-                variant="outline"
-                className="group h-12 px-8 border-2 border-lime-600 text-lime-600 hover:bg-lime-600 hover:text-white font-bold uppercase tracking-widest transition-all hover:shadow-lg hover:scale-105 rounded-full"
-              >
-                Learn More About Us <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* The Auto Lab Difference - High Class Design */}
-      <section className="py-24 bg-gray-900 relative overflow-hidden">
-        {/* Subtle Background Texture */}
-        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/carbon-fibre.png")' }}></div>
-        <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-gray-800/20 to-transparent"></div>
-
-        <div className="container mx-auto px-6 relative z-10">
-          <div className="grid lg:grid-cols-12 gap-12 items-center">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={fadeInUp}
-              className="lg:col-span-5"
-            >
-              <h2 className="font-heading text-4xl md:text-6xl font-bold text-white italic mb-6 leading-none">
-                THE <span className="text-lime-500 block">DIFFERENCE</span>
-              </h2>
-              <p className="text-gray-400 text-lg leading-relaxed mb-8">
-                We don't just sell parts; we provide engineered solutions. Our commitment to quality and precision sets the standard in the Malaysian automotive industry.
-              </p>
-
-              <div className="space-y-6">
+              <div className="grid gap-6">
                 {[
-                  { title: "Premium Quality Assurance", desc: "Every component is rigorously tested to meet OEM specifications." },
-                  { title: "Nationwide Logistics", desc: "Same-day dispatch for Klang Valley, rapid delivery throughout Malaysia." },
-                  { title: "Technical Expertise", desc: "Direct access to our engineering team for installation support." }
+                  { icon: <Shield />, title: "Bulletproof Warranty", desc: "Exhaustive coverage on all premium components." },
+                  { icon: <Zap />, title: "Hyper-Fast Logistics", desc: "98% in-stock rate with same-day dispatching." },
+                  { icon: <Users />, title: "Exclusive Partnership", desc: "Dedicated engineering support for our network." }
                 ].map((item, idx) => (
-                  <div key={idx} className="flex gap-4">
-                    <div className="mt-1">
-                      <CheckCircle2 className="w-6 h-6 text-lime-500" />
+                  <div key={idx} className="flex gap-5 p-6 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors hover:border-lime-500/30">
+                    <div className="w-12 h-12 rounded-full bg-lime-500/20 flex items-center justify-center text-lime-400 shrink-0 border border-lime-500/20">
+                      {item.icon}
                     </div>
                     <div>
-                      <h4 className="text-white font-bold text-lg mb-1">{item.title}</h4>
-                      <p className="text-gray-500 text-sm">{item.desc}</p>
+                      <h4 className="text-white font-bold text-base uppercase tracking-widest mb-1">{item.title}</h4>
+                      <p className="text-gray-400 text-xs leading-relaxed font-light">{item.desc}</p>
                     </div>
                   </div>
                 ))}
               </div>
+
+              <Button
+                onClick={() => navigate('/about')}
+                className="group h-12 px-8 rounded-none text-xs font-bold uppercase tracking-[0.3em] bg-white text-black hover:bg-lime-500 hover:text-white transition-all duration-500 shadow-xl"
+              >
+                Our Legacy <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Button>
             </motion.div>
 
-            <div className="lg:col-span-7 grid md:grid-cols-2 gap-6">
-              <motion.div
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.2 }}
-                className="bg-gray-800 p-8 rounded-3xl border border-gray-700 hover:border-lime-500/50 transition-colors group"
-              >
-                <Shield className="w-12 h-12 text-lime-500 mb-6 group-hover:scale-110 transition-transform" />
-                <h3 className="text-2xl font-heading font-bold text-white mb-4">WARRANTY PROTECTION</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  Comprehensive warranty coverage on all electronic and mechanical components for your peace of mind.
-                </p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.3 }}
-                className="bg-gray-800 p-8 rounded-3xl border border-gray-700 hover:border-lime-500/50 transition-colors group md:mt-12"
-              >
-                <Zap className="w-12 h-12 text-lime-500 mb-6 group-hover:scale-110 transition-transform" />
-                <h3 className="text-2xl font-heading font-bold text-white mb-4">RAPID FULFILLMENT</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  Advanced inventory management ensures 98% of our catalog is in stock and ready for immediate dispatch.
-                </p>
-              </motion.div>
-            </div>
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-24 relative overflow-hidden bg-white">
-        <div className="container mx-auto px-6 relative z-10">
-          <div className="max-w-5xl mx-auto bg-gray-900 rounded-[3rem] p-12 md:p-20 text-center relative overflow-hidden shadow-2xl">
-            {/* Background Accents */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden">
-              <div className="absolute -top-[50%] -left-[50%] w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-lime-900/20 via-gray-900/50 to-gray-900"></div>
-            </div>
+      {/* Massive Dark CTA */}
+      <section className="py-32 relative overflow-hidden bg-[#000]">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1511407397940-d57f68e81203?auto=format&fit=crop&q=80&w=2000')] bg-cover bg-center bg-fixed opacity-30"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent"></div>
 
-            <div className="relative z-10 space-y-8">
-              <motion.h2
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                className="font-heading text-4xl md:text-6xl font-bold text-white leading-tight italic"
-              >
-                READY TO <span className="text-lime-500">UPGRADE?</span>
-              </motion.h2>
-              <p className="text-xl text-gray-300 font-light max-w-2xl mx-auto">
-                Join Malaysia's fastest growing network of automotive retailers and enthusiasts.
+        <div className="container mx-auto px-6 relative z-10 text-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="max-w-4xl mx-auto glass-dark-panel rounded-[3rem] p-12 md:p-20 relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-b from-lime-500/10 to-transparent"></div>
+
+            <div className="relative z-10 flex flex-col items-center">
+              <Package className="w-12 h-12 text-lime-500 mb-6 opacity-80" />
+              <h2 className="font-heading text-4xl md:text-5xl lg:text-6xl font-black text-white uppercase leading-tight tracking-tighter mb-6">
+                Redefine Your <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-400 to-lime-600">Standards.</span>
+              </h2>
+              <p className="text-lg text-gray-400 font-light mb-10 max-w-xl">
+                Step into the future of automotive upgrades. Immerse yourself in our full product ecosystem.
               </p>
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.2 }}
-                className="flex flex-col sm:flex-row gap-6 justify-center items-center pt-6"
-              >
+              <div className="flex flex-col sm:flex-row gap-6 w-full justify-center">
                 <Button
-                  className="group relative h-12 px-8 bg-gradient-to-r from-lime-600 to-lime-500 hover:from-lime-500 hover:to-lime-400 text-white text-sm font-bold uppercase tracking-widest rounded-full shadow-[0_0_25px_rgba(101,163,13,0.5)] hover:shadow-[0_0_40px_rgba(101,163,13,0.7)] hover:scale-105 transition-all border border-lime-400/30 overflow-hidden"
-                >
-                  <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] z-0"></div>
-                  <span className="relative z-10 flex items-center">
-                    <MessageCircle className="mr-2 w-4 h-4 group-hover:rotate-12 transition-transform" />
-                    Contact Us Today
-                  </span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="h-12 px-8 border-2 border-gray-300 !text-gray-900 !bg-white hover:!bg-white hover:!border-lime-600 hover:!text-gray-900 text-sm font-bold uppercase tracking-widest rounded-full hover:scale-105 transition-all"
+                  className="group h-16 px-12 rounded-none bg-white text-black hover:bg-lime-600 hover:text-white transition-all duration-700 uppercase tracking-[0.3em] font-bold text-sm w-full sm:w-auto shadow-2xl"
                   onClick={() => navigate('/catalog')}
                 >
-                  <Package className="mr-2 w-4 h-4" />
-                  Browse Catalog
+                  Launch Catalog <ArrowRight className="ml-3 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Button>
-              </motion.div>
+              </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
       <Footer />
 
-      {/* Custom CSS for animations */}
+      {/* Custom CSS for ticker animations */}
       <style>{`
         @keyframes scroll {
           0% { transform: translateX(0); }
@@ -428,3 +365,5 @@ const Home = () => {
 };
 
 export default Home;
+
+

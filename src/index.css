@@ -206,13 +206,14 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   }
 
   h1, h2, h3, h4, .font-heading {
-    font-family: 'Oswald', sans-serif;
+    font-family: 'Lexend', sans-serif;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
+    letter-spacing: -0.02em;
+    font-weight: 800;
   }
 }
 
@@ -247,6 +248,14 @@
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.6);
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  }
+
+  .glass-dark-panel {
+    background: linear-gradient(135deg, rgba(20, 20, 20, 0.8), rgba(10, 10, 10, 0.6));
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.1);
   }
 
   /* Liquid / Glossy Button Effects */
@@ -411,6 +420,34 @@
 
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Advanced Automotive Animations */
+@keyframes scan-y {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.5; }
+  100% { transform: translateY(340%); opacity: 0; }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.1); }
+}
+
+.animate-scan-y {
+  animation: scan-y 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-scan-y-reverse {
+  animation: scan-y 10s cubic-bezier(0.4, 0, 0.2, 1) infinite reverse;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 12s ease-in-out infinite;
+}
+
+.border-text {
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.1);
 }
 
 /* Text Selection */

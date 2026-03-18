@@ -574,12 +574,11 @@ export default function MyOrders() {
             </div>
             <h1 className="text-xl font-heading font-bold uppercase italic text-gray-900 mb-2">Sign In Required</h1>
             <p className="text-[15px] text-gray-500 mb-6">Please log in to view your order history.</p>
-            <Link
-              to="/auth"
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-lime-600 text-white font-bold uppercase tracking-wide text-[13px] hover:bg-lime-700 transition-all rounded-lg"
-            >
-              Sign In
-            </Link>
+            <Button asChild variant="hero" className="mt-2 text-[13px] h-10 px-6">
+              <Link to="/auth">
+                Sign In
+              </Link>
+            </Button>
           </div>
         </div>
         <Footer />
@@ -602,9 +601,9 @@ export default function MyOrders() {
         </Link>
 
         {/* Page Header */}
-        <div className="mb-6 border-b border-gray-200 pb-4">
-          <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic mb-2">My Orders</h1>
-          <p className="text-sm text-gray-500 uppercase tracking-wider font-medium">Track your order history and delivery status.</p>
+        <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
+          <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3">My <span className="text-lime-600 italic">Orders</span></h1>
+          <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Track your order history and delivery status</p>
         </div>
 
         {loading ? (
@@ -623,12 +622,11 @@ export default function MyOrders() {
             <p className="text-[15px] text-gray-500 mb-6 max-w-md mx-auto">
               You haven't placed any orders yet. Start shopping to see your order history here.
             </p>
-            <Link
-              to="/catalog"
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-lime-600 text-white font-bold uppercase tracking-wide text-[13px] hover:bg-lime-700 transition-all rounded-lg"
-            >
-              Browse Catalog
-            </Link>
+            <Button asChild variant="hero" className="mt-2 text-[13px] h-10 px-6">
+              <Link to="/catalog">
+                Browse Catalog
+              </Link>
+            </Button>
           </div>
         ) : (
           <div className="space-y-8">

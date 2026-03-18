@@ -311,9 +311,9 @@ export default function Settings() {
       <div className="flex-1">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Page Header */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage your account, subscription, and preferences</p>
+          <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
+            <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3">Account <span className="text-lime-600 italic">Settings</span></h1>
+            <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Manage your account, subscription, and preferences</p>
           </div>
 
           {/* Tabs */}
@@ -524,7 +524,8 @@ export default function Settings() {
                           </p>
                           <Button
                             onClick={() => navigate('/premium-partner')}
-                            className="bg-lime-600 hover:bg-lime-700"
+                            variant="hero"
+                            className="mt-4 text-[13px] h-10 px-6"
                           >
                             <Crown className="w-4 h-4 mr-2" />
                             Explore Premium Plans
@@ -868,7 +869,8 @@ export default function Settings() {
                   <Button
                     onClick={handleSaveNotifications}
                     disabled={saving}
-                    className="bg-lime-600 hover:bg-lime-700"
+                    variant="hero"
+                    className="text-[13px] h-10 px-6"
                   >
                     <Save className="w-4 h-4 mr-2" />
                     {saving ? 'Saving...' : 'Save Preferences'}

@@ -483,34 +483,19 @@ export default function ComponentLibraryPro() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="component_sku">Component SKU *</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="component_sku"
-                      value={formData.component_sku}
-                      onChange={(e) => setFormData(prev => ({ ...prev, component_sku: e.target.value }))}
-                      placeholder="e.g., CASING-AUDI-A4-1234"
-                      required
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (formData.component_type && formData.name) {
-                          const generatedSku = generateSKU(formData.component_type, formData.name);
-                          setFormData(prev => ({ ...prev, component_sku: generatedSku }));
-                        }
-                      }}
-                      disabled={!formData.component_type || !formData.name}
-                      title="Generate SKU from type and name"
-                    >
-                      Generate
-                    </Button>
+                  <div className="flex items-center h-5">
+                    <Label htmlFor="component_sku">Component SKU *</Label>
                   </div>
+                  <Input
+                    id="component_sku"
+                    value={formData.component_sku}
+                    onChange={(e) => setFormData(prev => ({ ...prev, component_sku: e.target.value }))}
+                    placeholder="e.g., CASING-AUDI-A4-1234"
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between h-5">
                     <Label htmlFor="component_type">Type *</Label>
                     <button
                       type="button"

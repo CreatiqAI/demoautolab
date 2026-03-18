@@ -95,7 +95,7 @@ const ProductDetails = () => {
         .single();
 
       if (!error && data) {
-        setInstallationGuide(data as ProductInstallationGuide);
+        setInstallationGuide(data as unknown as ProductInstallationGuide);
       }
     } catch (error) {
       // No installation guide for this product - that's fine
@@ -355,17 +355,16 @@ const ProductDetails = () => {
   const primaryImage = product.product_images.find(img => img.is_primary) || product.product_images[0];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50 text-[#0f172a] font-sans pb-24">
       <Header />
 
-      <div className="container mx-auto px-4 py-6 max-w-7xl">
+      <div className="container mx-auto px-4 md:px-6 py-8 md:py-12 max-w-7xl">
         {/* Breadcrumb / Back */}
         <nav className="mb-6">
           <Button
             variant="ghost"
-            size="sm"
             onClick={() => navigate('/catalog')}
-            className="text-gray-600 hover:text-gray-900 -ml-2"
+            className="text-xs uppercase tracking-[0.2em] font-bold px-0 text-slate-500 hover:bg-transparent hover:text-lime-600 transition-colors"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Catalog
@@ -373,19 +372,19 @@ const ProductDetails = () => {
         </nav>
 
         {/* Main Product Section */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
             {/* Left: Product Images */}
-            <div className="p-6 lg:p-8 bg-gray-50/50">
+            <div className="bg-[#fbfbfb] border-r border-slate-100 flex flex-col justify-center select-none">
               {/* Main Image */}
               <div
-                className="relative aspect-square rounded-xl overflow-hidden bg-white cursor-pointer group mb-4"
+                className="relative w-full h-[350px] md:h-[500px] lg:h-full bg-[#f8f8f8] cursor-pointer group p-4 md:p-8 flex items-center justify-center"
                 onClick={() => openLightbox(product.product_images.map(img => img.url), selectedImage)}
               >
                 <img
                   src={product.product_images[selectedImage]?.url || primaryImage?.url || '/placeholder.svg'}
                   alt={product.product_images[selectedImage]?.alt_text || product.name}
-                  className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700"
                   loading="lazy"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
@@ -400,7 +399,7 @@ const ProductDetails = () => {
 
               {/* Thumbnails */}
               {product.product_images.length > 1 && (
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-2 justify-center p-4 border-t border-slate-100 bg-white z-10">
                   {product.product_images.map((image, index) => (
                     <button
                       key={index}
@@ -425,33 +424,34 @@ const ProductDetails = () => {
             </div>
 
             {/* Right: Product Info */}
-            <div className="p-6 lg:p-8 flex flex-col">
+            <div className="p-6 md:p-8 lg:p-10 flex flex-col">
               {/* Product Header */}
               <div className="mb-6">
                 {/* Badges */}
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-0">
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <Badge className="bg-lime-50 text-lime-700 hover:bg-lime-100 border border-lime-100 rounded-md px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider shadow-none">
+                    <CheckCircle2 className="h-3 w-3 mr-1.5" />
                     In Stock
                   </Badge>
                   {product.featured && (
-                    <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-0">
-                      <Star className="h-3 w-3 mr-1 fill-current" />
+                    <Badge className="bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-100 rounded-md px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider shadow-none">
+                      <Star className="h-3 w-3 mr-1.5 fill-current" />
                       Featured
                     </Badge>
                   )}
                 </div>
 
                 {/* Title */}
-                <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
+                <h1 className="text-2xl md:text-4xl font-heading font-bold text-[#0f172a] mb-3 uppercase tracking-wide leading-tight">
                   {product.name}
                 </h1>
 
                 {/* Brand/Model/Year */}
-                <p className="text-lg text-gray-600 mb-4">
-                  {product.brand} {product.model}
+                <p className="text-base text-slate-500 mb-5 font-normal">
+                  <span className="font-semibold text-[#0f172a] pr-1">{product.brand}</span>
+                  {product.model}
                   {product.year_from && product.year_to && (
-                    <span className="text-gray-400 ml-2">
+                    <span className="text-slate-400 ml-2">
                       ({product.year_from}–{product.year_to})
                     </span>
                   )}
@@ -472,21 +472,21 @@ const ProductDetails = () => {
               {/* Description */}
               {product.description && (
                 <div className="mb-6">
-                  <p className="text-gray-600 leading-relaxed">
+                  <p className="text-slate-600 leading-relaxed font-light text-sm md:text-base">
                     {product.description}
                   </p>
                 </div>
               )}
 
-              <Separator className="my-4" />
+              <Separator className="my-5 border-slate-100" />
 
               {/* Component Selection */}
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">
+                  <h2 className="text-sm font-semibold text-[#0f172a] uppercase tracking-wider">
                     Select Components
                   </h2>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-100 px-2.5 py-0.5 rounded-full">
                     {components.length} option{components.length !== 1 ? 's' : ''} available
                   </span>
                 </div>
@@ -501,7 +501,7 @@ const ProductDetails = () => {
                     <p className="text-gray-500">No components available</p>
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                  <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                     {components.map((component) => {
                       const quantity = getLocalCartQuantity(component.id);
                       const isExpanded = expandedComponent === component.id;
@@ -512,8 +512,8 @@ const ProductDetails = () => {
                           key={component.id}
                           className={cn(
                             "border rounded-xl transition-all duration-200",
-                            isExpanded ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300',
-                            quantity > 0 && !isExpanded && 'border-primary/50 bg-primary/5'
+                            isExpanded ? 'border-lime-400 bg-lime-50/50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white',
+                            quantity > 0 && !isExpanded && 'border-lime-300 bg-lime-50/30'
                           )}
                         >
                           <div
@@ -566,18 +566,18 @@ const ProductDetails = () => {
                                   {/* Controls */}
                                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                                     {user && quantity > 0 ? (
-                                      <div className="flex items-center border rounded-lg bg-white">
+                                      <div className="flex items-center border rounded border-slate-200 bg-white">
                                         <button
                                           onClick={() => updateLocalQuantity(component, quantity - 1)}
-                                          className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-l-lg transition-colors"
+                                          className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors text-slate-600"
                                         >
                                           <Minus className="h-3 w-3" />
                                         </button>
-                                        <span className="w-8 text-center font-medium text-sm">{quantity}</span>
+                                        <span className="w-6 text-center font-medium text-[10px] sm:text-xs">{quantity}</span>
                                         <button
                                           onClick={() => updateLocalQuantity(component, quantity + 1)}
                                           disabled={quantity >= component.stock_level}
-                                          className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-r-lg transition-colors disabled:opacity-50"
+                                          className="w-7 h-7 flex items-center justify-center hover:bg-slate-50 transition-colors disabled:opacity-50 text-slate-600"
                                         >
                                           <Plus className="h-3 w-3" />
                                         </button>
@@ -588,7 +588,7 @@ const ProductDetails = () => {
                                         variant="outline"
                                         onClick={() => updateLocalQuantity(component, 1)}
                                         disabled={component.stock_level === 0}
-                                        className="h-8"
+                                        className="h-7 px-3 font-semibold text-[10px] uppercase tracking-wider border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-lime-600 rounded transition-colors"
                                       >
                                         Add
                                       </Button>
@@ -596,7 +596,7 @@ const ProductDetails = () => {
                                       <LoginPromptButton
                                         variant="outline"
                                         size="sm"
-                                        className="h-8"
+                                        className="h-7 px-3 font-semibold text-[10px] uppercase tracking-wider border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-lime-600 rounded transition-colors"
                                         redirectTo={`/product/${id}`}
                                       >
                                         Login
@@ -634,17 +634,17 @@ const ProductDetails = () => {
 
               {/* Cart Summary */}
               {components.length > 0 && (
-                <div className="mt-6 pt-4 border-t">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-xs font-medium text-slate-400 mb-1">
                         {localCart.length > 0
                           ? `${getLocalCartTotalQuantity()} item${getLocalCartTotalQuantity() !== 1 ? 's' : ''} selected`
                           : 'No items selected'
                         }
                       </p>
                       {localCart.length > 0 && (
-                        <p className="text-2xl font-bold text-gray-900">
+                        <p className="text-2xl font-bold text-[#0f172a]">
                           {formatPrice(getLocalCartTotal())}
                         </p>
                       )}
@@ -652,21 +652,19 @@ const ProductDetails = () => {
 
                     {user ? (
                       <Button
-                        size="lg"
                         onClick={handleAddToCart}
                         disabled={cartLoading || localCart.length === 0}
-                        className="min-w-[160px]"
+                        className="h-10 px-6 rounded bg-[#0f172a] text-white hover:bg-lime-600 transition-all duration-300 font-semibold text-xs shadow"
                       >
-                        <ShoppingCart className="h-4 w-4 mr-2" />
+                        <ShoppingCart className="h-3.5 w-3.5 mr-2" />
                         {cartLoading ? 'Adding...' : 'Add to Cart'}
                       </Button>
                     ) : (
                       <LoginPromptButton
-                        size="lg"
-                        className="min-w-[160px]"
+                        className="h-10 px-6 rounded bg-[#0f172a] text-white hover:bg-lime-600 transition-all duration-300 font-semibold text-xs shadow"
                         redirectTo={`/product/${id}`}
                       >
-                        <ShoppingCart className="h-4 w-4 mr-2" />
+                        <ShoppingCart className="h-3.5 w-3.5 mr-2" />
                         Login to Add
                       </LoginPromptButton>
                     )}
@@ -679,21 +677,21 @@ const ProductDetails = () => {
 
         {/* Installation Guide Section */}
         {installationGuide && (
-          <div className="mt-6">
+          <div className="mt-8">
             <Collapsible open={installationOpen} onOpenChange={setInstallationOpen}>
-              <Card className="overflow-hidden">
-                <CollapsibleTrigger className="w-full">
-                  <div className="flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
+              <Card className="overflow-hidden rounded-2xl border-slate-100 shadow-sm bg-white">
+                <CollapsibleTrigger className="w-full group">
+                  <div className="flex items-center justify-between p-5 md:p-6 hover:bg-slate-50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-lime-100 rounded-lg">
+                      <div className="p-2.5 bg-lime-50 rounded-xl group-hover:bg-lime-100 transition-colors">
                         <Wrench className="h-5 w-5 text-lime-600" />
                       </div>
                       <div className="text-left">
-                        <h3 className="font-semibold text-gray-900">Installation Guide</h3>
-                        <p className="text-sm text-gray-500">
+                        <h3 className="font-semibold text-lg text-[#0f172a] tracking-wide">Installation Guide</h3>
+                        <p className="text-sm text-slate-500 font-light">
                           {installationGuide.recommended_time && `${installationGuide.recommended_time}`}
                           {installationGuide.recommended_time && installationGuide.installation_price && ' • '}
-                          {installationGuide.installation_price && `${formatPrice(installationGuide.installation_price)} installation fee`}
+                          {installationGuide.installation_price && `${formatPrice(installationGuide.installation_price)} fee`}
                         </p>
                       </div>
                     </div>
@@ -706,47 +704,47 @@ const ProductDetails = () => {
 
                 <CollapsibleContent>
                   <div className="px-5 pb-5 space-y-5">
-                    <Separator />
+                    <Separator className="border-slate-100" />
 
                     {/* Info Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       {installationGuide.recommended_time && (
-                        <div className="bg-gray-50 rounded-xl p-4">
-                          <Clock className="h-5 w-5 text-blue-500 mb-2" />
-                          <p className="text-xs text-gray-500 mb-1">Time Required</p>
-                          <p className="font-semibold text-gray-900">{installationGuide.recommended_time}</p>
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                          <Clock className="h-5 w-5 text-slate-400 mb-2" />
+                          <p className="text-xs font-medium text-slate-500 mb-1">Time Required</p>
+                          <p className="font-semibold text-[#0f172a]">{installationGuide.recommended_time}</p>
                         </div>
                       )}
 
                       {installationGuide.workman_power && (
-                        <div className="bg-gray-50 rounded-xl p-4">
-                          <Users className="h-5 w-5 text-purple-500 mb-2" />
-                          <p className="text-xs text-gray-500 mb-1">Workers Needed</p>
-                          <p className="font-semibold text-gray-900">
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                          <Users className="h-5 w-5 text-slate-400 mb-2" />
+                          <p className="text-xs font-medium text-slate-500 mb-1">Workers Needed</p>
+                          <p className="font-semibold text-[#0f172a]">
                             {installationGuide.workman_power} {installationGuide.workman_power === 1 ? 'person' : 'people'}
                           </p>
                         </div>
                       )}
 
                       {installationGuide.installation_price && installationGuide.installation_price > 0 && (
-                        <div className="bg-gray-50 rounded-xl p-4">
-                          <DollarSign className="h-5 w-5 text-green-500 mb-2" />
-                          <p className="text-xs text-gray-500 mb-1">Installation Fee</p>
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                          <DollarSign className="h-5 w-5 text-slate-400 mb-2" />
+                          <p className="text-xs font-medium text-slate-500 mb-1">Installation Fee</p>
                           <p className="font-semibold text-lime-600">{formatPrice(installationGuide.installation_price)}</p>
                         </div>
                       )}
 
                       {installationGuide.difficulty_level && (
-                        <div className="bg-gray-50 rounded-xl p-4">
-                          <Info className="h-5 w-5 text-orange-500 mb-2" />
-                          <p className="text-xs text-gray-500 mb-1">Difficulty</p>
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                          <Info className="h-5 w-5 text-slate-400 mb-2" />
+                          <p className="text-xs font-medium text-slate-500 mb-1">Difficulty</p>
                           <Badge
                             className={cn(
-                              "capitalize",
-                              installationGuide.difficulty_level === 'easy' && 'bg-green-100 text-green-800 hover:bg-green-100',
-                              installationGuide.difficulty_level === 'medium' && 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
-                              installationGuide.difficulty_level === 'hard' && 'bg-orange-100 text-orange-800 hover:bg-orange-100',
-                              installationGuide.difficulty_level === 'expert' && 'bg-red-100 text-red-800 hover:bg-red-100'
+                              "capitalize rounded-md px-2 py-0.5 font-medium text-xs shadow-none border",
+                              installationGuide.difficulty_level === 'easy' && 'bg-lime-50 text-lime-700 hover:bg-lime-50 border-lime-100',
+                              installationGuide.difficulty_level === 'medium' && 'bg-amber-50 text-amber-700 hover:bg-amber-50 border-amber-100',
+                              installationGuide.difficulty_level === 'hard' && 'bg-orange-50 text-orange-700 hover:bg-orange-50 border-orange-100',
+                              installationGuide.difficulty_level === 'expert' && 'bg-red-50 text-red-700 hover:bg-red-50 border-red-100'
                             )}
                           >
                             {installationGuide.difficulty_level}
@@ -805,16 +803,16 @@ const ProductDetails = () => {
         {/* Reviews Section */}
         <div className="mt-6">
           <Collapsible open={reviewsOpen} onOpenChange={setReviewsOpen}>
-            <Card className="overflow-hidden">
-              <CollapsibleTrigger className="w-full">
-                <div className="flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
+            <Card className="overflow-hidden rounded-2xl border-slate-100 shadow-sm bg-white">
+              <CollapsibleTrigger className="w-full group">
+                <div className="flex items-center justify-between p-5 md:p-6 hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-amber-100 rounded-lg">
-                      <Star className="h-5 w-5 text-amber-600" />
+                    <div className="p-2.5 bg-lime-50 rounded-xl group-hover:bg-lime-100 transition-colors">
+                      <Star className="h-5 w-5 text-lime-600" />
                     </div>
                     <div className="text-left">
-                      <h3 className="font-semibold text-gray-900">Customer Reviews</h3>
-                      <p className="text-sm text-gray-500">See what others are saying about this product</p>
+                      <h3 className="font-semibold text-lg text-[#0f172a] tracking-wide">Customer Reviews</h3>
+                      <p className="text-sm text-slate-500 font-light mt-0.5">See what others are saying about this product</p>
                     </div>
                   </div>
                   <ChevronDown className={cn(
@@ -825,8 +823,8 @@ const ProductDetails = () => {
               </CollapsibleTrigger>
 
               <CollapsibleContent>
-                <div className="px-5 pb-5">
-                  <Separator className="mb-5" />
+                <div className="px-6 md:px-8 pb-8">
+                  <Separator className="mb-8 border-slate-100" />
                   {showReviewForm ? (
                     <ReviewForm
                       productId={product.id}

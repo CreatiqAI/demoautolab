@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Package, ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -340,9 +341,9 @@ const Catalog = () => {
 
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
           {/* Page Header */}
-          <div className="mb-6 border-b border-gray-200 pb-4">
-            <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic mb-2">Product Catalog</h1>
-            <p className="text-sm text-gray-500 uppercase tracking-wider font-medium">Discover our extensive range of high-quality automotive parts and accessories</p>
+          <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
+            <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3">Product <span className="text-lime-600 italic">Catalog</span></h1>
+            <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Discover our extensive range of premium automotive parts and accessories</p>
           </div>
 
           {/* Mobile Filters - Shows only on small screens */}
@@ -419,17 +420,18 @@ const Catalog = () => {
                       <X className="h-3 w-3" />
                     </button>
                   )}
-                  <button
+                  <Button
+                    variant="ghost"
                     onClick={() => {
                       setSearchTerm('');
                       setSelectedBrand('all');
                       setSelectedCategory('all');
                       setSearchParams(new URLSearchParams());
                     }}
-                    className="ml-auto text-[10px] font-bold uppercase tracking-wide text-lime-600 hover:text-lime-700"
+                    className="ml-auto text-[10px] h-6 px-2"
                   >
                     Clear All
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -515,17 +517,18 @@ const Catalog = () => {
                 {/* Clear All Filters */}
                 {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
                   <div className="pt-3 border-t border-gray-200">
-                    <button
+                    <Button
+                      variant="hero"
                       onClick={() => {
                         setSearchTerm('');
                         setSelectedBrand('all');
                         setSelectedCategory('all');
                           setSearchParams(new URLSearchParams());
                       }}
-                      className="w-full px-3 py-2 bg-gray-900 text-white text-xs font-bold uppercase tracking-wide rounded-lg hover:bg-lime-600 transition-colors"
+                      className="w-full text-xs h-10"
                     >
                       Clear All Filters
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -539,23 +542,24 @@ const Catalog = () => {
                   {totalProducts} Products
                 </h2>
                 {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
-                  <button
+                  <Button
+                    variant="ghost"
                     onClick={() => {
                       setSearchTerm('');
                       setSelectedBrand('all');
                       setSelectedCategory('all');
                       setSearchParams(new URLSearchParams());
                     }}
-                    className="text-xs font-bold uppercase tracking-wide text-lime-600 hover:text-lime-700 transition-colors"
+                    className="text-xs h-8 px-3"
                   >
                     Reset Filters
-                  </button>
+                  </Button>
                 )}
               </div>
 
               {/* Products Grid */}
               {productsLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {Array.from({ length: isMobile ? itemsPerPage : 8 }).map((_, i) => (
                     <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                       <Skeleton className="aspect-square w-full" />
@@ -577,20 +581,21 @@ const Catalog = () => {
                   <p className="text-[15px] text-gray-500 mb-6">
                     Try adjusting your filters to see more results
                   </p>
-                  <button
+                  <Button
+                    variant="hero"
                     onClick={() => {
                       setSearchTerm('');
                       setSelectedBrand('all');
                       setSelectedCategory('all');
                       setSearchParams(new URLSearchParams());
                     }}
-                    className="px-6 py-3 bg-gray-900 text-white font-bold uppercase tracking-wide text-sm hover:bg-lime-600 transition-all rounded-lg"
+                    className="mt-6"
                   >
                     Clear Filters
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {displayProducts.map((product) => {
                     const primaryImage = getPrimaryImage(product.product_images);
                     const componentCount = getComponentCount(product);
@@ -626,47 +631,47 @@ const Catalog = () => {
                         </div>
 
                         {/* Glassmorphism Specs Overlay - Shows on Hover - Covers bottom 50% of entire card */}
-                        <div className="absolute top-[50%] left-0 right-0 bottom-0 flex items-center justify-center px-3 py-2 pointer-events-none">
-                          <div className="backdrop-blur-lg bg-black/5 rounded-lg p-3 border-2 border-white/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out w-full h-full flex flex-col justify-center overflow-y-auto shadow-lg">
+                        <div className="absolute top-[50%] left-0 right-0 bottom-0 flex items-center justify-center px-2 py-1.5 pointer-events-none">
+                          <div className="backdrop-blur-lg bg-black/5 rounded-lg p-2.5 border-2 border-white/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out w-full h-full flex flex-col justify-center overflow-y-auto shadow-lg no-scrollbar">
                             {/* Header with accent line */}
-                            <div className="mb-2">
-                              <div className="flex items-center gap-1.5 mb-1.5">
-                                <div className="w-1 h-4 bg-lime-500 rounded-full shadow-sm"></div>
-                                <h4 className="text-black font-bold text-xs uppercase tracking-wide">Specifications</h4>
+                            <div className="mb-1.5">
+                              <div className="flex items-center gap-1 mb-1">
+                                <div className="w-1 h-3 bg-lime-500 rounded-full shadow-sm"></div>
+                                <h4 className="text-black font-bold text-[10px] uppercase tracking-wide">Specifications</h4>
                               </div>
                               <div className="h-0.5 bg-gradient-to-r from-lime-500 via-lime-400/70 to-transparent rounded-full"></div>
                             </div>
 
                             {/* Specs Grid */}
-                            <div className="space-y-2">
+                            <div className="space-y-1">
                               {product.brand && (
-                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-2 py-1.5 border border-gray-300/60 shadow-sm">
-                                  <span className="text-[10px] font-medium text-gray-700 uppercase tracking-wide">Brand</span>
-                                  <span className="text-xs font-bold text-black truncate ml-2">{product.brand}</span>
+                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-300/60 shadow-sm">
+                                  <span className="text-[9px] font-medium text-gray-700 uppercase tracking-wide">Brand</span>
+                                  <span className="text-[10px] font-bold text-black truncate ml-2 max-w-[60%] text-right">{product.brand}</span>
                                 </div>
                               )}
                               {product.model && (
-                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-2 py-1.5 border border-gray-300/60 shadow-sm">
-                                  <span className="text-[10px] font-medium text-gray-700 uppercase tracking-wide">Model</span>
-                                  <span className="text-xs font-bold text-black truncate ml-2">{product.model}</span>
+                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-300/60 shadow-sm">
+                                  <span className="text-[9px] font-medium text-gray-700 uppercase tracking-wide">Model</span>
+                                  <span className="text-[10px] font-bold text-black truncate ml-2 max-w-[60%] text-right">{product.model}</span>
                                 </div>
                               )}
                               {product.category && (
-                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-2 py-1.5 border border-gray-300/60 shadow-sm">
-                                  <span className="text-[10px] font-medium text-gray-700 uppercase tracking-wide">Category</span>
-                                  <span className="text-xs font-bold text-black truncate ml-2">{product.category.name}</span>
+                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-300/60 shadow-sm">
+                                  <span className="text-[9px] font-medium text-gray-700 uppercase tracking-wide">Category</span>
+                                  <span className="text-[10px] font-bold text-black truncate ml-2 max-w-[50%] text-right">{product.category.name}</span>
                                 </div>
                               )}
                               {product.year_from && product.year_to && (
-                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-2 py-1.5 border border-gray-300/60 shadow-sm">
-                                  <span className="text-[10px] font-medium text-gray-700 uppercase tracking-wide">Year</span>
-                                  <span className="text-xs font-bold text-black truncate ml-2">{product.year_from}-{product.year_to}</span>
+                                <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-300/60 shadow-sm">
+                                  <span className="text-[9px] font-medium text-gray-700 uppercase tracking-wide">Year</span>
+                                  <span className="text-[10px] font-bold text-black truncate ml-2">{product.year_from}-{product.year_to}</span>
                                 </div>
                               )}
                               {componentCount > 0 && (
-                                <div className="flex items-center justify-between bg-lime-400/30 backdrop-blur-sm rounded px-2 py-1.5 border-2 border-lime-500/60 shadow-sm">
-                                  <span className="text-[10px] font-bold text-lime-800 uppercase tracking-wide">Components</span>
-                                  <span className="text-xs font-bold text-lime-900 truncate ml-2">{componentCount} Included</span>
+                                <div className="flex items-center justify-between bg-lime-400/30 backdrop-blur-sm rounded px-1.5 py-1 border-2 border-lime-500/60 shadow-sm">
+                                  <span className="text-[9px] font-bold text-lime-800 uppercase tracking-wide">Components</span>
+                                  <span className="text-[10px] font-bold text-lime-900 truncate ml-2">{componentCount} Included</span>
                                 </div>
                               )}
                             </div>
@@ -713,27 +718,27 @@ const Catalog = () => {
               {isMobile && totalPages > 1 && (
                 <div className="mt-8">
                   <div className="flex items-center justify-between bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 shadow-md">
-                    <button
+                    <Button
+                      variant="outline"
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 font-bold uppercase tracking-widest text-[10px] hover:bg-gray-100 transition-all rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="h-9 px-4 text-[10px]"
                     >
-                      <ChevronLeft className="h-4 w-4" />
+                      <ChevronLeft className="h-4 w-4 mr-1" />
                       Prev
-                    </button>
-
+                    </Button>
                     <span className="text-xs font-bold uppercase tracking-widest text-gray-500">
                       {currentPage} / {totalPages}
                     </span>
-
-                    <button
+                    <Button
+                      variant="outline"
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 font-bold uppercase tracking-widest text-[10px] hover:bg-gray-100 transition-all rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="h-9 px-4 text-[10px]"
                     >
                       Next
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
                   </div>
                 </div>
               )}
