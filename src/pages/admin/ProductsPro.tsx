@@ -79,6 +79,18 @@ const SCREEN_SIZES = [
   { value: '12.5', label: '12.5 inch' }
 ];
 
+function getThumbnailUrl(url: string, size = 100): string {
+  if (!url) return '';
+  // Supabase Storage supports image transforms via render/image/
+  if (url.includes('supabase.co/storage/v1/object/public/')) {
+    return url.replace(
+      '/storage/v1/object/public/',
+      `/storage/v1/render/image/public/`
+    ) + `?width=${size}&height=${size}&resize=cover`;
+  }
+  return url;
+}
+
 export default function ProductsPro() {
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
@@ -1476,8 +1488,12 @@ export default function ProductsPro() {
                       <TableCell>
                         {product.primary_image_url ? (
                           <img
-                            src={product.primary_image_url}
+                            src={getThumbnailUrl(product.primary_image_url)}
                             alt={product.name}
+                            loading="lazy"
+                            decoding="async"
+                            width={48}
+                            height={48}
                             className="w-12 h-12 rounded object-cover"
                           />
                         ) : (
