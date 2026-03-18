@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -1433,110 +1434,128 @@ export default function ProductsPro() {
               No products created yet. Create your first product!
             </div>
           ) : (
-            <div className="space-y-1">
-              {filteredProducts.map((product) => (
-                <div key={product.id} className="flex items-center justify-between gap-3 px-3 py-2 border rounded-lg hover:bg-gray-50/50 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-sm truncate">{product.name}</h3>
-                        <Badge variant={product.active ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 h-5 flex-shrink-0">
-                          {product.active ? 'Active' : 'Inactive'}
-                        </Badge>
-                        {product.featured && <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 flex-shrink-0">Featured</Badge>}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-muted-foreground">
-                          {product.brand} {product.model} {product.year_from && product.year_to && `(${product.year_from}-${product.year_to})`}
-                        </span>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product Name</TableHead>
+                    <TableHead>Brand / Model</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <div className="font-medium">{product.name}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {product.brand} {product.model}
+                        </div>
+                        {product.year_from && product.year_to && (
+                          <div className="text-sm text-muted-foreground">
+                            {product.year_from}–{product.year_to}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         {(product.categories || product.category) && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                          <Badge variant="secondary">
                             {(product.categories?.name || product.category?.name || 'Category')}
                           </Badge>
                         )}
+                      </TableCell>
+                      <TableCell>
                         {product.screen_size && product.screen_size.length > 0 &&
                           product.screen_size.map((size: string) => (
-                            <Badge key={size} variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                            <Badge key={size} variant="outline">
                               {size}"
                             </Badge>
                           ))
                         }
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={() => handlePreviewProduct(product)}
-                      title="Preview Product"
-                    >
-                      <Package className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={() => handleEditProduct(product)}
-                      title="Edit Product"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={async () => {
-                        if (confirm(`Are you sure you want to PERMANENTLY DELETE product "${product.name}"? This action cannot be undone and will remove all related components and images.`)) {
-                          try {
-                            // Use the new delete_product function from SQL
-                            const { data: functionData, error: functionError } = await (supabase
-                              .rpc as any)('delete_product', { product_id: product.id });
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Badge variant={product.active ? 'default' : 'secondary'}>
+                            {product.active ? 'Active' : 'Inactive'}
+                          </Badge>
+                          {product.featured && <Badge variant="outline">Featured</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handlePreviewProduct(product)}
+                          >
+                            <Package className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEditProduct(product)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={async () => {
+                              if (confirm(`Are you sure you want to PERMANENTLY DELETE product "${product.name}"? This action cannot be undone and will remove all related components and images.`)) {
+                                try {
+                                  const { data: functionData, error: functionError } = await (supabase
+                                    .rpc as any)('delete_product', { product_id: product.id });
 
-                            if (functionError) {
-                              // Fallback to direct deletion if function fails
-                              const { error: directError } = await supabase
-                                .from('products_new' as any)
-                                .delete()
-                                .eq('id', product.id);
-                              
-                              if (directError) throw directError;
-                              
-                              toast({
-                                title: "Product Deleted",
-                                description: `Product "${product.name}" has been deleted (fallback method)`
-                              });
-                            } else if (functionData?.success) {
-                              toast({
-                                title: "Product Deleted",
-                                description: functionData.message || `Product "${product.name}" has been permanently deleted`
-                              });
-                            } else {
-                              toast({
-                                title: "Delete Failed",
-                                description: functionData?.message || "Failed to delete product",
-                                variant: "destructive"
-                              });
-                              return;
-                            }
+                                  if (functionError) {
+                                    const { error: directError } = await supabase
+                                      .from('products_new' as any)
+                                      .delete()
+                                      .eq('id', product.id);
 
-                            fetchProducts();
-                          } catch (error: any) {
-                            toast({
-                              title: "Error",
-                              description: error.message || "Failed to delete product",
-                              variant: "destructive"
-                            });
-                          }
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                                    if (directError) throw directError;
+
+                                    toast({
+                                      title: "Product Deleted",
+                                      description: `Product "${product.name}" has been deleted (fallback method)`
+                                    });
+                                  } else if (functionData?.success) {
+                                    toast({
+                                      title: "Product Deleted",
+                                      description: functionData.message || `Product "${product.name}" has been permanently deleted`
+                                    });
+                                  } else {
+                                    toast({
+                                      title: "Delete Failed",
+                                      description: functionData?.message || "Failed to delete product",
+                                      variant: "destructive"
+                                    });
+                                    return;
+                                  }
+
+                                  fetchProducts();
+                                } catch (error: any) {
+                                  toast({
+                                    title: "Error",
+                                    description: error.message || "Failed to delete product",
+                                    variant: "destructive"
+                                  });
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
