@@ -197,10 +197,8 @@ export default function ProductsPro() {
             name,
             description
           ),
-          product_images_new (
-            url,
-            is_primary,
-            sort_order
+          product_components (
+            id
           )
         `)
         .order('created_at', { ascending: false });
@@ -211,10 +209,8 @@ export default function ProductsPro() {
           .from('products_new' as any)
           .select(`
             *,
-            product_images_new (
-              url,
-              is_primary,
-              sort_order
+            product_components (
+              id
             )
           `)
           .order('created_at', { ascending: false });
@@ -224,16 +220,6 @@ export default function ProductsPro() {
       }
 
       if (error) throw error;
-
-      // Attach primary_image_url from joined images
-      data = (data as any[])?.map((p: any) => {
-        const images = p.product_images_new || [];
-        const primary = images.find((img: any) => img.is_primary) || images[0];
-        return {
-          ...p,
-          primary_image_url: primary?.url || null
-        };
-      });
 
       setProducts((data as any) || []);
       setFilteredProducts((data as any) || []);
@@ -1461,11 +1447,11 @@ export default function ProductsPro() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Image</TableHead>
                     <TableHead>Product Name</TableHead>
                     <TableHead>Brand / Model</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Size</TableHead>
+                    <TableHead>Components</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -1473,25 +1459,6 @@ export default function ProductsPro() {
                 <TableBody>
                   {filteredProducts.map((product) => (
                     <TableRow key={product.id}>
-                      <TableCell>
-                        {product.primary_image_url ? (
-                          <img
-                            src={product.primary_image_url}
-                            alt={product.name}
-                            loading="lazy"
-                            decoding="async"
-                            className="w-12 h-12 rounded object-cover"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/placeholder.svg';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center">
-                            <Package className="h-5 w-5 text-gray-400" />
-                          </div>
-                        )}
-                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{product.name}</div>
                       </TableCell>
@@ -1520,6 +1487,11 @@ export default function ProductsPro() {
                             </Badge>
                           ))
                         }
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {product.product_components?.length || 0} SKU
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
