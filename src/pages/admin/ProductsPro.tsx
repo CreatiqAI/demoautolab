@@ -60,7 +60,6 @@ interface ProductFormData {
   slug: string;
   active: boolean;
   featured: boolean;
-  keywords: string[];
   images: Array<{ url: string; is_primary: boolean; alt_text?: string }>;
   selectedComponents: SelectedComponent[];
   installation: InstallationFormData;
@@ -115,7 +114,6 @@ export default function ProductsPro() {
     slug: '',
     active: true,
     featured: false,
-    keywords: [],
     images: [],
     selectedComponents: [],
     installation: {
@@ -421,8 +419,7 @@ export default function ProductsPro() {
         screen_size: formData.screen_size,
         slug: formData.slug,
         active: formData.active,
-        featured: formData.featured,
-        keywords: formData.keywords
+        featured: formData.featured
       };
 
       let product;
@@ -558,7 +555,6 @@ export default function ProductsPro() {
       slug: '',
       active: true,
       featured: false,
-      keywords: [],
       images: [],
       selectedComponents: [],
       installation: {
@@ -648,7 +644,6 @@ export default function ProductsPro() {
         slug: product.slug || '',
         active: product.active ?? true,
         featured: product.featured ?? false,
-        keywords: product.keywords || [],
         images: formattedImages,
         selectedComponents: components,
         installation: installationFormData
@@ -741,7 +736,7 @@ export default function ProductsPro() {
                 Create Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-4 sm:p-6">
+            <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-4 sm:p-6 overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                 <DialogTitle>{editingProduct ? 'Edit Product' : 'Create New Product'}</DialogTitle>
                 <DialogDescription>
@@ -749,8 +744,8 @@ export default function ProductsPro() {
                 </DialogDescription>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col min-h-0 flex-1">
+              <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col min-h-0 flex-1 overflow-hidden">
                   <TabsList className="grid w-full grid-cols-4 flex-shrink-0">
                     <TabsTrigger value="basic" className="text-xs sm:text-sm px-1 sm:px-3">
                       <span className="hidden sm:inline">Product Details</span>
@@ -773,7 +768,7 @@ export default function ProductsPro() {
                   </TabsList>
 
                   {/* Basic Product Info */}
-                  <TabsContent value="basic" className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1">
+                  <TabsContent value="basic" className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1 pb-2">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="name">Product Name *</Label>
@@ -901,60 +896,16 @@ export default function ProductsPro() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="description">Description</Label>
-                        <Textarea
-                          id="description"
-                          value={formData.description}
-                          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                          placeholder="Detailed product description..."
-                          rows={3}
-                          className="resize-none"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="keywords">SEO Keywords ({formData.keywords.length}/5)</Label>
-                        <Input
-                          id="keywords"
-                          placeholder="Type keyword and press Enter"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const keyword = e.currentTarget.value.trim();
-                              if (keyword && formData.keywords.length < 5 && !formData.keywords.includes(keyword)) {
-                                setFormData(prev => ({ ...prev, keywords: [...prev.keywords, keyword] }));
-                                e.currentTarget.value = '';
-                              }
-                            }
-                          }}
-                        />
-                        {formData.keywords.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {formData.keywords.map((keyword, index) => (
-                              <Badge key={index} variant="secondary" className="flex items-center gap-1 text-xs">
-                                {keyword}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setFormData(prev => ({
-                                      ...prev,
-                                      keywords: prev.keywords.filter((_, i) => i !== index)
-                                    }));
-                                  }}
-                                  className="ml-0.5 hover:text-red-500"
-                                  title="Remove keyword"
-                                >
-                                  ×
-                                </button>
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                        <p className="text-xs text-muted-foreground">
-                          Press Enter after typing each keyword.
-                        </p>
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Detailed product description..."
+                        rows={3}
+                        className="resize-none"
+                      />
                     </div>
 
                     <div className="mt-6 pt-5 pb-2 border-t">
@@ -1395,7 +1346,7 @@ export default function ProductsPro() {
                   </TabsContent>
                 </Tabs>
 
-                <div className="flex gap-3 pt-4 mt-4 border-t flex-shrink-0 bg-background sticky bottom-0">
+                <div className="flex gap-3 pt-4 mt-4 border-t flex-shrink-0">
                   <Button type="submit" className="flex-1">
                     {editingProduct ? 'Save Changes' : 'Create Product'}
                   </Button>
