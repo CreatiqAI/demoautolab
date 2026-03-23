@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { customAuthStorage } from '@/utils/customAuthStorage';
 import { deactivateDeviceSession } from '@/hooks/useSessionEnforcement';
 import { clearDeviceFingerprint } from '@/utils/deviceFingerprint';
 
@@ -101,14 +102,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearDeviceFingerprint();
     // Clear any stored OTP data
     localStorage.removeItem('pending_phone_auth');
-    // Use scope: 'local' to avoid 403 when token is already invalidated
-    // (e.g. after being kicked out by another device's login)
+
+    // Force clear local state first — this guarantees logout even if the API call fails
+    setUser(null);
+    setSession(null);
+
+    // Clear all Supabase auth data from every storage layer
+    // The customAuthStorage uses an in-memory Map + sessionStorage + localStorage
+    // with keys prefixed "supabase.auth" — we must clear all of them
+    customAuthStorage.clear();
+
+    // Try to sign out via Supabase SDK (best effort — may fail with 403 if token is dead)
     try {
       await supabase.auth.signOut({ scope: 'local' });
     } catch {
-      // Force clear local state even if server rejects the request
-      setUser(null);
-      setSession(null);
+      // Ignore — local state is already cleared above
     }
   };
 
