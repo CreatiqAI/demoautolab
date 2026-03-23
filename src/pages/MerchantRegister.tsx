@@ -6,10 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Store, ArrowLeft, CheckCircle2, Upload, X, Plus, Globe, FileText, Building, Image, Loader2, Car } from 'lucide-react';
+import { Eye, EyeOff, Store, ArrowLeft, CheckCircle2, Upload, X, Plus, Globe, FileText, Building, Image, Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import CarSelector from '@/components/CarSelector';
 
 interface SocialMediaLink {
   platform: string;
@@ -33,10 +32,6 @@ const MerchantRegister = () => {
     phone: '',
     email: '',
     dateOfBirth: '',
-    carMakeId: '',
-    carMakeName: '',
-    carModelId: '',
-    carModelName: '',
     password: '',
     confirmPassword: '',
     companyName: '',
@@ -404,15 +399,11 @@ const MerchantRegister = () => {
         customerProfile = newProfile;
       }
 
-      // Update profile with DOB and car data
+      // Update profile with DOB
       await supabase
         .from('customer_profiles' as any)
         .update({
           date_of_birth: merchantForm.dateOfBirth || null,
-          car_make_id: merchantForm.carMakeId || null,
-          car_make_name: merchantForm.carMakeName || null,
-          car_model_id: merchantForm.carModelId || null,
-          car_model_name: merchantForm.carModelName || null
         })
         .eq('id', (customerProfile as any).id);
 
@@ -602,20 +593,6 @@ const MerchantRegister = () => {
                         value={merchantForm.dateOfBirth}
                         onChange={(e) => setMerchantForm({...merchantForm, dateOfBirth: e.target.value})}
                         required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-1">
-                        <Car className="h-4 w-4" />
-                        Car Brand & Model
-                      </Label>
-                      <CarSelector
-                        selectedMakeId={merchantForm.carMakeId}
-                        selectedModelId={merchantForm.carModelId}
-                        onMakeChange={(makeId, makeName) => setMerchantForm({...merchantForm, carMakeId: makeId, carMakeName: makeName})}
-                        onModelChange={(modelId, modelName) => setMerchantForm({...merchantForm, carModelId: modelId, carModelName: modelName})}
-                        showLabels={false}
                       />
                     </div>
 

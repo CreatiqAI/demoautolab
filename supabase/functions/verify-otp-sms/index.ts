@@ -103,6 +103,26 @@ serve(async (req) => {
     if (existingCustomer?.user_id) {
       isNewUser = false;
       existingUserEmail = existingCustomer.email || null;
+
+      // Generate a magic link token for passwordless sign-in
+      if (existingUserEmail) {
+        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+          type: 'magiclink',
+          email: existingUserEmail,
+        });
+
+        if (!linkError && linkData?.properties?.hashed_token) {
+          return new Response(
+            JSON.stringify({
+              valid: true,
+              isNewUser: false,
+              existingUserEmail,
+              tokenHash: linkData.properties.hashed_token,
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
     }
 
     return new Response(

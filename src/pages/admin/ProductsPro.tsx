@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 
@@ -313,11 +313,11 @@ export default function ProductsPro() {
       if (error) throw error;
       setSearchResults((data as any) || []);
     } catch (error: any) {
-      // Fallback to direct query if function doesn't exist
+      // Fallback to direct query if function doesn't exist — search by SKU or name
       const { data, error: fallbackError } = await supabase
         .from('component_library' as any)
         .select('id, component_sku, name, description, component_type, stock_level, normal_price, merchant_price, default_image_url')
-        .ilike('component_sku', `%${term}%`)
+        .or(`component_sku.ilike.%${term}%,name.ilike.%${term}%`)
         .eq('is_active', true)
         .limit(20);
       
@@ -1118,29 +1118,192 @@ export default function ProductsPro() {
                   </TabsContent>
 
                   {/* Product Images */}
-                  <TabsContent value="images" className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1">
+                  <TabsContent value="images" className="space-y-4 flex-1 min-h-0 pr-1">
                     <div>
-                      <h3 className="text-lg font-medium mb-4">Product Images</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {[...Array(4)].map((_, index) => (
-                          <div key={index} className="space-y-2">
-                            <Label>Image {index + 1} {index === 0 && '(Primary)'}</Label>
-                            <ImageUpload
-                              value={formData.images[index]?.url || ''}
-                              onChange={(url) => {
-                                const newImages = [...formData.images];
-                                newImages[index] = {
-                                  url,
-                                  is_primary: index === 0,
-                                  alt_text: `${formData.name} - Image ${index + 1}`
-                                };
-                                setFormData(prev => ({ ...prev, images: newImages.filter(img => img.url) }));
-                              }}
-                              placeholder={`Upload image ${index + 1}`}
-                            />
-                          </div>
-                        ))}
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-medium text-gray-700">Product Images</h3>
+                        <span className="text-xs text-gray-400">{formData.images.filter(img => img.url).length}/9 uploaded</span>
                       </div>
+                      {/* Row 1: 5 images */}
+                      <div className="grid grid-cols-5 gap-2 mb-2">
+                        {[...Array(5)].map((_, index) => {
+                          const image = formData.images[index];
+                          return (
+                            <div key={index} className="relative">
+                              {image?.url ? (
+                                <div className="relative group aspect-square rounded-lg border overflow-hidden bg-gray-50">
+                                  <img src={image.url} alt={`Image ${index + 1}`} className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newImages = [...formData.images];
+                                        newImages[index] = { url: '', is_primary: false, alt_text: '' };
+                                        setFormData(prev => ({ ...prev, images: newImages.filter(img => img.url) }));
+                                      }}
+                                      className="p-1 bg-red-500 rounded-full text-white hover:bg-red-600"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                  {index === 0 && <span className="absolute top-1 left-1 text-[8px] bg-black/70 text-white px-1 rounded">Primary</span>}
+                                </div>
+                              ) : (
+                                <label className="aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center cursor-pointer transition-colors bg-gray-50/50">
+                                  <Upload className="h-4 w-4 text-gray-300 mb-1" />
+                                  <span className="text-[9px] text-gray-400">{index + 1}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      // Use the ImageUpload's upload logic inline
+                                      try {
+                                        const imageCompression = (await import('browser-image-compression')).default;
+                                        const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
+                                        const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
+                                        const { error } = await supabase.storage.from('product-images').upload(filePath, compressed, { contentType: 'image/webp' });
+                                        if (error) throw error;
+                                        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
+                                        const newImages = [...formData.images];
+                                        newImages[index] = { url: publicUrl, is_primary: index === 0, alt_text: `${formData.name} - Image ${index + 1}` };
+                                        setFormData(prev => ({ ...prev, images: newImages.filter(img => img.url) }));
+                                      } catch (err: any) {
+                                        toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                      }
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Row 2: 4 images */}
+                      <div className="grid grid-cols-5 gap-2">
+                        {[...Array(4)].map((_, i) => {
+                          const index = i + 5;
+                          const image = formData.images[index];
+                          return (
+                            <div key={index} className="relative">
+                              {image?.url ? (
+                                <div className="relative group aspect-square rounded-lg border overflow-hidden bg-gray-50">
+                                  <img src={image.url} alt={`Image ${index + 1}`} className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newImages = [...formData.images];
+                                        newImages[index] = { url: '', is_primary: false, alt_text: '' };
+                                        setFormData(prev => ({ ...prev, images: newImages.filter(img => img.url) }));
+                                      }}
+                                      className="p-1 bg-red-500 rounded-full text-white hover:bg-red-600"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <label className="aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center cursor-pointer transition-colors bg-gray-50/50">
+                                  <Upload className="h-4 w-4 text-gray-300 mb-1" />
+                                  <span className="text-[9px] text-gray-400">{index + 1}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      try {
+                                        const imageCompression = (await import('browser-image-compression')).default;
+                                        const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
+                                        const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
+                                        const { error } = await supabase.storage.from('product-images').upload(filePath, compressed, { contentType: 'image/webp' });
+                                        if (error) throw error;
+                                        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
+                                        const newImages = [...formData.images];
+                                        newImages[index] = { url: publicUrl, is_primary: index === 0, alt_text: `${formData.name} - Image ${index + 1}` };
+                                        setFormData(prev => ({ ...prev, images: newImages.filter(img => img.url) }));
+                                      } catch (err: any) {
+                                        toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                      }
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Bulk Upload + URL Input */}
+                      <div className="mt-3 flex gap-2">
+                        <label className="flex items-center gap-1.5 px-3 h-8 bg-gray-900 text-white text-xs font-medium rounded-md cursor-pointer hover:bg-gray-800 transition-colors shrink-0">
+                          <Upload className="h-3.5 w-3.5" />
+                          Select Files
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            multiple
+                            className="hidden"
+                            onChange={async (e) => {
+                              const files = Array.from(e.target.files || []);
+                              if (!files.length) return;
+                              const currentCount = formData.images.filter(img => img.url).length;
+                              const slotsAvailable = 9 - currentCount;
+                              if (files.length > slotsAvailable) {
+                                toast({ title: `Only ${slotsAvailable} slots available`, description: `Selected ${files.length} files, uploading first ${slotsAvailable}`, variant: 'destructive' });
+                              }
+                              const filesToUpload = files.slice(0, slotsAvailable);
+                              for (const file of filesToUpload) {
+                                try {
+                                  const imageCompression = (await import('browser-image-compression')).default;
+                                  const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
+                                  const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
+                                  const { error } = await supabase.storage.from('product-images').upload(filePath, compressed, { contentType: 'image/webp' });
+                                  if (error) throw error;
+                                  const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
+                                  setFormData(prev => {
+                                    const nextEmpty = [...Array(9)].findIndex((_, i) => !prev.images[i]?.url);
+                                    if (nextEmpty === -1) return prev;
+                                    const newImages = [...prev.images];
+                                    newImages[nextEmpty] = { url: publicUrl, is_primary: nextEmpty === 0, alt_text: `${prev.name} - Image ${nextEmpty + 1}` };
+                                    return { ...prev, images: newImages.filter(img => img.url) };
+                                  });
+                                } catch (err: any) {
+                                  toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                }
+                              }
+                              toast({ title: 'Upload complete', description: `${filesToUpload.length} image(s) uploaded` });
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                        <Input
+                          placeholder="Paste image URL and press Enter..."
+                          className="text-xs h-8 border-gray-900"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const url = (e.target as HTMLInputElement).value.trim();
+                              if (!url) return;
+                              const nextEmpty = [...Array(9)].findIndex((_, i) => !formData.images[i]?.url);
+                              if (nextEmpty === -1) {
+                                toast({ title: 'All slots full', description: 'Remove an image first', variant: 'destructive' });
+                                return;
+                              }
+                              const newImages = [...formData.images];
+                              newImages[nextEmpty] = { url, is_primary: nextEmpty === 0, alt_text: `${formData.name} - Image ${nextEmpty + 1}` };
+                              setFormData(prev => ({ ...prev, images: newImages.filter(img => img.url) }));
+                              (e.target as HTMLInputElement).value = '';
+                            }
+                          }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1">Select multiple files (Ctrl+Click) or paste a URL and press Enter</p>
                     </div>
                   </TabsContent>
 

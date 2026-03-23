@@ -25,16 +25,16 @@ const Footer = () => {
           <div>
             <h4 className="font-heading text-sm font-bold uppercase tracking-widest text-white mb-6">Quick Links</h4>
             <div className="space-y-3">
-              <Link to="/catalog" className="block text-gray-400 hover:text-lime-400 transition-colors text-sm">
+              <Link to="/catalog" className="block text-gray-400 hover:text-white transition-colors text-sm">
                 Shop Parts
               </Link>
-              <Link to="/find-shops" className="block text-gray-400 hover:text-lime-400 transition-colors text-sm">
+              <Link to="/find-shops" className="block text-gray-400 hover:text-white transition-colors text-sm">
                 Find Shops
               </Link>
-              <Link to="/about" className="block text-gray-400 hover:text-lime-400 transition-colors text-sm">
+              <Link to="/about" className="block text-gray-400 hover:text-white transition-colors text-sm">
                 About Us
               </Link>
-              <Link to="/merchant-register" className="block text-gray-400 hover:text-lime-400 transition-colors text-sm">
+              <Link to="/merchant-register" className="block text-gray-400 hover:text-white transition-colors text-sm">
                 Become a Merchant
               </Link>
             </div>
@@ -44,13 +44,13 @@ const Footer = () => {
           <div>
             <h4 className="font-heading text-sm font-bold uppercase tracking-widest text-white mb-6">Customer Service</h4>
             <div className="space-y-4">
-              <a href="tel:0342977668" className="flex items-center gap-3 text-gray-400 hover:text-lime-400 transition-colors text-sm">
+              <a href="tel:0342977668" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
                 <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
                   <Phone className="w-4 h-4" />
                 </div>
                 03-4297 7668
               </a>
-              <a href="mailto:support@autolab.my" className="flex items-center gap-3 text-gray-400 hover:text-lime-400 transition-colors text-sm">
+              <a href="mailto:support@autolab.my" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
                 <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
                   <Mail className="w-4 h-4" />
                 </div>
@@ -70,19 +70,19 @@ const Footer = () => {
           <div>
             <h4 className="font-heading text-sm font-bold uppercase tracking-widest text-white mb-6">Follow Us</h4>
             <div className="space-y-4">
-              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-lime-400 transition-colors text-sm">
+              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
                 <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
                   <Facebook className="w-4 h-4" />
                 </div>
                 Facebook
               </a>
-              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-lime-400 transition-colors text-sm">
+              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
                 <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
                   <Instagram className="w-4 h-4" />
                 </div>
                 Instagram
               </a>
-              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-lime-400 transition-colors text-sm">
+              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
                 <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
                   <MessageCircle className="w-4 h-4" />
                 </div>
@@ -99,13 +99,13 @@ const Footer = () => {
               &copy; 2026 Auto Lab Sdn Bhd. All rights reserved.
             </p>
             <div className="flex items-center gap-6 text-sm">
-              <Link to="/privacy" className="text-gray-500 hover:text-lime-400 transition-colors">
+              <Link to="/privacy" className="text-gray-500 hover:text-white transition-colors">
                 Privacy Policy
               </Link>
-              <Link to="/terms" className="text-gray-500 hover:text-lime-400 transition-colors">
+              <Link to="/terms" className="text-gray-500 hover:text-white transition-colors">
                 Terms of Service
               </Link>
-              <Link to="/return-policy" className="text-gray-500 hover:text-lime-400 transition-colors">
+              <Link to="/return-policy" className="text-gray-500 hover:text-white transition-colors">
                 Return Policy
               </Link>
             </div>

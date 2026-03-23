@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Eye, EyeOff, ArrowLeft, Shield, Phone, User, Calendar, Loader2, ArrowRight, Car, Store } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Shield, Phone, User, Calendar, Loader2, ArrowRight, Store } from 'lucide-react';
 import OTPInput from '@/components/OTPInput';
-import CarSelector from '@/components/CarSelector';
+import { registerDeviceSession } from '@/hooks/useSessionEnforcement';
 
-type AuthStep = 'contact' | 'otp' | 'details' | 'merchant-otp' | 'merchant-password';
+type AuthStep = 'contact' | 'otp' | 'details' | 'merchant-otp';
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -26,6 +27,7 @@ const Auth = () => {
   const {
     sendPhoneOTP,
     verifyPhoneOTP,
+    signInWithToken,
     signInWithPassword,
     signUpWithPhoneOTP,
     user
@@ -33,9 +35,6 @@ const Auth = () => {
 
   const navigate = useNavigate();
 
-  // For merchant login - store email after OTP verification
-  const [merchantEmail, setMerchantEmail] = useState<string | null>(null);
-  const [merchantPassword, setMerchantPassword] = useState('');
 
   // Customer login form (phone + password)
   const [customerForm, setCustomerForm] = useState({
@@ -48,6 +47,9 @@ const Auth = () => {
     phone: '',
     otp: ''
   });
+
+  // Test mode toggle — when ON, uses fixed OTP 123456 instead of real SMS
+  const [testOtpMode, setTestOtpMode] = useState(true);
 
   // Registration details (for new users)
   const [registrationForm, setRegistrationForm] = useState({
@@ -164,7 +166,7 @@ const Auth = () => {
 
     setLoading(true);
     const normalizedPhone = normalizePhone(merchantOtpForm.phone);
-    const { error } = await sendPhoneOTP(normalizedPhone);
+    const { error } = await sendPhoneOTP(normalizedPhone, { testMode: testOtpMode });
 
     if (error) {
       toast.error(error.message || 'Failed to send OTP. Please try again.');
@@ -172,7 +174,7 @@ const Auth = () => {
       return;
     }
 
-    toast.success('OTP sent to your phone!');
+    toast.success(testOtpMode ? 'Test mode: Use OTP 123456' : 'OTP sent to your phone!');
 
     setOtpSent(true);
     setAuthStep('merchant-otp');
@@ -191,7 +193,7 @@ const Auth = () => {
 
     setLoading(true);
     const normalizedPhone = normalizePhone(merchantOtpForm.phone);
-    const { error, isNewUser: newUser, existingUserEmail: userEmail } = await verifyPhoneOTP(normalizedPhone, merchantOtpForm.otp);
+    const { error, isNewUser: newUser, tokenHash } = await verifyPhoneOTP(normalizedPhone, merchantOtpForm.otp);
 
     if (error) {
       toast.error(error.message || 'Invalid OTP. Please try again.');
@@ -203,15 +205,21 @@ const Auth = () => {
       // New merchant - redirect to merchant registration
       toast.info('No account found. Please register as a merchant first.');
       navigate('/merchant-register');
-    } else {
-      // Existing merchant - OTP verified, now need password to create session
-      if (userEmail) {
-        setMerchantEmail(userEmail);
-        setAuthStep('merchant-password');
-        toast.success('Phone verified! Please enter your password to complete sign in.');
+    } else if (tokenHash) {
+      // Existing merchant — auto sign-in using magic link token (no password needed)
+      const { error: signInError, userId } = await signInWithToken(tokenHash);
+      if (signInError) {
+        toast.error('Failed to sign in. Please try again.');
       } else {
-        toast.error('Account found but email not available. Please contact support.');
+        // Register device session for single-device enforcement
+        if (userId) {
+          await registerDeviceSession(userId);
+        }
+        toast.success('Welcome back, Merchant!');
+        navigate('/');
       }
+    } else {
+      toast.error('Account found but auto sign-in failed. Please contact support.');
     }
 
     setLoading(false);
@@ -223,41 +231,14 @@ const Auth = () => {
 
     setLoading(true);
     const normalizedPhone = normalizePhone(merchantOtpForm.phone);
-    const { error } = await sendPhoneOTP(normalizedPhone);
+    const { error } = await sendPhoneOTP(normalizedPhone, { testMode: testOtpMode });
 
     if (error) {
       toast.error('Failed to resend OTP');
     } else {
-      toast.success('OTP resent to your phone!');
+      toast.success(testOtpMode ? 'Test mode: Use OTP 123456' : 'OTP resent to your phone!');
       setResendTimer(60);
     }
-    setLoading(false);
-  };
-
-  // Handle merchant password login (after OTP verification)
-  const handleMerchantPasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!merchantEmail || !merchantPassword) {
-      toast.error('Please enter your password');
-      return;
-    }
-
-    setLoading(true);
-    const { error } = await signInWithPassword(merchantEmail, merchantPassword);
-
-    if (error) {
-      if (error.message?.includes('Invalid login credentials')) {
-        toast.error('Incorrect password. Please try again.');
-      } else {
-        toast.error(error.message || 'Failed to sign in. Please try again.');
-      }
-      setLoading(false);
-      return;
-    }
-
-    toast.success('Welcome back, Merchant!');
-    navigate('/');
     setLoading(false);
   };
 
@@ -299,8 +280,6 @@ const Auth = () => {
     setAuthStep('contact');
     setOtpSent(false);
     setMerchantOtpForm(prev => ({ ...prev, otp: '' }));
-    setMerchantEmail(null);
-    setMerchantPassword('');
     setIsNewUser(false);
   };
 
@@ -365,12 +344,10 @@ const Auth = () => {
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               {authStep === 'merchant-otp' ? 'Enter Verification Code' :
-               authStep === 'merchant-password' ? 'Enter Your Password' :
                'Welcome'}
             </h2>
             <p className="text-gray-500">
               {authStep === 'merchant-otp' ? `We sent a code to +60${merchantOtpForm.phone}` :
-               authStep === 'merchant-password' ? 'Phone verified! Complete sign in with your password' :
                'Sign in to your account'}
             </p>
           </div>
@@ -415,71 +392,6 @@ const Auth = () => {
                   </>
                 ) : (
                   'Verify & Sign In'
-                )}
-              </Button>
-            </form>
-          )}
-
-          {/* Merchant Password Form (after OTP verification) */}
-          {authStep === 'merchant-password' && (
-            <form onSubmit={handleMerchantPasswordLogin} className="space-y-5">
-              {/* Verified badge */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <p className="text-sm font-medium text-green-800">Phone Verified</p>
-                </div>
-                <p className="text-xs text-green-700">+60{merchantOtpForm.phone}</p>
-                {merchantEmail && (
-                  <p className="text-xs text-green-600 mt-1">
-                    Account: {merchantEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3')}
-                  </p>
-                )}
-              </div>
-
-              {/* Password Input */}
-              <div className="space-y-2">
-                <Label htmlFor="merchant-login-password" className="text-gray-700 text-sm font-medium">
-                  Password
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="merchant-login-password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter your password"
-                    value={merchantPassword}
-                    onChange={(e) => setMerchantPassword(e.target.value)}
-                    required
-                    autoFocus
-                    className="pr-10 border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-gray-400"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors"
-                disabled={loading || !merchantPassword}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    Sign In
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </>
                 )}
               </Button>
             </form>
@@ -614,6 +526,15 @@ const Auth = () => {
                     <p className="text-xs text-amber-800 font-medium">
                       Merchant accounts require OTP verification for security.
                     </p>
+                  </div>
+
+                  {/* Test mode toggle */}
+                  <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div>
+                      <span className="text-xs font-medium text-gray-700">Test Mode</span>
+                      <p className="text-[10px] text-gray-500">{testOtpMode ? 'OTP fixed to 123456 (no SMS sent)' : 'Real SMS will be sent'}</p>
+                    </div>
+                    <Switch checked={testOtpMode} onCheckedChange={setTestOtpMode} />
                   </div>
 
                   <form onSubmit={handleMerchantSendOTP} className="space-y-4">

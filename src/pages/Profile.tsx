@@ -20,6 +20,7 @@ import {
   X,
   Store,
   ShoppingCart,
+  Car,
   ChevronDown,
   ArrowLeft
 } from 'lucide-react';
@@ -42,6 +43,11 @@ interface ProfileData {
   customer_type?: 'normal' | 'merchant';
   created_at: string;
   last_login_at?: string;
+  car_make_name?: string;
+  car_model_name?: string;
+  preferences?: {
+    cars?: Array<{ make_name: string; model_name: string }>;
+  };
 }
 
 const Profile = () => {
@@ -68,7 +74,22 @@ const Profile = () => {
         if (error) throw error;
 
         if (data && Object.keys(data).length > 0) {
-          setProfile(data as ProfileData);
+          // Fetch car data separately (RPC may not include these columns)
+          const { data: carData } = await supabase
+            .from('customer_profiles' as any)
+            .select('car_make_name, car_model_name')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          const profileData = {
+            ...(data as ProfileData),
+            ...(carData && {
+              car_make_name: (carData as any).car_make_name || null,
+              car_model_name: (carData as any).car_model_name || null,
+            }),
+          };
+
+          setProfile(profileData as ProfileData);
           return;
         }
       }
@@ -368,6 +389,17 @@ const Profile = () => {
                       <span className="text-sm text-gray-700">
                         {profile.customer_type === 'merchant' ? 'B2B Merchant' : 'B2C Customer'}
                       </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Vehicles */}
+                {profile.car_make_name && (
+                  <div className="sm:col-span-2">
+                    <label className={labelClass}>My Vehicle</label>
+                    <div className="flex items-center gap-2.5 bg-gray-50 px-3 py-2.5 rounded-lg">
+                      <Car className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-700">{profile.car_make_name}{profile.car_model_name ? ` — ${profile.car_model_name}` : ''}</span>
                     </div>
                   </div>
                 )}

@@ -3,19 +3,26 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   ShoppingCart,
   User,
   Menu,
   LogOut,
-  Tag,
   Store,
   XCircle,
   AlertCircle,
   X,
   ChevronDown,
-  Coins,
   Settings,
-  RotateCcw
+  Package,
+  RotateCcw,
+  Gift
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -171,8 +178,8 @@ const Header = () => {
 
   // Text color: dark on both states since navbar has white background
   const textColor = 'text-gray-900';
-  const linkHoverColor = 'hover:text-lime-600';
-  const borderColor = 'border-gray-900/30 hover:border-lime-500';
+  const linkHoverColor = 'hover:text-gray-500';
+  const borderColor = 'border-gray-900/30 hover:border-gray-500';
 
   return (
     <>
@@ -215,7 +222,7 @@ const Header = () => {
                       <div className="grid grid-cols-3 gap-8 py-6">
                         {/* Categories Column */}
                         <div>
-                          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-900 mb-3 pb-2 border-b-2 border-lime-500/30">
+                          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-900 mb-3 pb-2 border-b-2 border-gray-200">
                             Categories
                           </h3>
                           <ul className="space-y-2">
@@ -223,7 +230,7 @@ const Header = () => {
                               <li key={category.id}>
                                 <Link
                                   to={`/catalog?category=${category.id}`}
-                                  className="block text-sm text-gray-600 hover:text-lime-600 hover:translate-x-1 transition-all duration-200 py-0.5"
+                                  className="block text-sm text-gray-600 hover:text-gray-900 hover:translate-x-1 transition-all duration-200 py-0.5"
                                 >
                                   {category.name}
                                 </Link>
@@ -234,7 +241,7 @@ const Header = () => {
 
                         {/* Brands Column */}
                         <div>
-                          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-900 mb-3 pb-2 border-b-2 border-lime-500/30">
+                          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-900 mb-3 pb-2 border-b-2 border-gray-200">
                             Brands
                           </h3>
                           <ul className="space-y-2">
@@ -242,7 +249,7 @@ const Header = () => {
                               <li key={brand.id}>
                                 <Link
                                   to={`/catalog?brand=${brand.id}`}
-                                  className="block text-sm text-gray-600 hover:text-lime-600 hover:translate-x-1 transition-all duration-200 py-0.5"
+                                  className="block text-sm text-gray-600 hover:text-gray-900 hover:translate-x-1 transition-all duration-200 py-0.5"
                                 >
                                   {brand.name}
                                 </Link>
@@ -252,7 +259,7 @@ const Header = () => {
                         </div>
 
                         {/* Call to Action Column */}
-                        <div className="bg-gradient-to-br from-lime-50 to-lime-100/50 border border-lime-200/40 rounded-lg p-5 flex flex-col justify-center items-center text-center">
+                        <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/40 rounded-lg p-5 flex flex-col justify-center items-center text-center">
                           <h3 className="text-sm font-bold text-gray-900 mb-1.5 uppercase tracking-wider">
                             Explore All Products
                           </h3>
@@ -261,7 +268,7 @@ const Header = () => {
                           </p>
                           <Link
                             to="/catalog"
-                            className="px-5 py-2 bg-lime-600 text-white text-xs font-bold uppercase tracking-widest rounded-full hover:bg-lime-700 transition-all duration-300 hover:shadow-lg"
+                            className="px-5 py-2 bg-gray-900 text-white text-xs font-bold uppercase tracking-widest rounded-full hover:bg-gray-800 transition-all duration-300 hover:shadow-lg"
                           >
                             View Catalog
                           </Link>
@@ -286,32 +293,6 @@ const Header = () => {
                 About Us
               </Link>
 
-              {user && (
-                <>
-                  <Link
-                    to="/my-orders"
-                    className={`relative h-full flex items-center text-xs font-bold tracking-widest uppercase transition-all duration-300 ${linkHoverColor} liquid-underline`}
-                  >
-                    My Orders
-                  </Link>
-
-                  <Link
-                    to="/my-vouchers"
-                    className={`relative h-full flex items-center text-xs font-bold tracking-widest uppercase transition-all duration-300 ${linkHoverColor} liquid-underline gap-1.5`}
-                  >
-                    <Tag className="h-3.5 w-3.5" />
-                    Vouchers
-                  </Link>
-
-                  <Link
-                    to="/my-points"
-                    className={`relative h-full flex items-center text-xs font-bold tracking-widest uppercase transition-all duration-300 ${linkHoverColor} liquid-underline gap-1.5`}
-                  >
-                    <Coins className="h-3.5 w-3.5" />
-                    My Points
-                  </Link>
-                </>
-              )}
             </nav>
 
             {/* Right Actions */}
@@ -338,39 +319,65 @@ const Header = () => {
               {/* Account Actions */}
               {user ? (
                 <>
-                  {/* Merchant Console Button (for panel merchants only) */}
-                  {isMerchant && partnership?.subscription_plan === 'panel' && (
-                    <Link
-                      to="/merchant-console"
-                      className={`hidden sm:block relative p-2 ${linkHoverColor} transition-colors duration-300`}
-                      title="Merchant Console"
-                    >
-                      <Store className="h-5 w-5" />
-                    </Link>
-                  )}
-
-                  {/* Profile/Settings Button */}
-                  <Link
-                    to="/settings"
-                    className={`hidden sm:block relative p-2 ${linkHoverColor} transition-colors duration-300`}
-                    title="Settings"
-                  >
-                    <Settings className="h-5 w-5" />
-                  </Link>
-
-                  {/* Logout Button */}
-                  <button
-                    onClick={handleSignOut}
-                    className="hidden sm:block relative p-2 text-gray-900 hover:text-red-600 transition-colors duration-300"
-                    title="Logout"
-                  >
-                    <LogOut className="h-5 w-5" />
-                  </button>
+                  {/* User Account Dropdown */}
+                  <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <button className={`hidden sm:block relative p-2 ${linkHoverColor} transition-colors duration-300 focus:outline-none`}>
+                        <User className="h-5 w-5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-60 p-2">
+                      <div className="px-3 py-2.5 mb-1">
+                        <p className="text-xs text-gray-500 font-medium truncate">{user.email}</p>
+                      </div>
+                      <DropdownMenuSeparator className="mb-1" />
+                      <DropdownMenuItem asChild>
+                        <Link to="/my-orders" className="flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:bg-gray-50 focus:text-gray-900">
+                          <Package className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm font-medium">My Orders</span>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/my-returns" className="flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:bg-gray-50 focus:text-gray-900">
+                          <RotateCcw className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm font-medium">My Returns</span>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/my-vouchers" className="flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:bg-gray-50 focus:text-gray-900">
+                          <Gift className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm font-medium">Rewards & Vouchers</span>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:bg-gray-50 focus:text-gray-900">
+                          <Settings className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm font-medium">Account Settings</span>
+                        </Link>
+                      </DropdownMenuItem>
+                      {isMerchant && partnership?.subscription_plan === 'panel' && (
+                        <DropdownMenuItem asChild>
+                          <Link to="/merchant-console" className="flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:bg-gray-50 focus:text-gray-900">
+                            <Store className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm font-medium">Merchant Console</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator className="my-1" />
+                      <DropdownMenuItem
+                        onClick={handleSignOut}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50 focus:bg-red-50 focus:text-red-700"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        <span className="text-sm font-medium">Sign Out</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               ) : (
                 <Link
                   to="/auth"
-                  className={`hidden sm:block px-6 py-2.5 rounded-full border ${borderColor} transition-all uppercase text-[10px] font-bold tracking-widest hover:bg-lime-600 hover:border-lime-600 hover:text-white`}
+                  className={`hidden sm:block px-6 py-2.5 rounded-full border ${borderColor} transition-all uppercase text-[10px] font-bold tracking-widest hover:bg-gray-900 hover:border-gray-900 hover:text-white`}
                 >
                   Login
                 </Link>
@@ -385,106 +392,81 @@ const Header = () => {
                 </SheetTrigger>
                 <SheetContent side="right" className="w-[300px] sm:w-80 bg-white">
                   <div className="flex flex-col gap-6 mt-8">
-                    {/* Mobile Navigation */}
-                    <nav className="flex flex-col gap-2">
+                    {/* Navigation */}
+                    <nav className="flex flex-col gap-1">
                       {['Catalog', 'Find Shops', 'About Us'].map((item) => (
                         <Link
                           key={item}
                           to={`/${item.toLowerCase().replace(/\s+/g, '-')}`}
                           onClick={() => setMobileMenuOpen(false)}
-                          className="text-xl font-heading font-bold uppercase text-gray-900 hover:text-lime-600 transition-colors py-3 border-b border-gray-100"
+                          className="text-lg font-bold text-gray-900 hover:text-gray-900 transition-colors py-3 border-b border-gray-100"
                         >
                           {item}
                         </Link>
                       ))}
-
-                      {user && (
-                        <>
-                          <Link
-                            to="/my-orders"
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="text-xl font-heading font-bold uppercase text-gray-900 hover:text-lime-600 transition-colors py-3 border-b border-gray-100"
-                          >
-                            My Orders
-                          </Link>
-                          <Link
-                            to="/my-returns"
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="text-xl font-heading font-bold uppercase text-gray-900 hover:text-lime-600 transition-colors py-3 border-b border-gray-100 flex items-center gap-2"
-                          >
-                            <RotateCcw className="h-5 w-5" />
-                            My Returns
-                          </Link>
-                          <Link
-                            to="/my-vouchers"
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="text-xl font-heading font-bold uppercase text-gray-900 hover:text-lime-600 transition-colors py-3 border-b border-gray-100 flex items-center gap-2"
-                          >
-                            <Tag className="h-5 w-5" />
-                            My Vouchers
-                          </Link>
-                          <Link
-                            to="/my-points"
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="text-xl font-heading font-bold uppercase text-gray-900 hover:text-lime-600 transition-colors py-3 border-b border-gray-100 flex items-center gap-2"
-                          >
-                            <Coins className="h-5 w-5" />
-                            My Points
-                          </Link>
-
-                        </>
-                      )}
                     </nav>
 
-                    <div className="flex flex-col gap-4 mt-4">
+                    {/* My Account Section */}
+                    {user && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">My Account</p>
+                        <nav className="flex flex-col gap-1">
+                          <Link to="/my-orders" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 py-2.5 text-gray-700 hover:text-gray-900 transition-colors">
+                            <Package className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm font-medium">My Orders</span>
+                          </Link>
+                          <Link to="/my-returns" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 py-2.5 text-gray-700 hover:text-gray-900 transition-colors">
+                            <RotateCcw className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm font-medium">My Returns</span>
+                          </Link>
+                          <Link to="/my-vouchers" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 py-2.5 text-gray-700 hover:text-gray-900 transition-colors">
+                            <Gift className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm font-medium">Rewards & Vouchers</span>
+                          </Link>
+                          <Link to="/settings" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 py-2.5 text-gray-700 hover:text-gray-900 transition-colors">
+                            <Settings className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm font-medium">Account Settings</span>
+                          </Link>
+                          {isMerchant && partnership?.subscription_plan === 'panel' && (
+                            <Link to="/merchant-console" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 py-2.5 text-gray-700 hover:text-gray-900 transition-colors">
+                              <Store className="h-4 w-4" />
+                              <span className="text-sm font-medium">Merchant Console</span>
+                            </Link>
+                          )}
+                        </nav>
+                      </div>
+                    )}
+
+                    {/* Bottom Actions */}
+                    <div className="flex flex-col gap-3 mt-auto">
                       <button
                         onClick={() => {
                           setMobileMenuOpen(false);
                           setIsCartOpen(true);
                         }}
-                        className="bg-lime-600 text-white font-bold uppercase tracking-widest px-8 py-4 w-full rounded-full text-center"
+                        className="bg-gray-900 text-white font-bold uppercase tracking-widest px-8 py-3.5 w-full rounded-full text-center text-sm"
                       >
                         Cart ({getTotalItems()})
                       </button>
 
                       {user ? (
-                        <div className="space-y-2">
-                          {isMerchant && partnership?.subscription_plan === 'panel' && (
-                            <Link
-                              to="/merchant-console"
-                              onClick={() => setMobileMenuOpen(false)}
-                              className="flex items-center w-full px-4 py-3 text-lime-700 hover:bg-lime-50 rounded-lg transition-colors"
-                            >
-                              <Store className="h-5 w-5 mr-2" />
-                              Merchant Console
-                            </Link>
-                          )}
-                          <Link
-                            to="/settings"
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="flex items-center w-full px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                          >
-                            <Settings className="h-5 w-5 mr-2" />
-                            Settings
-                          </Link>
-                          <Button
-                            className="w-full border border-gray-200 text-gray-900 font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white hover:border-red-600"
-                            variant="outline"
-                            size="lg"
-                            onClick={() => {
-                              setMobileMenuOpen(false);
-                              handleSignOut();
-                            }}
-                          >
-                            <LogOut className="h-5 w-5 mr-2" />
-                            Logout
-                          </Button>
-                        </div>
+                        <Button
+                          className="w-full border border-gray-200 text-gray-600 font-medium hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                          variant="outline"
+                          size="lg"
+                          onClick={() => {
+                            setMobileMenuOpen(false);
+                            handleSignOut();
+                          }}
+                        >
+                          <LogOut className="h-4 w-4 mr-2" />
+                          Sign Out
+                        </Button>
                       ) : (
                         <Link
                           to="/auth"
                           onClick={() => setMobileMenuOpen(false)}
-                          className="border border-gray-900 text-gray-900 font-bold uppercase tracking-widest px-8 py-4 w-full rounded-full hover:bg-gray-900 hover:text-white transition-colors text-center"
+                          className="border border-gray-900 text-gray-900 font-bold uppercase tracking-widest px-8 py-3.5 w-full rounded-full hover:bg-gray-900 hover:text-white transition-colors text-center text-sm"
                         >
                           Login
                         </Link>

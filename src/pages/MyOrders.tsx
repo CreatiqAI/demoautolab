@@ -594,7 +594,7 @@ export default function MyOrders() {
         {/* Back Button */}
         <Link
           to="/catalog"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-lime-700 mb-6 text-sm font-medium transition-colors"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 text-sm font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Shop
@@ -609,7 +609,7 @@ export default function MyOrders() {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <Package className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
+              <Package className="h-12 w-12 animate-pulse mx-auto mb-4 text-gray-400" />
               <p className="text-gray-500 text-[15px]">Loading orders...</p>
             </div>
           </div>
@@ -622,7 +622,7 @@ export default function MyOrders() {
             <p className="text-[15px] text-gray-500 mb-6 max-w-md mx-auto">
               You haven't placed any orders yet. Start shopping to see your order history here.
             </p>
-            <Button asChild variant="hero" className="mt-2 text-[13px] h-10 px-6">
+            <Button asChild className="mt-2 text-[13px] h-10 px-6 bg-gray-900 text-white hover:bg-lime-600 transition-colors rounded-lg">
               <Link to="/catalog">
                 Browse Catalog
               </Link>
@@ -1161,7 +1161,7 @@ export default function MyOrders() {
                     </h4>
                     <Button
                       onClick={() => openInvoiceModal(selectedOrder)}
-                      className="w-full bg-lime-600 hover:bg-lime-700 text-white"
+                      className="w-full bg-gray-900 hover:bg-gray-800 text-white"
                     >
                       <FileDown className="h-4 w-4 mr-2" />
                       View / Download Invoice
@@ -1648,11 +1648,11 @@ export default function MyOrders() {
             </div>
 
             <div className="sticky bottom-0 bg-white border-t p-4 flex justify-center gap-3">
-              <Button onClick={printInvoice} className="bg-lime-600 hover:bg-lime-700 text-white">
+              <Button onClick={printInvoice} className="bg-gray-900 hover:bg-gray-800 text-white">
                 <Printer className="h-4 w-4 mr-2" />
                 Print Invoice
               </Button>
-              <Button onClick={downloadInvoicePDF} variant="outline" className="border-lime-600 text-lime-600 hover:bg-lime-50">
+              <Button onClick={downloadInvoicePDF} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
                 <FileDown className="h-4 w-4 mr-2" />
                 Download PDF
               </Button>

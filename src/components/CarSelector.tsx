@@ -4,11 +4,13 @@ import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { Car } from 'lucide-react';
+
 
 interface CarMake {
   id: string;
@@ -111,8 +113,6 @@ export default function CarSelector({
   const handleMakeChange = (makeId: string) => {
     const make = makes.find(m => m.id === makeId);
     onMakeChange(makeId, make?.name || '');
-    // Reset model when make changes
-    onModelChange('', '');
   };
 
   const handleModelChange = (modelId: string) => {
@@ -134,50 +134,45 @@ export default function CarSelector({
   }
 
   return (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${className}`}>
+    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 items-end ${className}`}>
       {/* Car Brand Select */}
       <div className="space-y-2">
         {showLabels && (
-          <Label className="flex items-center gap-1">
-            <Car className="h-4 w-4" />
+          <Label>
             Car Brand {required && <span className="text-red-500">*</span>}
           </Label>
         )}
         <Select
-          value={selectedMakeId}
+          value={selectedMakeId || undefined}
           onValueChange={handleMakeChange}
           disabled={disabled || loadingMakes}
         >
-          <SelectTrigger>
+          <SelectTrigger className="h-11">
             <SelectValue placeholder={loadingMakes ? "Loading..." : "Select brand"} />
           </SelectTrigger>
           <SelectContent>
             {/* Popular brands */}
             {popularMakes.length > 0 && (
-              <>
-                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                  Popular Brands
-                </div>
+              <SelectGroup>
+                <SelectLabel>Popular Brands</SelectLabel>
                 {popularMakes.map((make) => (
                   <SelectItem key={make.id} value={make.id}>
                     {make.name}
                   </SelectItem>
                 ))}
-              </>
+              </SelectGroup>
             )}
 
             {/* Other brands */}
             {otherMakes.length > 0 && (
-              <>
-                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t mt-1">
-                  Other Brands
-                </div>
+              <SelectGroup>
+                <SelectLabel>Other Brands</SelectLabel>
                 {otherMakes.map((make) => (
                   <SelectItem key={make.id} value={make.id}>
                     {make.name}
                   </SelectItem>
                 ))}
-              </>
+              </SelectGroup>
             )}
           </SelectContent>
         </Select>
@@ -186,16 +181,16 @@ export default function CarSelector({
       {/* Car Model Select */}
       <div className="space-y-2">
         {showLabels && (
-          <Label>
+          <Label className="flex items-center gap-1">
             Car Model {required && <span className="text-red-500">*</span>}
           </Label>
         )}
         <Select
-          value={selectedModelId}
+          value={selectedModelId || undefined}
           onValueChange={handleModelChange}
           disabled={disabled || !selectedMakeId || loadingModels}
         >
-          <SelectTrigger>
+          <SelectTrigger className="h-11">
             <SelectValue
               placeholder={
                 !selectedMakeId

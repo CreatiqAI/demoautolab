@@ -369,11 +369,11 @@ const Catalog = () => {
                     <SelectValue placeholder="Category" />
                   </SelectTrigger>
                   <SelectContent className="bg-white border border-gray-200 rounded-xl shadow-lg max-h-[280px]">
-                    <SelectItem value="all" className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
+                    <SelectItem value="all" className="cursor-pointer hover:bg-gray-50 focus:bg-gray-100 focus:text-gray-900 rounded-lg mx-1 my-0.5">
                       All Categories
                     </SelectItem>
                     {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id} className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
+                      <SelectItem key={category.id} value={category.id} className="cursor-pointer hover:bg-gray-50 focus:bg-gray-100 focus:text-gray-900 rounded-lg mx-1 my-0.5">
                         {category.name}
                       </SelectItem>
                     ))}
@@ -386,11 +386,11 @@ const Catalog = () => {
                     <SelectValue placeholder="Brand" />
                   </SelectTrigger>
                   <SelectContent className="bg-white border border-gray-200 rounded-xl shadow-lg max-h-[280px]">
-                    <SelectItem value="all" className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
+                    <SelectItem value="all" className="cursor-pointer hover:bg-gray-50 focus:bg-gray-100 focus:text-gray-900 rounded-lg mx-1 my-0.5">
                       All Brands
                     </SelectItem>
                     {brands.map((brand) => (
-                      <SelectItem key={brand.id} value={brand.id} className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5">
+                      <SelectItem key={brand.id} value={brand.id} className="cursor-pointer hover:bg-gray-50 focus:bg-gray-100 focus:text-gray-900 rounded-lg mx-1 my-0.5">
                         {brand.name}
                       </SelectItem>
                     ))}
@@ -403,13 +403,13 @@ const Catalog = () => {
               {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
                 <div className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-2 flex-wrap">
                   {selectedCategory !== 'all' && (
-                    <button onClick={() => handleCategoryChange('all')} className="flex items-center gap-1 px-2 py-1 bg-lime-50 text-lime-700 text-[10px] font-bold rounded-lg hover:bg-lime-100">
+                    <button onClick={() => handleCategoryChange('all')} className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-[10px] font-bold rounded-lg hover:bg-gray-200">
                       {categories.find(c => c.id === selectedCategory)?.name}
                       <X className="h-3 w-3" />
                     </button>
                   )}
                   {selectedBrand !== 'all' && (
-                    <button onClick={() => handleBrandChange('all')} className="flex items-center gap-1 px-2 py-1 bg-lime-50 text-lime-700 text-[10px] font-bold rounded-lg hover:bg-lime-100">
+                    <button onClick={() => handleBrandChange('all')} className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-[10px] font-bold rounded-lg hover:bg-gray-200">
                       {brands.find(b => b.id === selectedBrand)?.name}
                       <X className="h-3 w-3" />
                     </button>
@@ -465,8 +465,8 @@ const Catalog = () => {
                     <button
                       onClick={() => handleCategoryChange('all')}
                       className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedCategory === 'all'
-                        ? 'bg-lime-500 text-white shadow-sm'
-                        : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
+                        ? 'bg-gray-900 text-white shadow-sm'
+                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                         }`}
                     >
                       All Categories
@@ -476,8 +476,8 @@ const Catalog = () => {
                         key={category.id}
                         onClick={() => handleCategoryChange(category.id)}
                         className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedCategory === category.id
-                          ? 'bg-lime-500 text-white shadow-sm'
-                          : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
+                          ? 'bg-gray-900 text-white shadow-sm'
+                          : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                           }`}
                       >
                         {category.name}
@@ -493,8 +493,8 @@ const Catalog = () => {
                     <button
                       onClick={() => handleBrandChange('all')}
                       className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedBrand === 'all'
-                        ? 'bg-lime-500 text-white shadow-sm'
-                        : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
+                        ? 'bg-gray-900 text-white shadow-sm'
+                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                         }`}
                     >
                       All Brands
@@ -504,8 +504,8 @@ const Catalog = () => {
                         key={brand.id}
                         onClick={() => handleBrandChange(brand.id)}
                         className={`px-3 py-2 text-xs font-semibold text-left rounded-lg transition-all ${selectedBrand === brand.id
-                          ? 'bg-lime-500 text-white shadow-sm'
-                          : 'bg-gray-50 text-gray-700 hover:bg-lime-50 hover:text-lime-700'
+                          ? 'bg-gray-900 text-white shadow-sm'
+                          : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                           }`}
                       >
                         {brand.name}
@@ -518,14 +518,14 @@ const Catalog = () => {
                 {(selectedCategory !== 'all' || selectedBrand !== 'all' || searchTerm) && (
                   <div className="pt-3 border-t border-gray-200">
                     <Button
-                      variant="hero"
+                      variant="outline"
                       onClick={() => {
                         setSearchTerm('');
                         setSelectedBrand('all');
                         setSelectedCategory('all');
                           setSearchParams(new URLSearchParams());
                       }}
-                      className="w-full text-xs h-10"
+                      className="w-full text-xs h-10 border-gray-300 text-gray-600 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all"
                     >
                       Clear All Filters
                     </Button>
@@ -636,10 +636,10 @@ const Catalog = () => {
                             {/* Header with accent line */}
                             <div className="mb-1.5">
                               <div className="flex items-center gap-1 mb-1">
-                                <div className="w-1 h-3 bg-lime-500 rounded-full shadow-sm"></div>
+                                <div className="w-1 h-3 bg-gray-400 rounded-full shadow-sm"></div>
                                 <h4 className="text-black font-bold text-[10px] uppercase tracking-wide">Specifications</h4>
                               </div>
-                              <div className="h-0.5 bg-gradient-to-r from-lime-500 via-lime-400/70 to-transparent rounded-full"></div>
+                              <div className="h-0.5 bg-gradient-to-r from-gray-400 via-gray-300/70 to-transparent rounded-full"></div>
                             </div>
 
                             {/* Specs Grid */}
@@ -669,9 +669,9 @@ const Catalog = () => {
                                 </div>
                               )}
                               {componentCount > 0 && (
-                                <div className="flex items-center justify-between bg-lime-400/30 backdrop-blur-sm rounded px-1.5 py-1 border-2 border-lime-500/60 shadow-sm">
-                                  <span className="text-[9px] font-bold text-lime-800 uppercase tracking-wide">Components</span>
-                                  <span className="text-[10px] font-bold text-lime-900 truncate ml-2">{componentCount} Included</span>
+                                <div className="flex items-center justify-between bg-gray-800/80 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-600/60 shadow-sm">
+                                  <span className="text-[9px] font-bold text-gray-200 uppercase tracking-wide">Components</span>
+                                  <span className="text-[10px] font-bold text-white truncate ml-2">{componentCount} Included</span>
                                 </div>
                               )}
                             </div>

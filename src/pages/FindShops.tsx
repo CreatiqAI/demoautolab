@@ -180,7 +180,7 @@ export default function FindShops() {
         <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
           <div className="flex items-center justify-center lg:justify-start gap-3 mb-3">
             <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide">Find Authorized <span className="text-lime-600 italic">Shops</span></h1>
-            <Badge className="bg-purple-600 text-white text-[10px] uppercase font-bold self-start mt-2">Panel Members Only</Badge>
+            <Badge className="bg-purple-600 text-white text-[10px] uppercase font-bold self-start mt-2 hover:bg-purple-600 cursor-default">Panel Members Only</Badge>
           </div>
           <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Our top 100 authorized Panel shops across Malaysia - invitation only</p>
         </div>

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,6 +7,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from '@/hooks/useAuth';
 import { PricingProvider } from '@/hooks/usePricing';
 import { CartProvider } from '@/hooks/useCartDB';
+import { useSessionEnforcement } from '@/hooks/useSessionEnforcement';
 import ScrollToTop from './components/ScrollToTop';
 
 import Home from './pages/Home';
@@ -58,7 +59,6 @@ import Analytics from './pages/admin/Analytics';
 import SecondhandMarketplace from './pages/SecondhandMarketplace';
 import My2ndHandListings from './pages/My2ndHandListings';
 import NotificationSettings from './pages/NotificationSettings';
-import MyPoints from './pages/MyPoints';
 import PointsRewards from './pages/admin/PointsRewards';
 import Salesmen from './pages/admin/Salesmen';
 
@@ -74,6 +74,11 @@ import WarehouseScan from './pages/warehouse/Scan';
 
 const queryClient = new QueryClient();
 
+function SessionEnforcer() {
+  useSessionEnforcement();
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <HelmetProvider>
@@ -81,6 +86,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <AuthProvider>
+          <SessionEnforcer />
           <PricingProvider>
             <CartProvider>
               <BrowserRouter>
@@ -114,8 +120,6 @@ const App = () => (
                   <Route path="/secondhand-marketplace" element={<SecondhandMarketplace />} />
                   <Route path="/my-2ndhand-listings" element={<My2ndHandListings />} />
                   <Route path="/notification-settings" element={<NotificationSettings />} />
-                  <Route path="/my-points" element={<MyPoints />} />
-
                   {/* Returns Routes */}
                   <Route path="/return-request" element={<ReturnRequest />} />
                   <Route path="/my-returns" element={<MyReturns />} />

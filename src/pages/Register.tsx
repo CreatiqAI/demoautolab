@@ -146,38 +146,68 @@ const Register = () => {
       const userId = authData.user.id;
       const primaryCar = validCars[0];
 
-      // Build preferences JSON with all cars
-      const preferences = {
-        cars: validCars.map(c => ({
-          make_id: c.makeId,
-          make_name: c.makeName,
-          model_id: c.modelId,
-          model_name: c.modelName,
-        })),
+      // 2. Create or update customer_profiles entry
+      // Try insert first, fall back to update if profile already exists (e.g. from DB trigger)
+      const profileData = {
+        user_id: userId,
+        username: `user_${userId.slice(0, 8)}`,
+        full_name: form.fullName.trim(),
+        phone: normalizedPhone,
+        email: form.email,
+        date_of_birth: form.dateOfBirth,
+        customer_type: 'normal' as const,
+        car_make_id: primaryCar.makeId || null,
+        car_model_id: primaryCar.modelId || null,
+        car_make_name: primaryCar.makeName || null,
+        car_model_name: primaryCar.modelName || null,
       };
 
-      // 2. Create customer_profiles entry
       const { error: profileError } = await supabase
         .from('customer_profiles')
-        .insert({
-          user_id: userId,
-          username: `user_${userId.slice(0, 8)}`,
-          full_name: form.fullName.trim(),
-          phone: normalizedPhone,
-          email: form.email,
-          date_of_birth: form.dateOfBirth,
-          customer_type: 'normal',
-          car_make_id: primaryCar.makeId,
-          car_model_id: primaryCar.modelId,
-          car_make_name: primaryCar.makeName,
-          car_model_name: primaryCar.modelName,
-          preferences,
-        });
+        .insert(profileData);
 
       if (profileError) {
-        toast.error('Account created but profile setup failed. Please contact support.');
-        setLoading(false);
-        return;
+        // Profile may already exist from auth trigger — update instead
+        const { error: updateError } = await supabase
+          .from('customer_profiles')
+          .update({
+            full_name: profileData.full_name,
+            phone: profileData.phone,
+            email: profileData.email,
+            date_of_birth: profileData.date_of_birth,
+            car_make_id: profileData.car_make_id,
+            car_model_id: profileData.car_model_id,
+            car_make_name: profileData.car_make_name,
+            car_model_name: profileData.car_model_name,
+          })
+          .eq('user_id', userId);
+
+        if (updateError) {
+          toast.error('Account created but profile setup failed. Please contact support.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 3. Save all cars to customer_cars table
+      const { data: customerProfile } = await supabase
+        .from('customer_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+
+      if (customerProfile) {
+        const carsToInsert = validCars.map((car, index) => ({
+          customer_id: customerProfile.id,
+          car_make_id: car.makeId || null,
+          car_model_id: car.modelId || null,
+          car_make_name: car.makeName,
+          car_model_name: car.modelName,
+          is_primary: index === 0,
+          sort_order: index,
+        }));
+
+        await supabase.from('customer_cars' as any).insert(carsToInsert);
       }
 
       toast.success('Account created successfully! Welcome to AutoLab.');
@@ -343,6 +373,7 @@ const Register = () => {
                   required
                   className="border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                 />
+                <p className="text-xs text-gray-400">Used for birthday promotions and exclusive offers.</p>
               </div>
 
               {/* Car Selection */}
@@ -354,7 +385,7 @@ const Register = () => {
                   </Label>
                   <span className="text-xs text-gray-400">{cars.length}/5 cars</span>
                 </div>
-                <p className="text-xs text-gray-500">Select at least 1 car, up to 5 maximum.</p>
+                <p className="text-xs text-gray-500">Select at least 1 car, up to 5 maximum. This helps us recommend the right products for your vehicle.</p>
 
                 <div className="space-y-4">
                   {cars.map((car, index) => (

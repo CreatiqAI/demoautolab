@@ -44,6 +44,8 @@ interface CustomerProfile {
   date_of_birth: string | null;
   customer_type: 'normal' | 'merchant';
   created_at: string;
+  car_make_name?: string | null;
+  car_model_name?: string | null;
 }
 
 interface MerchantRegistration {
@@ -87,11 +89,12 @@ interface NotificationPreferences {
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [customerCars, setCustomerCars] = useState<Array<{ car_make_name: string; car_model_name: string | null; is_primary: boolean }>>([]);
   const [merchantReg, setMerchantReg] = useState<MerchantRegistration | null>(null);
   const [partnership, setPartnership] = useState<PartnershipData | null>(null);
   const [notifications, setNotifications] = useState<NotificationPreferences>({
@@ -105,12 +108,13 @@ export default function Settings() {
   });
 
   useEffect(() => {
+    if (authLoading) return; // Wait for auth to initialize
     if (user) {
       fetchData();
     } else {
       navigate('/auth');
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   const fetchData = async () => {
     try {
@@ -132,8 +136,28 @@ export default function Settings() {
         phone: profileData.phone,
         date_of_birth: profileData.date_of_birth || null,
         customer_type: profileData.customer_type,
-        created_at: profileData.created_at
+        created_at: profileData.created_at,
+        car_make_name: profileData.car_make_name || null,
+        car_model_name: profileData.car_model_name || null,
       });
+
+      // Fetch all customer cars
+      const { data: carsData } = await supabase
+        .from('customer_cars' as any)
+        .select('car_make_name, car_model_name, is_primary, sort_order')
+        .eq('customer_id', profileData.id)
+        .order('sort_order', { ascending: true });
+
+      if (carsData && (carsData as any[]).length > 0) {
+        setCustomerCars(carsData as any[]);
+      } else if (profileData.car_make_name) {
+        // Fallback: use single car from customer_profiles
+        setCustomerCars([{
+          car_make_name: profileData.car_make_name,
+          car_model_name: profileData.car_model_name || null,
+          is_primary: true,
+        }]);
+      }
 
       // Fetch merchant registration data if merchant
       if (profileData.customer_type === 'merchant') {
@@ -293,7 +317,7 @@ export default function Settings() {
         <Header />
         <div className="flex items-center justify-center flex-1">
           <div className="text-center">
-            <User className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
+            <User className="h-12 w-12 animate-pulse mx-auto mb-4 text-gray-600" />
             <p className="text-gray-500">Loading settings...</p>
           </div>
         </div>
@@ -342,7 +366,7 @@ export default function Settings() {
                 <Card>
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-4 mb-6">
-                      <div className="w-16 h-16 rounded-full bg-lime-100 flex items-center justify-center text-lime-700 text-xl font-bold shrink-0">
+                      <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 text-xl font-bold shrink-0">
                         {profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U'}
                       </div>
                       <div className="min-w-0">
@@ -353,7 +377,7 @@ export default function Settings() {
                             {isMerchant ? 'Merchant' : 'Customer'}
                           </Badge>
                           {partnership && partnership.subscription_status === 'ACTIVE' && partnership.admin_approved && (
-                            <Badge variant="outline" className="border-lime-300 text-lime-700">
+                            <Badge variant="outline" className="border-gray-300 text-gray-700">
                               {partnership.subscription_plan === 'panel' ? 'Panel' : 'Professional'}
                             </Badge>
                           )}
@@ -399,6 +423,23 @@ export default function Settings() {
                             : 'N/A'}
                         </p>
                       </div>
+
+                      {customerCars.length > 0 && (
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-500 mb-2">
+                            <Package className="w-3.5 h-3.5 inline mr-1.5" />
+                            My Vehicles
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {customerCars.map((car, i) => (
+                              <span key={i} className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-800 text-sm font-medium px-3 py-1.5 rounded-lg">
+                                {car.car_make_name}{car.car_model_name ? ` — ${car.car_model_name}` : ''}
+                                {car.is_primary && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Primary</Badge>}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -408,7 +449,7 @@ export default function Settings() {
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <Building className="w-5 h-5 text-lime-600" />
+                        <Building className="w-5 h-5 text-gray-600" />
                         Business Information
                       </CardTitle>
                       <CardDescription>Your registered merchant details</CardDescription>
@@ -438,7 +479,7 @@ export default function Settings() {
                         {merchantReg.company_profile_url && (
                           <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-gray-500 mb-1">Website</label>
-                            <a href={merchantReg.company_profile_url} target="_blank" rel="noopener noreferrer" className="text-lime-600 hover:text-lime-700 font-medium flex items-center gap-1">
+                            <a href={merchantReg.company_profile_url} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1">
                               {merchantReg.company_profile_url}
                               <ExternalLink className="w-3 h-3" />
                             </a>
@@ -568,14 +609,14 @@ export default function Settings() {
                         <CardHeader className="pb-4">
                           <div className="flex items-center justify-between flex-wrap gap-3">
                             <CardTitle className="flex items-center gap-2">
-                              <Shield className="w-5 h-5 text-lime-600" />
+                              <Shield className="w-5 h-5 text-gray-600" />
                               Subscription Overview
                             </CardTitle>
                             <div className="flex items-center gap-2">
                               <Badge variant={getStatusBadgeVariant(partnership.subscription_status)}>
                                 {partnership.subscription_status}
                               </Badge>
-                              <Badge variant="outline" className="border-lime-300 text-lime-700">
+                              <Badge variant="outline" className="border-gray-300 text-gray-700">
                                 {partnership.subscription_plan === 'panel' ? 'Panel' : 'Professional'}
                               </Badge>
                             </div>
@@ -591,7 +632,7 @@ export default function Settings() {
                                     ? 'text-red-500'
                                     : subscriptionInfo.isExpiringSoon
                                     ? 'text-yellow-500'
-                                    : 'text-lime-600'
+                                    : 'text-gray-600'
                                 }`}>
                                   {subscriptionInfo.isExpired ? 0 : subscriptionInfo.daysRemaining}
                                 </div>
@@ -634,7 +675,7 @@ export default function Settings() {
                       <Card>
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2">
-                            <CreditCard className="w-5 h-5 text-lime-600" />
+                            <CreditCard className="w-5 h-5 text-gray-600" />
                             Plan Details
                           </CardTitle>
                         </CardHeader>
@@ -717,7 +758,7 @@ export default function Settings() {
                         onChange={(e) =>
                           setNotifications({ ...notifications, phone_number: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 focus:border-gray-400"
                         placeholder="+60123456789"
                       />
                       <p className="text-xs text-gray-500 mt-1">
@@ -869,8 +910,7 @@ export default function Settings() {
                   <Button
                     onClick={handleSaveNotifications}
                     disabled={saving}
-                    variant="hero"
-                    className="text-[13px] h-10 px-6"
+                    className="text-[13px] h-10 px-6 bg-gray-900 text-white hover:bg-lime-600 transition-colors rounded-lg disabled:opacity-50"
                   >
                     <Save className="w-4 h-4 mr-2" />
                     {saving ? 'Saving...' : 'Save Preferences'}

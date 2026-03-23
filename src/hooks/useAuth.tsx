@@ -2,6 +2,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { deactivateDeviceSession } from '@/hooks/useSessionEnforcement';
+import { clearDeviceFingerprint } from '@/utils/deviceFingerprint';
 
 // Registration data for OTP-based signup
 interface RegistrationData {
@@ -23,9 +25,11 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   // Phone OTP methods (via iSMS Edge Function)
-  sendPhoneOTP: (phone: string) => Promise<{ error: any }>;
-  verifyPhoneOTP: (phone: string, token: string) => Promise<{ error: any; isNewUser?: boolean; existingUserEmail?: string }>;
+  sendPhoneOTP: (phone: string, options?: { testMode?: boolean }) => Promise<{ error: any }>;
+  verifyPhoneOTP: (phone: string, token: string) => Promise<{ error: any; isNewUser?: boolean; existingUserEmail?: string; tokenHash?: string }>;
   signUpWithPhoneOTP: (phone: string, token: string, userData: RegistrationData) => Promise<{ error: any }>;
+  // Sign in with magic link token (used after phone OTP verification for merchants)
+  signInWithToken: (tokenHash: string) => Promise<{ error: any; userId?: string }>;
   // Email/Password sign in (used after phone OTP verification for existing users)
   signInWithPassword: (email: string, password: string) => Promise<{ error: any }>;
   // Google OAuth (FREE)
@@ -92,6 +96,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    // Deactivate device session before signing out
+    await deactivateDeviceSession();
+    clearDeviceFingerprint();
     // Clear any stored OTP data
     localStorage.removeItem('pending_phone_auth');
     await supabase.auth.signOut();
@@ -102,10 +109,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ============================================
 
   // Send OTP via iSMS SMS gateway (server-side Edge Function)
-  const sendPhoneOTP = async (phone: string): Promise<{ error: any }> => {
+  const sendPhoneOTP = async (phone: string, options?: { testMode?: boolean }): Promise<{ error: any }> => {
     try {
       const { data, error } = await supabase.functions.invoke('send-otp-sms', {
-        body: { phone: normalizePhone(phone) },
+        body: { phone: normalizePhone(phone), testMode: options?.testMode ?? false },
       });
 
       if (error) {
@@ -129,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     error: any;
     isNewUser?: boolean;
     existingUserEmail?: string;
+    tokenHash?: string;
   }> => {
     try {
       const { data, error } = await supabase.functions.invoke('verify-otp-sms', {
@@ -147,7 +155,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         error: null,
         isNewUser: data.isNewUser,
         existingUserEmail: data.existingUserEmail || undefined,
+        tokenHash: data.tokenHash || undefined,
       };
+    } catch (error) {
+      return { error };
+    }
+  };
+
+  // Sign in with magic link token (used after phone OTP verification for merchants)
+  const signInWithToken = async (tokenHash: string): Promise<{ error: any; userId?: string }> => {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: 'magiclink',
+      });
+      if (error) return { error };
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.user);
+      }
+      localStorage.removeItem('pending_phone_auth');
+      return { error: null, userId: data.user?.id };
     } catch (error) {
       return { error };
     }
@@ -413,6 +441,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendPhoneOTP,
     verifyPhoneOTP,
     signUpWithPhoneOTP,
+    signInWithToken,
     signInWithPassword,
     signInWithGoogle,
     checkAndCreateProfile,

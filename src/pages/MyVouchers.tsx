@@ -5,9 +5,10 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tag, Calendar, Percent, DollarSign, Copy, Check, ShoppingCart, AlertCircle, Ticket, ArrowLeft } from 'lucide-react';
+import { Tag, Calendar, Percent, DollarSign, Copy, Check, ShoppingCart, AlertCircle, Ticket, ArrowLeft, Coins } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import MyPoints from './MyPoints';
 
 interface Voucher {
   id: string;
@@ -26,6 +27,8 @@ interface Voucher {
 
 export default function MyVouchers() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'vouchers';
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -36,6 +39,7 @@ export default function MyVouchers() {
       fetchAvailableVouchers();
     }
   }, [user]);
+
 
   const fetchAvailableVouchers = async () => {
     try {
@@ -110,22 +114,51 @@ export default function MyVouchers() {
         {/* Back Button */}
         <Link
           to="/catalog"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-lime-700 mb-6 text-sm font-medium transition-colors"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 text-sm font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Shop
         </Link>
 
         {/* Page Header */}
-        <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
-          <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3">My <span className="text-lime-600 italic">Vouchers</span></h1>
-          <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Redeem your available discount codes at checkout</p>
+        <div className="mb-6 text-center lg:text-left">
+          <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3">Rewards & <span className="text-lime-600 italic">Vouchers</span></h1>
+          <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Your rewards, vouchers, and loyalty points</p>
         </div>
 
-        {loading ? (
+        {/* Tab Navigation */}
+        <div className="flex gap-1 mb-8 border-b border-gray-200">
+          <button
+            onClick={() => setSearchParams({})}
+            className={`px-5 py-3 text-sm font-bold uppercase tracking-wider transition-colors relative ${
+              activeTab === 'vouchers'
+                ? 'text-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-lime-600'
+                : 'text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            <Ticket className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+            Vouchers
+          </button>
+          <button
+            onClick={() => setSearchParams({ tab: 'points' })}
+            className={`px-5 py-3 text-sm font-bold uppercase tracking-wider transition-colors relative ${
+              activeTab === 'points'
+                ? 'text-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-lime-600'
+                : 'text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            <Coins className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+            My Points
+          </button>
+        </div>
+
+        {/* Points Tab — render full MyPoints page content */}
+        {activeTab === 'points' ? (
+          <MyPoints embedded />
+        ) : loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <Ticket className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
+              <Ticket className="h-12 w-12 animate-pulse mx-auto mb-4 text-gray-600" />
               <p className="text-gray-500 text-[15px]">Loading vouchers...</p>
             </div>
           </div>
@@ -138,7 +171,7 @@ export default function MyVouchers() {
             <p className="text-[15px] text-gray-500 mb-6 max-w-md mx-auto">
               There are currently no vouchers available for your account. Check back later for exclusive deals!
             </p>
-            <Button asChild variant="hero" className="mt-2 text-[13px] h-10 px-6">
+            <Button asChild className="mt-2 text-[13px] h-10 px-6 bg-gray-900 text-white hover:bg-lime-600 transition-colors rounded-lg">
               <Link to="/catalog">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Start Shopping
@@ -165,7 +198,7 @@ export default function MyVouchers() {
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          voucher.discount_type === 'PERCENTAGE' ? 'bg-lime-600' : 'bg-blue-600'
+                          voucher.discount_type === 'PERCENTAGE' ? 'bg-gray-900' : 'bg-blue-600'
                         }`}>
                           {voucher.discount_type === 'PERCENTAGE' ? (
                             <Percent className="h-4 w-4 text-white" />
@@ -183,7 +216,7 @@ export default function MyVouchers() {
                         className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
                       >
                         {copiedCode === voucher.code ? (
-                          <Check className="h-4 w-4 text-lime-400" />
+                          <Check className="h-4 w-4 text-white/80" />
                         ) : (
                           <Copy className="h-4 w-4 text-gray-400 hover:text-white" />
                         )}
@@ -192,7 +225,7 @@ export default function MyVouchers() {
 
                     {/* Discount Amount */}
                     <div className="text-center py-2 border-t border-dashed border-white/20">
-                      <p className="text-2xl font-heading font-bold uppercase italic text-lime-400">
+                      <p className="text-2xl font-heading font-bold uppercase italic text-white/80">
                         {getDiscountDisplay(voucher)}
                       </p>
                     </div>
@@ -220,7 +253,7 @@ export default function MyVouchers() {
                         <div
                           className={`h-full rounded-full transition-all ${
                             getUsagePercentage(voucher) >= 100 ? 'bg-red-500' :
-                            getUsagePercentage(voucher) >= 50 ? 'bg-yellow-500' : 'bg-lime-500'
+                            getUsagePercentage(voucher) >= 50 ? 'bg-yellow-500' : 'bg-green-500'
                           }`}
                           style={{ width: `${Math.min(getUsagePercentage(voucher), 100)}%` }}
                         />
@@ -273,28 +306,28 @@ export default function MyVouchers() {
             </div>
 
             {/* How to Use Card */}
-            <div className="bg-white/80 backdrop-blur-xl border border-lime-200 rounded-xl p-5">
+            <div className="bg-white/80 backdrop-blur-xl border border-gray-200 rounded-xl p-5">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-lime-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="h-5 w-5 text-lime-700" />
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="h-5 w-5 text-gray-700" />
                 </div>
                 <div className="flex-1">
                   <h4 className="font-heading font-bold uppercase italic text-gray-900 text-[15px] mb-3">How to Use Vouchers</h4>
                   <ol className="text-[15px] text-gray-600 space-y-2.5">
                     <li className="flex items-start gap-2.5">
-                      <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                      <span className="w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
                       <span>Copy your voucher code by clicking the copy button</span>
                     </li>
                     <li className="flex items-start gap-2.5">
-                      <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                      <span className="w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
                       <span>Add items to your cart and proceed to checkout</span>
                     </li>
                     <li className="flex items-start gap-2.5">
-                      <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
+                      <span className="w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
                       <span>Enter the voucher code in the "Apply Voucher" section</span>
                     </li>
                     <li className="flex items-start gap-2.5">
-                      <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">4</span>
+                      <span className="w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">4</span>
                       <span>Your discount will be automatically applied to the total</span>
                     </li>
                   </ol>

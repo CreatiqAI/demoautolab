@@ -36,8 +36,8 @@ import {
 } from 'lucide-react';
 import Header from '@/components/Header';
 
-export default function MyPoints() {
-  const { user } = useAuth();
+export default function MyPoints({ embedded = false }: { embedded?: boolean }) {
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -65,12 +65,13 @@ export default function MyPoints() {
   });
 
   useEffect(() => {
+    if (authLoading) return; // Wait for auth to initialize
     if (!user) {
       navigate('/auth');
     } else {
       fetchAllData();
     }
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -267,6 +268,13 @@ export default function MyPoints() {
   }
 
   if (loading) {
+    if (embedded) {
+      return (
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-background">
         <Header />
@@ -279,22 +287,11 @@ export default function MyPoints() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        {/* Page Header */}
-        <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
-          <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3 flex items-center justify-center lg:justify-start gap-3">
-            <Award className="h-10 w-10 md:h-12 md:w-12 text-lime-600" />
-            My <span className="text-lime-600 italic">Points & Rewards</span>
-          </h1>
-          <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Earn points with every purchase, redeem amazing rewards</p>
-        </div>
-
-        {/* Points Balance Cards */}
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+  // Content shared between embedded and standalone
+  const pointsContent = (
+    <>
+      {/* Points Balance Cards */}
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
           <Card className="border-l-4 border-l-primary">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -614,7 +611,6 @@ export default function MyPoints() {
             )}
           </TabsContent>
         </Tabs>
-      </div>
 
       {/* Redemption Confirmation Dialog */}
       <Dialog open={redeemDialogOpen} onOpenChange={setRedeemDialogOpen}>
@@ -730,6 +726,27 @@ export default function MyPoints() {
           )}
         </DialogContent>
       </Dialog>
+    </>
+  );
+
+  if (embedded) {
+    return pointsContent;
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        {/* Page Header */}
+        <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
+          <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3 flex items-center justify-center lg:justify-start gap-3">
+            <Award className="h-10 w-10 md:h-12 md:w-12 text-lime-600" />
+            My <span className="text-lime-600 italic">Points & Rewards</span>
+          </h1>
+          <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Earn points with every purchase, redeem amazing rewards</p>
+        </div>
+        {pointsContent}
+      </div>
     </div>
   );
 }

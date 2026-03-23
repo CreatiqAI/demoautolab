@@ -74,7 +74,7 @@ const ProductDetails = () => {
   const { toast } = useToast();
   const { addToCart, loading: cartLoading } = useCart();
   const { user } = useAuth();
-  const { getDisplayPrice } = usePricing();
+  const { getDisplayPrice, customerType } = usePricing();
 
   useEffect(() => {
     if (id) {
@@ -135,7 +135,7 @@ const ProductDetails = () => {
       <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
         <Button
           onClick={() => window.open(url, '_blank')}
-          className="bg-lime-600 hover:bg-lime-700"
+          className="bg-gray-900 hover:bg-gray-800"
         >
           <Video className="h-4 w-4 mr-2" />
           Watch Video
@@ -364,7 +364,7 @@ const ProductDetails = () => {
           <Button
             variant="ghost"
             onClick={() => navigate('/catalog')}
-            className="text-xs uppercase tracking-[0.2em] font-bold px-0 text-slate-500 hover:bg-transparent hover:text-lime-600 transition-colors"
+            className="text-xs uppercase tracking-[0.2em] font-bold px-0 text-slate-500 hover:bg-transparent hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Catalog
@@ -429,7 +429,7 @@ const ProductDetails = () => {
               <div className="mb-6">
                 {/* Badges */}
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge className="bg-lime-50 text-lime-700 hover:bg-lime-100 border border-lime-100 rounded-md px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider shadow-none">
+                  <Badge className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-100 rounded-md px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider shadow-none">
                     <CheckCircle2 className="h-3 w-3 mr-1.5" />
                     In Stock
                   </Badge>
@@ -512,8 +512,8 @@ const ProductDetails = () => {
                           key={component.id}
                           className={cn(
                             "border rounded-xl transition-all duration-200",
-                            isExpanded ? 'border-lime-400 bg-lime-50/50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white',
-                            quantity > 0 && !isExpanded && 'border-lime-300 bg-lime-50/30'
+                            isExpanded ? 'border-gray-400 bg-gray-50/50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white',
+                            quantity > 0 && !isExpanded && 'border-gray-300 bg-gray-50/30'
                           )}
                         >
                           <div
@@ -588,7 +588,7 @@ const ProductDetails = () => {
                                         variant="outline"
                                         onClick={() => updateLocalQuantity(component, 1)}
                                         disabled={component.stock_level === 0}
-                                        className="h-7 px-3 font-semibold text-[10px] uppercase tracking-wider border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-lime-600 rounded transition-colors"
+                                        className="h-7 px-3 font-semibold text-[10px] uppercase tracking-wider border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-gray-900 rounded transition-colors"
                                       >
                                         Add
                                       </Button>
@@ -596,7 +596,7 @@ const ProductDetails = () => {
                                       <LoginPromptButton
                                         variant="outline"
                                         size="sm"
-                                        className="h-7 px-3 font-semibold text-[10px] uppercase tracking-wider border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-lime-600 rounded transition-colors"
+                                        className="h-7 px-3 font-semibold text-[10px] uppercase tracking-wider border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-gray-900 rounded transition-colors"
                                         redirectTo={`/product/${id}`}
                                       >
                                         Login
@@ -675,16 +675,16 @@ const ProductDetails = () => {
           </div>
         </div>
 
-        {/* Installation Guide Section */}
-        {installationGuide && (
+        {/* Installation Guide Section — visible to merchant & panel customers only */}
+        {installationGuide && customerType === 'merchant' && (
           <div className="mt-8">
             <Collapsible open={installationOpen} onOpenChange={setInstallationOpen}>
               <Card className="overflow-hidden rounded-2xl border-slate-100 shadow-sm bg-white">
                 <CollapsibleTrigger className="w-full group">
                   <div className="flex items-center justify-between p-5 md:p-6 hover:bg-slate-50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-lime-50 rounded-xl group-hover:bg-lime-100 transition-colors">
-                        <Wrench className="h-5 w-5 text-lime-600" />
+                      <div className="p-2.5 bg-gray-100 rounded-xl group-hover:bg-gray-200 transition-colors">
+                        <Wrench className="h-5 w-5 text-gray-700" />
                       </div>
                       <div className="text-left">
                         <h3 className="font-semibold text-lg text-[#0f172a] tracking-wide">Installation Guide</h3>
@@ -730,7 +730,7 @@ const ProductDetails = () => {
                         <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                           <DollarSign className="h-5 w-5 text-slate-400 mb-2" />
                           <p className="text-xs font-medium text-slate-500 mb-1">Installation Fee</p>
-                          <p className="font-semibold text-lime-600">{formatPrice(installationGuide.installation_price)}</p>
+                          <p className="font-semibold text-gray-700">{formatPrice(installationGuide.installation_price)}</p>
                         </div>
                       )}
 
@@ -741,7 +741,7 @@ const ProductDetails = () => {
                           <Badge
                             className={cn(
                               "capitalize rounded-md px-2 py-0.5 font-medium text-xs shadow-none border",
-                              installationGuide.difficulty_level === 'easy' && 'bg-lime-50 text-lime-700 hover:bg-lime-50 border-lime-100',
+                              installationGuide.difficulty_level === 'easy' && 'bg-green-50 text-green-700 hover:bg-green-50 border-green-100',
                               installationGuide.difficulty_level === 'medium' && 'bg-amber-50 text-amber-700 hover:bg-amber-50 border-amber-100',
                               installationGuide.difficulty_level === 'hard' && 'bg-orange-50 text-orange-700 hover:bg-orange-50 border-orange-100',
                               installationGuide.difficulty_level === 'expert' && 'bg-red-50 text-red-700 hover:bg-red-50 border-red-100'
@@ -807,8 +807,8 @@ const ProductDetails = () => {
               <CollapsibleTrigger className="w-full group">
                 <div className="flex items-center justify-between p-5 md:p-6 hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-lime-50 rounded-xl group-hover:bg-lime-100 transition-colors">
-                      <Star className="h-5 w-5 text-lime-600" />
+                    <div className="p-2.5 bg-gray-100 rounded-xl group-hover:bg-gray-200 transition-colors">
+                      <Star className="h-5 w-5 text-gray-700" />
                     </div>
                     <div className="text-left">
                       <h3 className="font-semibold text-lg text-[#0f172a] tracking-wide">Customer Reviews</h3>

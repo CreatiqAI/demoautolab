@@ -95,7 +95,7 @@ const Home = () => {
               className="flex items-center gap-4 mb-8"
             >
               <div className="h-[1px] w-12 bg-lime-500/50"></div>
-              <span className="text-xs uppercase tracking-[0.5em] text-lime-400 font-medium">Est. 2007 • Authority in Parts</span>
+              <span className="text-xs uppercase tracking-[0.5em] text-lime-400/80 font-medium">Est. 2007 • Authority in Parts</span>
             </motion.div>
 
             {/* Main Headline: Refined Scale & Wording */}
@@ -112,7 +112,7 @@ const Home = () => {
             {/* Sub-headline / Description */}
             <motion.div variants={fadeInUp} className="max-w-xl mb-12">
               <p className="text-lg md:text-xl text-gray-400 leading-relaxed font-light">
-                AutoLab represents the pinnacle of automotive enhancement. We curate and engineer the world's most <span className="text-white border-b border-lime-500/30">exclusive components</span> for those who transcend the ordinary.
+                AutoLab represents the pinnacle of automotive enhancement. We curate and engineer the world's most <span className="text-white border-b border-white/20">exclusive components</span> for those who transcend the ordinary.
               </p>
             </motion.div>
 
@@ -144,7 +144,7 @@ const Home = () => {
           </div>
           <div className="flex flex-col gap-4">
             {[1, 2, 3].map(i => (
-              <div key={i} className={`w-1 h-1 rounded-full ${i === 1 ? 'bg-lime-500' : 'bg-white/10'}`}></div>
+              <div key={i} className={`w-1 h-1 rounded-full ${i === 1 ? 'bg-white/40' : 'bg-white/10'}`}></div>
             ))}
           </div>
         </div>
@@ -153,7 +153,7 @@ const Home = () => {
       <section className="bg-[#0f0f0f] py-4 border-y border-white/5 relative z-20 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
         <div className="flex animate-scroll whitespace-nowrap opacity-30">
           {[...carBrands, ...carBrands, ...carBrands].map((brand, idx) => (
-            <div key={idx} className="mx-6 md:mx-10 text-gray-400 font-heading font-black text-xl md:text-2xl uppercase tracking-[0.2em] hover:text-lime-500 transition-all cursor-default">
+            <div key={idx} className="mx-6 md:mx-10 text-gray-400 font-heading font-black text-xl md:text-2xl uppercase tracking-[0.2em] hover:text-white/50 transition-all cursor-default">
               {brand}
             </div>
           ))}
@@ -163,7 +163,7 @@ const Home = () => {
       {/* Grid-based Avant-Garde Categories */}
       <section id="categories" className="py-32 relative z-20 bg-[#070707] overflow-hidden">
         {/* Glow behind grid */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-lime-600/10 rounded-[100%] blur-[120px] pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-gray-800/10 rounded-[100%] blur-[120px] pointer-events-none"></div>
 
         <div className="container mx-auto px-6 relative z-10">
           <motion.div
@@ -182,8 +182,9 @@ const Home = () => {
                 Premium <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-400 to-lime-600">Categories</span>
               </h2>
             </div>
-            <Button variant="outline" className="rounded-none border-white/10 text-white hover:bg-white hover:text-black w-fit px-8 h-10 uppercase tracking-[0.2em] font-bold text-xs transition-all duration-500" onClick={() => navigate('/catalog')}>
-              View All Parts
+            <Button className="group relative rounded-none bg-white text-black w-fit px-8 h-10 uppercase tracking-[0.2em] font-bold text-xs transition-all duration-500 overflow-hidden hover:text-white" onClick={() => navigate('/catalog')}>
+              <div className="absolute inset-0 bg-lime-600 translate-x-[-101%] group-hover:translate-x-0 transition-transform duration-500 ease-[0.22,1,0.36,1]"></div>
+              <span className="relative z-10">View All Parts</span>
             </Button>
           </motion.div>
 
@@ -200,7 +201,7 @@ const Home = () => {
                 whileInView={{ opacity: 1, scale: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: idx * 0.1 }}
-                className={`group relative rounded-[2rem] overflow-hidden cursor-pointer glass-dark-panel hover:border-lime-500/50 transition-all duration-500 ${cat.colSpan}`}
+                className={`group relative rounded-[2rem] overflow-hidden cursor-pointer glass-dark-panel hover:border-white/30 transition-all duration-500 ${cat.colSpan}`}
                 onClick={() => navigate('/catalog')}
               >
                 <img src={cat.img} alt={cat.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60 group-hover:opacity-40 filter grayscale group-hover:grayscale-0" />
@@ -224,7 +225,7 @@ const Home = () => {
 
       {/* Feature Split - Asymmetrical */}
       <section className="py-24 bg-[#0a0a0a] relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-1/3 h-full bg-lime-600/5 blur-[150px] pointer-events-none"></div>
+        <div className="absolute right-0 top-0 w-1/3 h-full bg-gray-800/5 blur-[150px] pointer-events-none"></div>
         <div className="container mx-auto px-6">
           <div className="grid lg:grid-cols-2 gap-16 lg:gap-24 items-center">
 
@@ -240,7 +241,7 @@ const Home = () => {
                 alt="Auto Lab Workshop"
                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
               />
-              <div className="absolute inset-0 bg-gradient-to-tr from-black/80 via-transparent to-lime-500/20 mix-blend-overlay"></div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-black/80 via-transparent to-white/10 mix-blend-overlay"></div>
 
               <div className="absolute bottom-10 left-10 right-10 p-6 glass-dark-panel rounded-2xl border border-white/10">
                 <div className="flex items-center gap-5">
@@ -269,7 +270,7 @@ const Home = () => {
                 </motion.div>
                 <h2 className="font-heading text-4xl md:text-5xl lg:text-6xl font-black text-white uppercase leading-[1.1] mb-6 tracking-tighter">
                   ENGINEERED FOR <br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-400 to-green-600">PERFECTION.</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-white/80 to-white/50">PERFECTION.</span>
                 </h2>
                 <p className="text-gray-400 text-lg leading-relaxed font-light">
                   We don't just supply parts. We architect driving experiences. Our curated selection undergoes extreme scrutiny to guarantee unmatched reliability and performance.
@@ -282,8 +283,8 @@ const Home = () => {
                   { icon: <Zap />, title: "Hyper-Fast Logistics", desc: "98% in-stock rate with same-day dispatching." },
                   { icon: <Users />, title: "Exclusive Partnership", desc: "Dedicated engineering support for our network." }
                 ].map((item, idx) => (
-                  <div key={idx} className="flex gap-5 p-6 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors hover:border-lime-500/30">
-                    <div className="w-12 h-12 rounded-full bg-lime-500/20 flex items-center justify-center text-lime-400 shrink-0 border border-lime-500/20">
+                  <div key={idx} className="flex gap-5 p-6 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors hover:border-white/20">
+                    <div className="w-12 h-12 rounded-full bg-lime-500/10 flex items-center justify-center text-lime-400 shrink-0 border border-lime-500/20">
                       {item.icon}
                     </div>
                     <div>
@@ -319,7 +320,7 @@ const Home = () => {
             transition={{ duration: 0.8 }}
             className="max-w-4xl mx-auto glass-dark-panel rounded-[3rem] p-12 md:p-20 relative overflow-hidden"
           >
-            <div className="absolute inset-0 bg-gradient-to-b from-lime-500/10 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent"></div>
 
             <div className="relative z-10 flex flex-col items-center">
               <Package className="w-12 h-12 text-lime-500 mb-6 opacity-80" />

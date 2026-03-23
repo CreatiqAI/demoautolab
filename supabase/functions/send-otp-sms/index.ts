@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { phone } = await req.json();
+    const { phone, testMode } = await req.json();
 
     if (!phone) {
       return new Response(
@@ -24,8 +24,8 @@ serve(async (req) => {
     // Normalize phone number: remove +, spaces, dashes (e.g. 60164502380)
     const normalizedPhone = phone.replace(/[\s\-\+]/g, '');
 
-    // Generate 6-digit OTP
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate 6-digit OTP (use fixed code in test mode)
+    const code = testMode ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
 
     // Store OTP in database
@@ -53,45 +53,47 @@ serve(async (req) => {
       throw new Error(`Failed to store OTP: ${insertError.message}`);
     }
 
-    // Send SMS via OneWay SMS (onewaysms.com.my)
-    const apiUsername = Deno.env.get('ONEWAYSMS_API_USERNAME');
-    const apiPassword = Deno.env.get('ONEWAYSMS_API_PASSWORD');
-    const mtUrl = Deno.env.get('ONEWAYSMS_MT_URL') || 'https://gateway.onewaysms.com.my/api.aspx';
+    // Send SMS via OneWay SMS (skip in test mode to save credits)
+    if (!testMode) {
+      const apiUsername = Deno.env.get('ONEWAYSMS_API_USERNAME');
+      const apiPassword = Deno.env.get('ONEWAYSMS_API_PASSWORD');
+      const mtUrl = Deno.env.get('ONEWAYSMS_MT_URL') || 'https://gateway.onewaysms.com.my/api.aspx';
 
-    if (!apiUsername || !apiPassword) {
-      throw new Error('OneWay SMS credentials not configured');
-    }
+      if (!apiUsername || !apiPassword) {
+        throw new Error('OneWay SMS credentials not configured');
+      }
 
-    const message = `RM0.00 Auto Lab : Your verification code is ${code}. Valid for 5 minutes.`;
+      const message = `RM0.00 Auto Lab : Your verification code is ${code}. Valid for 5 minutes.`;
 
-    const params = new URLSearchParams({
-      apiusername: apiUsername,
-      apipassword: apiPassword,
-      mobileno: normalizedPhone,
-      senderid: 'INFO',
-      languagetype: '1',
-      message: message,
-    });
+      const params = new URLSearchParams({
+        apiusername: apiUsername,
+        apipassword: apiPassword,
+        mobileno: normalizedPhone,
+        senderid: 'INFO',
+        languagetype: '1',
+        message: message,
+      });
 
-    const smsResponse = await fetch(`${mtUrl}?${params.toString()}`);
-    const smsResult = await smsResponse.text();
-    const resultCode = parseInt(smsResult.trim(), 10);
+      const smsResponse = await fetch(`${mtUrl}?${params.toString()}`);
+      const smsResult = await smsResponse.text();
+      const resultCode = parseInt(smsResult.trim(), 10);
 
-    // OneWay SMS: positive value = success (MT ID), negative = error
-    if (isNaN(resultCode) || resultCode < 0) {
-      const errorMessages: Record<number, string> = {
-        [-100]: 'Invalid API credentials',
-        [-200]: 'Invalid sender ID',
-        [-300]: 'Invalid phone number',
-        [-400]: 'Invalid language type',
-        [-500]: 'Invalid message characters',
-        [-600]: 'Insufficient SMS credits',
-      };
-      throw new Error(errorMessages[resultCode] || `OneWay SMS error: ${smsResult.trim()}`);
+      // OneWay SMS: positive value = success (MT ID), negative = error
+      if (isNaN(resultCode) || resultCode < 0) {
+        const errorMessages: Record<number, string> = {
+          [-100]: 'Invalid API credentials',
+          [-200]: 'Invalid sender ID',
+          [-300]: 'Invalid phone number',
+          [-400]: 'Invalid language type',
+          [-500]: 'Invalid message characters',
+          [-600]: 'Insufficient SMS credits',
+        };
+        throw new Error(errorMessages[resultCode] || `OneWay SMS error: ${smsResult.trim()}`);
+      }
     }
 
     return new Response(
-      JSON.stringify({ success: true, message: 'OTP sent successfully' }),
+      JSON.stringify({ success: true, message: testMode ? 'Test OTP stored (123456)' : 'OTP sent successfully' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
