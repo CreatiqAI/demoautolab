@@ -1,23 +1,64 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { generateDeviceFingerprint, getDeviceInfo } from '@/utils/deviceFingerprint';
 import { toast } from 'sonner';
 
 const SESSION_ID_KEY = 'autolab_session_id';
+const POLL_INTERVAL_MS = 30_000; // 30 seconds
+
+/**
+ * Check if a session is still active in the database.
+ * Returns false if session doesn't exist or is inactive.
+ */
+async function checkSessionActive(sessionId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('user_sessions' as any)
+      .select('is_active')
+      .eq('id', sessionId)
+      .maybeSingle();
+
+    return (data as any)?.is_active === true;
+  } catch {
+    // Network error — don't force logout on transient failures
+    return true;
+  }
+}
 
 export function useSessionEnforcement() {
   const { user, signOut } = useAuth();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSigningOutRef = useRef(false);
 
-  // Subscribe to session invalidation via Realtime
+  const forceSignOut = useCallback(() => {
+    if (isSigningOutRef.current) return;
+    isSigningOutRef.current = true;
+    localStorage.removeItem(SESSION_ID_KEY);
+    toast.error('You have been signed out because your account was signed in on another device.');
+    signOut();
+  }, [signOut]);
+
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      isSigningOutRef.current = false;
+      return;
+    }
 
     const sessionId = localStorage.getItem(SESSION_ID_KEY);
     if (!sessionId) return;
 
+    let cancelled = false;
+
+    // 1. Immediate validation on mount — catch stale sessions after refresh
+    checkSessionActive(sessionId).then((active) => {
+      if (!cancelled && !active) {
+        forceSignOut();
+      }
+    });
+
+    // 2. Realtime listener — instant notification when another device logs in
     const channel = supabase
       .channel(`session_enforce_${user.id}`)
       .on(
@@ -29,12 +70,8 @@ export function useSessionEnforcement() {
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
-          if (payload.new && payload.new.is_active === false && !isSigningOutRef.current) {
-            // This session was deactivated by another device logging in
-            isSigningOutRef.current = true;
-            toast.error('You have been signed out because your account was signed in on another device.');
-            localStorage.removeItem(SESSION_ID_KEY);
-            signOut();
+          if (payload.new && (payload.new as any).is_active === false) {
+            forceSignOut();
           }
         }
       )
@@ -42,13 +79,30 @@ export function useSessionEnforcement() {
 
     channelRef.current = channel;
 
+    // 3. Polling fallback — reliable safety net every 30 seconds
+    //    Catches cases where Realtime misses the event (network issues, tab suspended, etc.)
+    const interval = setInterval(async () => {
+      if (isSigningOutRef.current) return;
+      const active = await checkSessionActive(sessionId);
+      if (!active) {
+        forceSignOut();
+      }
+    }, POLL_INTERVAL_MS);
+
+    intervalRef.current = interval;
+
     return () => {
+      cancelled = true;
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [user, signOut]);
+  }, [user, signOut, forceSignOut]);
 }
 
 /**
