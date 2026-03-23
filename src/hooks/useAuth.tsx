@@ -101,7 +101,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearDeviceFingerprint();
     // Clear any stored OTP data
     localStorage.removeItem('pending_phone_auth');
-    await supabase.auth.signOut();
+    // Use scope: 'local' to avoid 403 when token is already invalidated
+    // (e.g. after being kicked out by another device's login)
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      // Force clear local state even if server rejects the request
+      setUser(null);
+      setSession(null);
+    }
   };
 
   // ============================================
