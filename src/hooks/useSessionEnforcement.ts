@@ -114,6 +114,14 @@ export async function registerDeviceSession(userId: string): Promise<{ error: an
   const fingerprint = generateDeviceFingerprint();
   const deviceInfo = getDeviceInfo();
 
+  // Verify the Supabase client has an active session (required for RLS)
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData?.session) {
+    const err = 'No active Supabase session — cannot register device session';
+    console.error('[Session]', err);
+    return { error: { message: err } };
+  }
+
   const { data, error } = await supabase
     .from('user_sessions' as any)
     .insert({
@@ -125,8 +133,13 @@ export async function registerDeviceSession(userId: string): Promise<{ error: an
     .select('id')
     .single();
 
+  if (error) {
+    console.error('[Session] Insert failed:', error.message, error.details, error.hint);
+  }
+
   if (!error && data) {
     localStorage.setItem(SESSION_ID_KEY, (data as any).id);
+    console.log('[Session] Registered device session:', (data as any).id);
   }
 
   return { error };

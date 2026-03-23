@@ -212,8 +212,14 @@ const Auth = () => {
         toast.error('Failed to sign in. Please try again.');
       } else {
         // Register device session for single-device enforcement
+        // Wait briefly for Supabase client to propagate the JWT from signInWithToken
+        // (RLS requires auth.uid() to be set for the INSERT to succeed)
         if (userId) {
-          await registerDeviceSession(userId);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const { error: sessionError } = await registerDeviceSession(userId);
+          if (sessionError) {
+            console.error('[Session] Failed to register device session:', sessionError);
+          }
         }
         toast.success('Welcome back, Merchant!');
         navigate('/');
