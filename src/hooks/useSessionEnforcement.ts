@@ -122,6 +122,16 @@ export async function registerDeviceSession(userId: string): Promise<{ error: an
     return { error: { message: err } };
   }
 
+  // Step 1: Deactivate all existing active sessions for this user
+  // This must happen BEFORE insert to avoid the unique constraint violation
+  // (idx_user_sessions_unique_active allows only one active session per user)
+  await supabase
+    .from('user_sessions' as any)
+    .update({ is_active: false })
+    .eq('user_id', userId)
+    .eq('is_active', true);
+
+  // Step 2: Insert the new active session
   const { data, error } = await supabase
     .from('user_sessions' as any)
     .insert({
