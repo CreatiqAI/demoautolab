@@ -52,6 +52,7 @@ interface Product {
     url: string;
     alt_text: string;
     is_primary: boolean;
+    media_type?: 'image' | 'video';
   }>;
 }
 
@@ -156,7 +157,8 @@ const ProductDetails = () => {
             url,
             alt_text,
             is_primary,
-            sort_order
+            sort_order,
+            media_type
           )
         `)
         .eq('id', id)
@@ -355,12 +357,12 @@ const ProductDetails = () => {
   const primaryImage = product.product_images.find(img => img.is_primary) || product.product_images[0];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-[#0f172a] font-sans pb-24">
+    <div className="min-h-screen bg-slate-50 text-[#0f172a] font-sans pb-20 md:pb-8">
       <Header />
 
-      <div className="container mx-auto px-4 md:px-6 py-8 md:py-12 max-w-7xl">
+      <div className="container mx-auto px-3 sm:px-4 md:px-6 py-4 md:py-12 max-w-7xl">
         {/* Breadcrumb / Back */}
-        <nav className="mb-6">
+        <nav className="mb-3 md:mb-6">
           <Button
             variant="ghost"
             onClick={() => navigate('/catalog')}
@@ -372,51 +374,92 @@ const ProductDetails = () => {
         </nav>
 
         {/* Main Product Section */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-8">
+        <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6 md:mb-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
             {/* Left: Product Images */}
-            <div className="bg-[#fbfbfb] border-r border-slate-100 flex flex-col justify-center select-none">
-              {/* Main Image */}
-              <div
-                className="relative w-full h-[350px] md:h-[500px] lg:h-full bg-[#f8f8f8] cursor-pointer group p-4 md:p-8 flex items-center justify-center"
-                onClick={() => openLightbox(product.product_images.map(img => img.url), selectedImage)}
-              >
-                <img
-                  src={product.product_images[selectedImage]?.url || primaryImage?.url || '/placeholder.svg'}
-                  alt={product.product_images[selectedImage]?.alt_text || product.name}
-                  className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700"
-                  loading="lazy"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = '/placeholder.svg';
-                  }}
-                />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
-                <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                  <Eye className="h-5 w-5 text-gray-700" />
-                </div>
-              </div>
+            <div className="bg-[#fbfbfb] lg:border-r border-slate-100 flex flex-col justify-center select-none">
+              {/* Main Image/Video */}
+              {(() => {
+                const currentMedia = product.product_images[selectedImage];
+                const isVideo = currentMedia?.media_type === 'video';
+                const isEmbed = isVideo && currentMedia?.url && /youtube\.com\/watch|youtu\.be\/|vimeo\.com\//i.test(currentMedia.url);
+                const embedUrl = isEmbed ? (() => {
+                  const ytMatch = currentMedia.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
+                  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+                  const vimeoMatch = currentMedia.url.match(/vimeo\.com\/(\d+)/);
+                  if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+                  return null;
+                })() : null;
+
+                return (
+                  <div
+                    className="relative w-full h-[280px] sm:h-[350px] md:h-[500px] lg:h-full bg-[#f8f8f8] group p-2 sm:p-4 md:p-8 flex items-center justify-center"
+                    {...(!isVideo ? { onClick: () => openLightbox(product.product_images.filter(img => img.media_type !== 'video').map(img => img.url), selectedImage), style: { cursor: 'pointer' } } : {})}
+                  >
+                    {isVideo ? (
+                      embedUrl ? (
+                        <iframe
+                          src={embedUrl}
+                          className="w-full h-full rounded-lg"
+                          allowFullScreen
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        />
+                      ) : (
+                        <video
+                          src={currentMedia?.url}
+                          className="w-full h-full object-contain rounded-lg"
+                          controls
+                          preload="metadata"
+                        />
+                      )
+                    ) : (
+                      <>
+                        <img
+                          src={currentMedia?.url || primaryImage?.url || '/placeholder.svg'}
+                          alt={currentMedia?.alt_text || product.name}
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700"
+                          loading="lazy"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/placeholder.svg';
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
+                        <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                          <Eye className="h-5 w-5 text-gray-700" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Thumbnails */}
               {product.product_images.length > 1 && (
-                <div className="flex gap-2 justify-center p-4 border-t border-slate-100 bg-white z-10">
+                <div className="flex gap-1.5 sm:gap-2 justify-start sm:justify-center p-2 sm:p-4 border-t border-slate-100 bg-white z-10 overflow-x-auto no-scrollbar">
                   {product.product_images.map((image, index) => (
                     <button
                       key={index}
                       onClick={() => setSelectedImage(index)}
                       className={cn(
-                        "relative w-16 h-16 rounded-lg overflow-hidden border-2 transition-all duration-200",
+                        "relative w-12 h-12 sm:w-16 sm:h-16 rounded-lg overflow-hidden border-2 transition-all duration-200 flex-shrink-0",
                         index === selectedImage
                           ? 'border-primary ring-2 ring-primary/20'
                           : 'border-transparent hover:border-gray-300'
                       )}
                     >
-                      <img
-                        src={image.url}
-                        alt={image.alt_text || `View ${index + 1}`}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
+                      {image.media_type === 'video' ? (
+                        <div className="w-full h-full bg-gray-900 flex items-center justify-center">
+                          <PlayCircle className="h-6 w-6 text-white" />
+                        </div>
+                      ) : (
+                        <img
+                          src={image.url}
+                          alt={image.alt_text || `View ${index + 1}`}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      )}
                     </button>
                   ))}
                 </div>
@@ -424,9 +467,9 @@ const ProductDetails = () => {
             </div>
 
             {/* Right: Product Info */}
-            <div className="p-6 md:p-8 lg:p-10 flex flex-col">
+            <div className="p-4 sm:p-6 md:p-8 lg:p-10 flex flex-col">
               {/* Product Header */}
-              <div className="mb-6">
+              <div className="mb-4 sm:mb-6">
                 {/* Badges */}
                 <div className="flex flex-wrap gap-2 mb-4">
                   <Badge className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-100 rounded-md px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider shadow-none">
@@ -442,12 +485,12 @@ const ProductDetails = () => {
                 </div>
 
                 {/* Title */}
-                <h1 className="text-2xl md:text-4xl font-heading font-bold text-[#0f172a] mb-3 uppercase tracking-wide leading-tight">
+                <h1 className="text-xl sm:text-2xl md:text-4xl font-heading font-bold text-[#0f172a] mb-2 sm:mb-3 uppercase tracking-wide leading-tight">
                   {product.name}
                 </h1>
 
                 {/* Brand/Model/Year */}
-                <p className="text-base text-slate-500 mb-5 font-normal">
+                <p className="text-sm sm:text-base text-slate-500 mb-3 sm:mb-5 font-normal">
                   <span className="font-semibold text-[#0f172a] pr-1">{product.brand}</span>
                   {product.model}
                   {product.year_from && product.year_to && (
@@ -501,7 +544,7 @@ const ProductDetails = () => {
                     <p className="text-gray-500">No components available</p>
                   </div>
                 ) : (
-                  <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="space-y-2.5 max-h-none md:max-h-[350px] overflow-y-auto pr-1 md:pr-2 custom-scrollbar">
                     {components.map((component) => {
                       const quantity = getLocalCartQuantity(component.id);
                       const isExpanded = expandedComponent === component.id;
@@ -632,10 +675,10 @@ const ProductDetails = () => {
                 )}
               </div>
 
-              {/* Cart Summary */}
+              {/* Cart Summary — Desktop */}
               {components.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-slate-100">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="hidden md:block mt-6 pt-6 border-t border-slate-100">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-xs font-medium text-slate-400 mb-1">
                         {localCart.length > 0
@@ -703,7 +746,7 @@ const ProductDetails = () => {
                 </CollapsibleTrigger>
 
                 <CollapsibleContent>
-                  <div className="px-5 pb-5 space-y-5">
+                  <div className="px-3 sm:px-5 pb-4 sm:pb-5 space-y-4 sm:space-y-5">
                     <Separator className="border-slate-100" />
 
                     {/* Info Cards */}
@@ -823,7 +866,7 @@ const ProductDetails = () => {
               </CollapsibleTrigger>
 
               <CollapsibleContent>
-                <div className="px-6 md:px-8 pb-8">
+                <div className="px-4 sm:px-6 md:px-8 pb-6 md:pb-8">
                   <Separator className="mb-8 border-slate-100" />
                   {showReviewForm ? (
                     <ReviewForm
@@ -845,6 +888,42 @@ const ProductDetails = () => {
           </Collapsible>
         </div>
       </div>
+
+      {/* Sticky Mobile Cart Bar */}
+      {components.length > 0 && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              {localCart.length > 0 ? (
+                <>
+                  <p className="text-[10px] font-medium text-slate-400">{getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''}</p>
+                  <p className="text-lg font-bold text-[#0f172a]">{formatPrice(getLocalCartTotal())}</p>
+                </>
+              ) : (
+                <p className="text-xs text-slate-400">No items selected</p>
+              )}
+            </div>
+            {user ? (
+              <Button
+                onClick={handleAddToCart}
+                disabled={cartLoading || localCart.length === 0}
+                className="h-10 px-5 rounded-lg bg-[#0f172a] text-white hover:bg-lime-600 transition-all font-semibold text-xs shadow shrink-0"
+              >
+                <ShoppingCart className="h-3.5 w-3.5 mr-2" />
+                {cartLoading ? 'Adding...' : 'Add to Cart'}
+              </Button>
+            ) : (
+              <LoginPromptButton
+                className="h-10 px-5 rounded-lg bg-[#0f172a] text-white hover:bg-lime-600 transition-all font-semibold text-xs shadow shrink-0"
+                redirectTo={`/product/${id}`}
+              >
+                <ShoppingCart className="h-3.5 w-3.5 mr-2" />
+                Login to Add
+              </LoginPromptButton>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Image Lightbox */}
       <Dialog open={lightboxOpen} onOpenChange={closeLightbox}>

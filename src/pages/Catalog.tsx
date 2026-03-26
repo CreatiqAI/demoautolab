@@ -336,14 +336,14 @@ const Catalog = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-gray-50 flex flex-col">
         <Header />
 
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
+        <main className="min-h-[calc(100vh-80px)] container mx-auto px-3 sm:px-6 lg:px-8 py-4 md:py-8 flex-1">
           {/* Page Header */}
-          <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
-            <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3">Product <span className="text-lime-600 italic">Catalog</span></h1>
-            <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Discover our extensive range of premium automotive parts and accessories</p>
+          <div className="mb-5 sm:mb-8 border-b border-gray-200 pb-4 sm:pb-6 text-center lg:text-left">
+            <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-2 sm:mb-3">Product <span className="text-lime-600 italic">Catalog</span></h1>
+            <p className="text-xs sm:text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Discover our extensive range of premium automotive parts and accessories</p>
           </div>
 
           {/* Mobile Filters - Shows only on small screens */}
@@ -559,7 +559,7 @@ const Catalog = () => {
 
               {/* Products Grid */}
               {productsLoading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-5">
                   {Array.from({ length: isMobile ? itemsPerPage : 8 }).map((_, i) => (
                     <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                       <Skeleton className="aspect-square w-full" />
@@ -595,7 +595,7 @@ const Catalog = () => {
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-5">
                   {displayProducts.map((product) => {
                     const primaryImage = getPrimaryImage(product.product_images);
                     const componentCount = getComponentCount(product);
@@ -679,30 +679,30 @@ const Catalog = () => {
                         </div>
 
                         {/* Product Info */}
-                        <div className="p-3 flex-1 flex flex-col">
+                        <div className="p-2 sm:p-3 flex-1 flex flex-col">
                           {/* Brand Badge */}
-                          <div className="mb-1.5">
-                            <span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[9px] font-semibold rounded uppercase tracking-wide truncate max-w-full">
+                          <div className="mb-1 sm:mb-1.5">
+                            <span className="inline-block px-1 sm:px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[8px] sm:text-[9px] font-semibold rounded uppercase tracking-wide truncate max-w-full">
                               {product.brand}
                             </span>
                           </div>
 
                           {/* Product Title */}
-                          <h3 className="font-sans text-gray-900 text-xs font-semibold mb-2 line-clamp-2 leading-snug flex-1">
+                          <h3 className="font-sans text-gray-900 text-[11px] sm:text-xs font-semibold mb-1.5 sm:mb-2 line-clamp-2 leading-snug flex-1">
                             {product.name}
                           </h3>
 
                           {/* Footer Info */}
-                          <div className="flex items-center justify-between text-[9px] text-gray-400 pt-1.5 border-t border-gray-100">
+                          <div className="flex items-center justify-between text-[8px] sm:text-[9px] text-gray-400 pt-1 sm:pt-1.5 border-t border-gray-100">
                             <span className="uppercase tracking-wider font-medium truncate max-w-[60%]">
                               {product.category?.name || 'Details'}
                             </span>
                             {componentCount > 0 ? (
                               <span className="font-semibold text-gray-600 truncate">
-                                {componentCount} {componentCount === 1 ? 'Component' : 'Components'}
+                                {componentCount} {componentCount === 1 ? 'Part' : 'Parts'}
                               </span>
                             ) : (
-                              <span className="font-semibold text-gray-600">
+                              <span className="font-semibold text-gray-600 hidden sm:inline">
                                 View Details
                               </span>
                             )}
