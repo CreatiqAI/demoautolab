@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
-import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -28,12 +28,29 @@ interface ComponentItem {
   products_used_in?: number;
   total_allocated_stock?: number;
   created_at: string;
+  updated_at?: string;
 }
 
 
 // Component types will be fetched from database
 // Users can also create new types on the fly
 const DEFAULT_COMPONENT_ICON = '📦';
+
+function formatTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return date.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
+}
 
 export default function ComponentLibraryPro() {
   const [components, setComponents] = useState<ComponentItem[]>([]);
@@ -126,7 +143,7 @@ export default function ComponentLibraryPro() {
           last_restocked
         `)
         .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false, nullsFirst: false });
 
       if (basicError) throw basicError;
 
@@ -654,6 +671,7 @@ export default function ComponentLibraryPro() {
                   <TableHead>Stock</TableHead>
                   <TableHead>Normal Price</TableHead>
                   <TableHead>Merchant Price</TableHead>
+                  <TableHead>Last Edited</TableHead>
                   <TableHead>Stock Actions</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -711,6 +729,16 @@ export default function ComponentLibraryPro() {
                           <span className="text-sm">RM</span>
                           <span className="ml-1">{component.merchant_price.toFixed(2)}</span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {component.updated_at ? (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground" title={new Date(component.updated_at).toLocaleString()}>
+                            <Clock className="h-3.5 w-3.5" />
+                            {formatTimeAgo(component.updated_at)}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Button
