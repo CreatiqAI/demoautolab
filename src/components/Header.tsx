@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -390,18 +390,23 @@ const Header = () => {
                     <Menu className="h-6 w-6" />
                   </button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-[300px] sm:w-80 bg-white">
+                <SheetContent side="right" className="w-[300px] sm:w-80 bg-white" aria-describedby={undefined}>
+                  <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
                   <div className="flex flex-col gap-6 mt-8">
                     {/* Navigation */}
                     <nav className="flex flex-col gap-1">
-                      {['Catalog', 'Find Shops', 'About Us'].map((item) => (
+                      {[
+                        { label: 'Catalog', path: '/catalog' },
+                        { label: 'Find Shops', path: '/find-shops' },
+                        { label: 'About Us', path: '/about' },
+                      ].map((item) => (
                         <Link
-                          key={item}
-                          to={`/${item.toLowerCase().replace(/\s+/g, '-')}`}
+                          key={item.label}
+                          to={item.path}
                           onClick={() => setMobileMenuOpen(false)}
                           className="text-lg font-bold text-gray-900 hover:text-gray-900 transition-colors py-3 border-b border-gray-100"
                         >
-                          {item}
+                          {item.label}
                         </Link>
                       ))}
                     </nav>

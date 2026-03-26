@@ -176,9 +176,9 @@ export default function ShopDetails() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-gray-50 flex flex-col">
         <Header />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="min-h-[calc(100vh-80px)] flex-1 flex items-center justify-center">
           <div className="text-center">
             <Store className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
             <p className="text-gray-500 text-sm">Loading shop details...</p>
@@ -191,9 +191,9 @@ export default function ShopDetails() {
 
   if (!shop) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-gray-50 flex flex-col">
         <Header />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="min-h-[calc(100vh-80px)] flex-1 flex items-center justify-center">
           <div className="text-center px-4">
             <div className="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-4">
               <Store className="h-8 w-8 text-gray-400" />
@@ -216,10 +216,10 @@ export default function ShopDetails() {
   const displayPhotos = shop.shop_photos && shop.shop_photos.length > 0 ? shop.shop_photos : [];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="bg-gray-50 flex flex-col">
       <Header />
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
+      <main className="min-h-[calc(100vh-80px)] container mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8 flex-1">
         {/* Back Button */}
         <button
           onClick={() => navigate('/find-shops')}
@@ -254,7 +254,7 @@ export default function ShopDetails() {
               <img
                 src={displayPhotos[currentPhotoIndex]}
                 alt={`${shop.business_name}`}
-                className="w-full h-[220px] md:h-[320px] lg:h-[400px] object-cover group-hover:scale-105 transition-transform duration-700"
+                className="w-full h-[180px] sm:h-[220px] md:h-[320px] lg:h-[400px] object-cover group-hover:scale-105 transition-transform duration-700"
               />
 
               {/* Overlay */}

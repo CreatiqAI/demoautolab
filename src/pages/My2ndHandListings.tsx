@@ -333,9 +333,9 @@ export default function My2ndHandListings() {
 
   if (loading && !isMerchant) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-gray-50 flex flex-col">
         <Header />
-        <div className="flex items-center justify-center flex-1">
+        <div className="min-h-[calc(100vh-80px)] flex items-center justify-center flex-1">
           <div className="text-center">
             <Package className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
             <p className="text-gray-500 text-[15px]">Loading...</p>
@@ -347,13 +347,13 @@ export default function My2ndHandListings() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="bg-gray-50 flex flex-col">
       <Header />
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
+      <main className="min-h-[calc(100vh-80px)] container mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8 flex-1">
         {/* Page Header */}
         <div className="mb-6 border-b border-gray-200 pb-4">
-          <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic mb-2">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold text-gray-900 uppercase italic mb-2">
             My 2nd Hand Listings
           </h1>
           <p className="text-sm text-gray-500 uppercase tracking-wider font-medium">
@@ -395,7 +395,7 @@ export default function My2ndHandListings() {
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {listings.map((listing) => (
                   <div key={listing.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                     {/* Image */}
@@ -546,7 +546,7 @@ export default function My2ndHandListings() {
               {/* Pricing */}
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b">Pricing</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="original_price">Original Price (RM)</Label>
                     <Input
@@ -631,7 +631,7 @@ export default function My2ndHandListings() {
               {/* Vehicle Compatibility */}
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b">Vehicle Compatibility</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="car_brand">Car Brand</Label>
                     <Input

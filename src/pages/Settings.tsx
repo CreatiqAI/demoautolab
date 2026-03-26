@@ -33,7 +33,8 @@ import {
   CreditCard,
   AlertTriangle,
   Shield,
-  Info
+  Info,
+  CheckCircle
 } from 'lucide-react';
 
 interface CustomerProfile {
@@ -329,15 +330,14 @@ export default function Settings() {
   const subscriptionInfo = getSubscriptionInfo();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="bg-gray-50 flex flex-col">
       <Header />
 
-      <div className="flex-1">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Page Header */}
-          <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
-            <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-3">Account <span className="text-lime-600 italic">Settings</span></h1>
-            <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Manage your account, subscription, and preferences</p>
+      <div className="min-h-[calc(100vh-80px)]">
+        <div className="container mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold tracking-tight">Account Settings</h2>
+            <p className="text-sm text-muted-foreground">Manage your account, subscription, and preferences</p>
           </div>
 
           {/* Tabs */}
@@ -361,179 +361,153 @@ export default function Settings() {
 
             {/* ===== PROFILE TAB ===== */}
             <TabsContent value="profile">
-              <div className="space-y-6">
-                {/* Profile Header Card */}
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 text-xl font-bold shrink-0">
-                        {profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U'}
-                      </div>
-                      <div className="min-w-0">
-                        <h2 className="text-lg font-semibold text-gray-900 truncate">{profile?.name}</h2>
-                        <p className="text-sm text-gray-500">{profile?.email}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant={isMerchant ? 'default' : 'secondary'}>
-                            {isMerchant ? 'Merchant' : 'Customer'}
-                          </Badge>
-                          {partnership && partnership.subscription_status === 'ACTIVE' && partnership.admin_approved && (
-                            <Badge variant="outline" className="border-gray-300 text-gray-700">
-                              {partnership.subscription_plan === 'panel' ? 'Panel' : 'Professional'}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
+              <Card>
+                <CardContent className="pt-6">
+                  {/* Profile Header */}
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-sm font-semibold shrink-0">
+                      {profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U'}
                     </div>
-
-                    <Separator />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-1">
-                          <Phone className="w-3.5 h-3.5 inline mr-1.5" />
-                          Phone Number
-                        </label>
-                        <p className="text-gray-900 font-medium">{profile?.phone || 'Not set'}</p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-1">
-                          <Calendar className="w-3.5 h-3.5 inline mr-1.5" />
-                          Date of Birth
-                        </label>
-                        <p className="text-gray-900 font-medium">
-                          {profile?.date_of_birth
-                            ? new Date(profile.date_of_birth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-                            : 'Not set'}
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-1">
-                          <Calendar className="w-3.5 h-3.5 inline mr-1.5" />
-                          Member Since
-                        </label>
-                        <p className="text-gray-900 font-medium">
-                          {profile?.created_at
-                            ? new Date(profile.created_at).toLocaleDateString('en-MY', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                              })
-                            : 'N/A'}
-                        </p>
-                      </div>
-
-                      {customerCars.length > 0 && (
-                        <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-500 mb-2">
-                            <Package className="w-3.5 h-3.5 inline mr-1.5" />
-                            My Vehicles
-                          </label>
-                          <div className="flex flex-wrap gap-2">
-                            {customerCars.map((car, i) => (
-                              <span key={i} className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-800 text-sm font-medium px-3 py-1.5 rounded-lg">
-                                {car.car_make_name}{car.car_model_name ? ` — ${car.car_model_name}` : ''}
-                                {car.is_primary && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Primary</Badge>}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-gray-900 truncate">{profile?.name}</h3>
+                      <p className="text-xs text-muted-foreground">{profile?.email}</p>
+                    </div>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <Badge variant={isMerchant ? 'default' : 'secondary'} className="text-[11px]">
+                        {isMerchant ? 'Merchant' : 'Customer'}
+                      </Badge>
+                      {partnership && partnership.subscription_status === 'ACTIVE' && partnership.admin_approved && (
+                        <Badge variant="outline" className="border-gray-300 text-gray-600 text-[11px]">
+                          {partnership.subscription_plan === 'panel' ? 'Panel' : 'Professional'}
+                        </Badge>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                {/* Merchant Business Information */}
-                {isMerchant && merchantReg && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Building className="w-5 h-5 text-gray-600" />
-                        Business Information
-                      </CardTitle>
-                      <CardDescription>Your registered merchant details</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-500 mb-1">Company Name</label>
-                          <p className="text-gray-900 font-medium">{merchantReg.company_name}</p>
+                  {/* Personal Details */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Phone</p>
+                      <p className="text-gray-900">{profile?.phone || 'Not set'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Date of Birth</p>
+                      <p className="text-gray-900">
+                        {profile?.date_of_birth
+                          ? new Date(profile.date_of_birth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+                          : 'Not set'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Member Since</p>
+                      <p className="text-gray-900">
+                        {profile?.created_at
+                          ? new Date(profile.created_at).toLocaleDateString('en-MY', { year: 'numeric', month: 'long', day: 'numeric' })
+                          : 'N/A'}
+                      </p>
+                    </div>
+                    {customerCars.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Vehicles</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {customerCars.map((car, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 text-gray-700 text-xs px-2 py-1 rounded">
+                              {car.car_make_name}{car.car_model_name ? ` ${car.car_model_name}` : ''}
+                              {car.is_primary && <span className="text-[10px] text-muted-foreground">(Primary)</span>}
+                            </span>
+                          ))}
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-500 mb-1">Business Type</label>
-                          <p className="text-gray-900 font-medium">{merchantReg.business_type}</p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-500 mb-1">Registration No.</label>
-                          <p className="text-gray-900 font-medium">{merchantReg.business_registration_no}</p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-500 mb-1">Tax ID</label>
-                          <p className="text-gray-900 font-medium">{merchantReg.tax_id || 'Not provided'}</p>
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-500 mb-1">Business Address</label>
-                          <p className="text-gray-900 font-medium">{merchantReg.address}</p>
-                        </div>
-                        {merchantReg.company_profile_url && (
-                          <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-500 mb-1">Website</label>
-                            <a href={merchantReg.company_profile_url} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1">
-                              {merchantReg.company_profile_url}
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          </div>
-                        )}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-500 mb-1">Application Status</label>
-                          <Badge variant={merchantReg.status === 'APPROVED' ? 'default' : 'secondary'}>
-                            {merchantReg.status}
-                          </Badge>
-                        </div>
-                        {merchantReg.referral_code && (
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Merchant Business Info */}
+                  {isMerchant && merchantReg && (
+                    <>
+                      <Separator className="my-6" />
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-4">Business Information</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
                           <div>
-                            <label className="block text-sm font-medium text-gray-500 mb-1">Referral Code</label>
-                            <p className="text-gray-900 font-medium font-mono">{merchantReg.referral_code}</p>
+                            <p className="text-xs text-muted-foreground mb-0.5">Company Name</p>
+                            <p className="text-gray-900">{merchantReg.company_name}</p>
                           </div>
-                        )}
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-0.5">Business Type</p>
+                            <p className="text-gray-900">{merchantReg.business_type}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-0.5">Registration No.</p>
+                            <p className="text-gray-900">{merchantReg.business_registration_no}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-0.5">Tax ID</p>
+                            <p className="text-gray-900">{merchantReg.tax_id || 'Not provided'}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-xs text-muted-foreground mb-0.5">Address</p>
+                            <p className="text-gray-900">{merchantReg.address}</p>
+                          </div>
+                          {merchantReg.company_profile_url && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-muted-foreground mb-0.5">Website</p>
+                              <a href={merchantReg.company_profile_url} target="_blank" rel="noopener noreferrer" className="text-sm text-gray-700 hover:text-gray-900 inline-flex items-center gap-1">
+                                {merchantReg.company_profile_url}
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-0.5">Status</p>
+                            <Badge variant={merchantReg.status === 'APPROVED' ? 'default' : 'secondary'} className="text-[11px]">
+                              {merchantReg.status}
+                            </Badge>
+                          </div>
+                          {merchantReg.referral_code && (
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-0.5">Referral Code</p>
+                              <p className="text-gray-900 font-mono text-xs">{merchantReg.referral_code}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Documents */}
-                      <Separator />
-                      <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-2">
-                          <FileText className="w-3.5 h-3.5 inline mr-1.5" />
-                          Submitted Documents
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          {merchantReg.ssm_document_url && (
-                            <a href={merchantReg.ssm_document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors">
-                              <FileText className="w-3 h-3" /> SSM Document
-                            </a>
-                          )}
-                          {merchantReg.bank_proof_url && (
-                            <a href={merchantReg.bank_proof_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors">
-                              <FileText className="w-3 h-3" /> Bank Proof
-                            </a>
-                          )}
-                          {merchantReg.payment_slip_url && (
-                            <a href={merchantReg.payment_slip_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors">
-                              <FileText className="w-3 h-3" /> Payment Slip
-                            </a>
-                          )}
-                        </div>
-                      </div>
+                      {(merchantReg.ssm_document_url || merchantReg.bank_proof_url || merchantReg.payment_slip_url) && (
+                        <>
+                          <Separator className="my-6" />
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Documents</p>
+                            <div className="flex flex-wrap gap-2">
+                              {merchantReg.ssm_document_url && (
+                                <a href={merchantReg.ssm_document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded text-xs text-gray-700 transition-colors">
+                                  <FileText className="w-3 h-3" /> SSM Document
+                                </a>
+                              )}
+                              {merchantReg.bank_proof_url && (
+                                <a href={merchantReg.bank_proof_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded text-xs text-gray-700 transition-colors">
+                                  <FileText className="w-3 h-3" /> Bank Proof
+                                </a>
+                              )}
+                              {merchantReg.payment_slip_url && (
+                                <a href={merchantReg.payment_slip_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded text-xs text-gray-700 transition-colors">
+                                  <FileText className="w-3 h-3" /> Payment Slip
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
 
                       {/* Workshop Photos */}
                       {merchantReg.workshop_photos && merchantReg.workshop_photos.length > 0 && (
                         <>
-                          <Separator />
+                          <Separator className="my-6" />
                           <div>
-                            <label className="block text-sm font-medium text-gray-500 mb-2">Workshop Photos</label>
-                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Workshop Photos</p>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                               {merchantReg.workshop_photos.map((photo, i) => (
-                                <a key={i} href={photo} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity">
+                                <a key={i} href={photo} target="_blank" rel="noopener noreferrer" className="aspect-square rounded overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity">
                                   <img src={photo} alt={`Workshop ${i + 1}`} className="w-full h-full object-cover" />
                                 </a>
                               ))}
@@ -541,18 +515,113 @@ export default function Settings() {
                           </div>
                         </>
                       )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* ===== SUBSCRIPTION TAB (Merchant Only) ===== */}
             {isMerchant && (
               <TabsContent value="subscription">
                 <div className="space-y-6">
-                  {!partnership ? (
-                    /* No Partnership */
+                  {!partnership && merchantReg && merchantReg.status === 'APPROVED' ? (
+                    /* Approved merchant with basic plan — show merchant plan details */
+                    <Card>
+                      <CardHeader className="pb-4">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="flex items-center gap-2 text-base">
+                            <Shield className="w-5 h-5 text-gray-600" />
+                            Merchant Plan
+                          </CardTitle>
+                          <Badge className="bg-green-100 text-green-700 border-green-200">Active</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-muted-foreground mb-0.5">Plan</p>
+                              <p className="font-medium">Merchant Subscription</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground mb-0.5">Billing</p>
+                              <p className="font-medium">RM 99 / year</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground mb-0.5">Company</p>
+                              <p className="font-medium">{merchantReg.company_name}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground mb-0.5">Subscribed Since</p>
+                              <p className="font-medium">
+                                {new Date(merchantReg.created_at).toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground mb-0.5">Next Renewal</p>
+                              <p className="font-medium">
+                                {(() => {
+                                  const renewalDate = new Date(merchantReg.created_at);
+                                  renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+                                  // If renewal is past, keep adding years until future
+                                  while (renewalDate < new Date()) {
+                                    renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+                                  }
+                                  return renewalDate.toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' });
+                                })()}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground mb-0.5">Days Until Renewal</p>
+                              <p className={`font-medium ${(() => {
+                                const renewalDate = new Date(merchantReg.created_at);
+                                renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+                                while (renewalDate < new Date()) {
+                                  renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+                                }
+                                const days = Math.ceil((renewalDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                return days <= 30 ? 'text-red-600' : days <= 60 ? 'text-yellow-600' : 'text-green-600';
+                              })()}`}>
+                                {(() => {
+                                  const renewalDate = new Date(merchantReg.created_at);
+                                  renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+                                  while (renewalDate < new Date()) {
+                                    renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+                                  }
+                                  const days = Math.ceil((renewalDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                  return `${days} days`;
+                                })()}
+                              </p>
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 mb-3">Your Benefits</p>
+                            <div className="grid sm:grid-cols-2 gap-2">
+                              {[
+                                { label: 'Merchant Pricing', desc: 'Access to wholesale/merchant pricing on all products' },
+                                { label: 'Installation Guides', desc: 'Step-by-step installation guides for all products' },
+                                { label: 'RM50 Welcome Voucher', desc: 'One-time welcome voucher on your first order' },
+                                { label: 'Priority Support', desc: 'Dedicated support channel for merchants' },
+                              ].map(b => (
+                                <div key={b.label} className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-50">
+                                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">{b.label}</p>
+                                    <p className="text-xs text-muted-foreground">{b.desc}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : !partnership ? (
+                    /* No partnership and no approved merchant reg */
                     <Card>
                       <CardContent className="pt-6">
                         <div className="text-center py-8">
@@ -561,16 +630,8 @@ export default function Settings() {
                           </div>
                           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Active Subscription</h3>
                           <p className="text-sm text-gray-500 mb-4 max-w-md mx-auto">
-                            You don't have an active premium partnership yet. Subscribe to get featured listing, priority display, and more benefits.
+                            Contact our team to learn about merchant subscription plans.
                           </p>
-                          <Button
-                            onClick={() => navigate('/premium-partner')}
-                            variant="hero"
-                            className="mt-4 text-[13px] h-10 px-6"
-                          >
-                            <Crown className="w-4 h-4 mr-2" />
-                            Explore Premium Plans
-                          </Button>
                         </div>
                       </CardContent>
                     </Card>
@@ -735,52 +796,32 @@ export default function Settings() {
 
             {/* ===== NOTIFICATIONS TAB ===== */}
             <TabsContent value="notifications">
-              <div className="space-y-6">
-                {/* WhatsApp Notifications */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <MessageCircle className="w-5 h-5 text-green-600" />
-                      WhatsApp Notifications
-                    </CardTitle>
-                    <CardDescription>
-                      Receive updates via WhatsApp to your registered phone number
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        WhatsApp Phone Number
-                      </label>
-                      <input
-                        type="tel"
-                        value={notifications.phone_number}
-                        onChange={(e) =>
-                          setNotifications({ ...notifications, phone_number: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 focus:border-gray-400"
-                        placeholder="+60123456789"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Include country code (e.g., +60 for Malaysia)
-                      </p>
-                    </div>
+              <Card>
+                <CardContent className="pt-6">
+                  {/* WhatsApp Number */}
+                  <div className="mb-6">
+                    <p className="text-xs text-muted-foreground mb-1.5">WhatsApp Number</p>
+                    <input
+                      type="tel"
+                      value={notifications.phone_number}
+                      onChange={(e) =>
+                        setNotifications({ ...notifications, phone_number: e.target.value })
+                      }
+                      className="w-full max-w-xs px-3 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-gray-400 focus:border-gray-400 outline-none"
+                      placeholder="+60123456789"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">Include country code (e.g., +60 for Malaysia)</p>
+                  </div>
 
-                    <Separator />
+                  <Separator className="mb-4" />
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          notifications.whatsapp_enabled ? 'bg-green-100' : 'bg-gray-100'
-                        }`}>
-                          <MessageCircle className={`w-5 h-5 ${
-                            notifications.whatsapp_enabled ? 'text-green-600' : 'text-gray-400'
-                          }`} />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">Enable WhatsApp Notifications</p>
-                          <p className="text-sm text-gray-500">Master toggle for all WhatsApp notifications</p>
-                        </div>
+                  {/* Notification Toggles */}
+                  <div className="space-y-0 divide-y divide-gray-100">
+                    {/* Master WhatsApp Toggle */}
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm text-gray-900">WhatsApp Notifications</p>
+                        <p className="text-xs text-muted-foreground">Master toggle for all notifications</p>
                       </div>
                       <Switch
                         checked={notifications.whatsapp_enabled}
@@ -789,32 +830,12 @@ export default function Settings() {
                         }
                       />
                     </div>
-                  </CardContent>
-                </Card>
 
-                {/* Notification Preferences */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Notification Preferences</CardTitle>
-                    <CardDescription>
-                      Choose which notifications you want to receive via WhatsApp
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
                     {/* New Products */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          notifications.notify_new_products ? 'bg-blue-100' : 'bg-gray-100'
-                        }`}>
-                          <ShoppingBag className={`w-5 h-5 ${
-                            notifications.notify_new_products ? 'text-blue-600' : 'text-gray-400'
-                          }`} />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">New Products Related to My Car</p>
-                          <p className="text-sm text-gray-500">Get notified when new products matching your car are added</p>
-                        </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm text-gray-900">New Products</p>
+                        <p className="text-xs text-muted-foreground">Products matching your car</p>
                       </div>
                       <Switch
                         checked={notifications.notify_new_products}
@@ -825,22 +846,11 @@ export default function Settings() {
                       />
                     </div>
 
-                    <Separator />
-
                     {/* Car News */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          notifications.notify_car_news ? 'bg-purple-100' : 'bg-gray-100'
-                        }`}>
-                          <Newspaper className={`w-5 h-5 ${
-                            notifications.notify_car_news ? 'text-purple-600' : 'text-gray-400'
-                          }`} />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">Car News & Updates</p>
-                          <p className="text-sm text-gray-500">Stay updated with automotive news and industry trends</p>
-                        </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm text-gray-900">Car News & Updates</p>
+                        <p className="text-xs text-muted-foreground">Automotive news and trends</p>
                       </div>
                       <Switch
                         checked={notifications.notify_car_news}
@@ -851,22 +861,11 @@ export default function Settings() {
                       />
                     </div>
 
-                    <Separator />
-
                     {/* Promotions */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          notifications.notify_promotions ? 'bg-orange-100' : 'bg-gray-100'
-                        }`}>
-                          <TagIcon className={`w-5 h-5 ${
-                            notifications.notify_promotions ? 'text-orange-600' : 'text-gray-400'
-                          }`} />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">Promotions & Special Offers</p>
-                          <p className="text-sm text-gray-500">Receive exclusive deals, vouchers, and promotional offers</p>
-                        </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm text-gray-900">Promotions & Offers</p>
+                        <p className="text-xs text-muted-foreground">Deals, vouchers, and special offers</p>
                       </div>
                       <Switch
                         checked={notifications.notify_promotions}
@@ -877,22 +876,11 @@ export default function Settings() {
                       />
                     </div>
 
-                    <Separator />
-
                     {/* Order Status */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          notifications.notify_order_status ? 'bg-green-100' : 'bg-gray-100'
-                        }`}>
-                          <Package className={`w-5 h-5 ${
-                            notifications.notify_order_status ? 'text-green-600' : 'text-gray-400'
-                          }`} />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">Order Status Updates</p>
-                          <p className="text-sm text-gray-500">Get real-time updates on your order status and delivery</p>
-                        </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm text-gray-900">Order Status</p>
+                        <p className="text-xs text-muted-foreground">Real-time order and delivery updates</p>
                       </div>
                       <Switch
                         checked={notifications.notify_order_status}
@@ -902,21 +890,21 @@ export default function Settings() {
                         disabled={!notifications.whatsapp_enabled}
                       />
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                {/* Save Button */}
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleSaveNotifications}
-                    disabled={saving}
-                    className="text-[13px] h-10 px-6 bg-gray-900 text-white hover:bg-lime-600 transition-colors rounded-lg disabled:opacity-50"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {saving ? 'Saving...' : 'Save Preferences'}
-                  </Button>
-                </div>
-              </div>
+                  {/* Save Button */}
+                  <div className="flex justify-end mt-6">
+                    <Button
+                      onClick={handleSaveNotifications}
+                      disabled={saving}
+                      className="text-[13px] h-9 px-5 bg-gray-900 text-white hover:bg-gray-800 transition-colors rounded disabled:opacity-50"
+                    >
+                      <Save className="w-3.5 h-3.5 mr-1.5" />
+                      {saving ? 'Saving...' : 'Save Preferences'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>

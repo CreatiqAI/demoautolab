@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePricing } from '@/hooks/usePricing';
 import Header from '@/components/Header';
 import LoginPromptButton from '@/components/LoginPromptButton';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { ProductInstallationGuide } from '@/types/product-types';
@@ -927,7 +927,8 @@ const ProductDetails = () => {
 
       {/* Image Lightbox */}
       <Dialog open={lightboxOpen} onOpenChange={closeLightbox}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-0 border-0 bg-transparent">
+        <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-0 border-0 bg-transparent" aria-describedby={undefined}>
+          <span className="sr-only"><DialogTitle>Product Image</DialogTitle></span>
           <div className="relative flex items-center justify-center">
             {lightboxImages[currentLightboxIndex] && (
               <>

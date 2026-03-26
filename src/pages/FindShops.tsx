@@ -172,17 +172,17 @@ export default function FindShops() {
   const hasActiveFilters = selectedState !== 'All States' || selectedService !== 'All Services' || searchQuery;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="bg-gray-50 flex flex-col">
       <Header />
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
+      <main className="min-h-[calc(100vh-80px)] container mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8 flex-1">
         {/* Page Header */}
-        <div className="mb-8 border-b border-gray-200 pb-6 text-center lg:text-left">
-          <div className="flex items-center justify-center lg:justify-start gap-3 mb-3">
-            <h1 className="text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide">Find Authorized <span className="text-lime-600 italic">Shops</span></h1>
-            <Badge className="bg-purple-600 text-white text-[10px] uppercase font-bold self-start mt-2 hover:bg-purple-600 cursor-default">Panel Members Only</Badge>
+        <div className="mb-6 sm:mb-8 border-b border-gray-200 pb-4 sm:pb-6 text-center lg:text-left">
+          <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-2 sm:gap-3 mb-3">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide">Find Authorized <span className="text-lime-600 italic">Shops</span></h1>
+            <Badge className="bg-purple-600 text-white text-[10px] uppercase font-bold self-center sm:self-start sm:mt-2 hover:bg-purple-600 cursor-default">Panel Members Only</Badge>
           </div>
-          <p className="text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Our top 100 authorized Panel shops across Malaysia - invitation only</p>
+          <p className="text-xs sm:text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Our top 100 authorized Panel shops across Malaysia - invitation only</p>
         </div>
 
         {/* Search & Filters */}

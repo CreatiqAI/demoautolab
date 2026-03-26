@@ -166,9 +166,9 @@ const MerchantConsole = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-gray-50 flex flex-col">
         <Header />
-        <div className="flex items-center justify-center flex-1">
+        <div className="min-h-[calc(100vh-80px)] flex items-center justify-center flex-1">
           <div className="text-center">
             <Store className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
             <p className="text-gray-500">Loading Merchant Console...</p>
@@ -196,14 +196,14 @@ const MerchantConsole = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="bg-gray-50 flex flex-col">
       <Header />
 
-      <div className="flex-1">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="min-h-[calc(100vh-80px)] flex-1">
+        <div className="container mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
           {/* Page Header */}
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Merchant Console</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Merchant Console</h1>
             <p className="text-sm text-gray-500 mt-1">{partnership?.business_name}</p>
             <div className="flex items-center gap-2 mt-3">
               <Badge variant={
@@ -221,7 +221,7 @@ const MerchantConsole = () => {
 
           {/* Tab Navigation */}
           <div className="border-b border-gray-200 mb-6">
-            <nav className="-mb-px flex space-x-8 overflow-x-auto">
+            <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto">
               {navItems.map((item) => {
                 const isActive = activeTab === item.id;
                 const Icon = item.icon;
@@ -279,7 +279,7 @@ const DashboardTab = ({ partnership }: { partnership: PartnershipData | null }) 
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardDescription className="text-xs">Profile Views</CardDescription>
@@ -575,7 +575,7 @@ const ProfileTab = ({ partnership, onUpdate }: { partnership: PartnershipData | 
 
             {/* Form */}
             <div className="lg:col-span-2 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Shop Name</label>
                   <input
@@ -614,7 +614,7 @@ const ProfileTab = ({ partnership, onUpdate }: { partnership: PartnershipData | 
                 ></textarea>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
                   <input
@@ -645,7 +645,7 @@ const ProfileTab = ({ partnership, onUpdate }: { partnership: PartnershipData | 
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">City</label>
                   <input

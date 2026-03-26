@@ -21,10 +21,10 @@ export default function ReturnRequest() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="flex flex-col bg-gray-50">
       <Header />
 
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-3xl">
+      <main className="min-h-[calc(100vh-80px)] flex-1 container mx-auto px-3 sm:px-4 py-4 sm:py-6 md:py-8 max-w-3xl">
         {/* Back button */}
         <Link
           to="/my-orders"
@@ -39,7 +39,7 @@ export default function ReturnRequest() {
           <div className="w-16 h-16 bg-lime-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Package className="h-8 w-8 text-lime-600" />
           </div>
-          <h1 className="text-3xl font-heading font-bold text-gray-900 uppercase italic mb-3">
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900 uppercase italic mb-3">
             Return & Refund
           </h1>
           <p className="text-gray-600 max-w-lg mx-auto">
@@ -55,7 +55,7 @@ export default function ReturnRequest() {
               Contact Us for Returns
             </h2>
 
-            <div className="grid gap-4 md:grid-cols-2 mb-6">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 mb-6">
               {/* WhatsApp - Primary */}
               <a
                 href={`https://wa.me/${whatsappNumber}?text=${whatsappMessage}`}

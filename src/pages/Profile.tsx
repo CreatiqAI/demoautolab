@@ -247,9 +247,9 @@ const Profile = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="bg-gray-50 flex flex-col">
         <Header />
-        <div className="flex items-center justify-center flex-1">
+        <div className="min-h-[calc(100vh-80px)] flex items-center justify-center flex-1">
           <div className="text-center">
             <User className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
             <p className="text-gray-500 text-sm">Loading profile...</p>
@@ -261,10 +261,10 @@ const Profile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="bg-gray-50 flex flex-col">
       <Header />
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1">
+      <main className="min-h-[calc(100vh-80px)] container mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8 flex-1">
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
@@ -280,7 +280,7 @@ const Profile = () => {
             <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-2xl p-5 md:p-6 shadow-lg mb-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 md:w-16 md:h-16 bg-lime-600 rounded-xl flex items-center justify-center text-white font-heading font-bold text-xl md:text-2xl italic">
+                  <div className="w-11 h-11 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-lime-600 rounded-xl flex items-center justify-center text-white font-heading font-bold text-lg sm:text-xl md:text-2xl italic">
                     {profile.full_name?.charAt(0).toUpperCase() || 'U'}
                   </div>
                   <div>

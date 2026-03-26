@@ -18,10 +18,10 @@ import {
 
 export default function ReturnPolicy() {
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="flex flex-col bg-gray-50">
       <Header />
 
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
+      <main className="min-h-[calc(100vh-80px)] flex-1 container mx-auto px-3 sm:px-4 py-4 sm:py-6 md:py-8 max-w-4xl">
         {/* Back button */}
         <Link
           to="/catalog"
@@ -33,7 +33,7 @@ export default function ReturnPolicy() {
 
         {/* Header */}
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-heading font-bold text-gray-900 uppercase italic mb-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-heading font-bold text-gray-900 uppercase italic mb-4">
             Return & Refund Policy
           </h1>
           <p className="text-gray-600 max-w-2xl mx-auto">
@@ -43,7 +43,7 @@ export default function ReturnPolicy() {
         </div>
 
         {/* Quick summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <Card className="text-center">
             <CardContent className="pt-6">
               <div className="w-12 h-12 bg-lime-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -173,7 +173,7 @@ export default function ReturnPolicy() {
                 Refund Options
               </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 border rounded-lg">
                   <h4 className="font-semibold text-gray-900 mb-2">Full Refund</h4>
                   <p className="text-sm text-gray-600 mb-2">
@@ -310,7 +310,7 @@ export default function ReturnPolicy() {
                 please don't hesitate to contact us.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <a
                   href="https://wa.me/60342977668?text=Hi%2C%20I%20need%20help%20with%20a%20return."
                   target="_blank"
