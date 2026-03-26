@@ -12,9 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
+import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
 
 interface ComponentSearchResult {
   id: string;
@@ -61,7 +62,8 @@ interface ProductFormData {
   slug: string;
   active: boolean;
   featured: boolean;
-  images: Array<{ url: string; is_primary: boolean; alt_text?: string }>;
+  images: Array<{ url: string; is_primary: boolean; alt_text?: string; media_type?: 'image' | 'video' }>;
+  videos: Array<{ url: string; alt_text?: string }>;
   selectedComponents: SelectedComponent[];
   installation: InstallationFormData;
 }
@@ -71,6 +73,22 @@ interface Category {
   name: string;
   description?: string;
   active: boolean;
+}
+
+function formatTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return date.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
 }
 
 const SCREEN_SIZES = [
@@ -116,6 +134,7 @@ export default function ProductsPro() {
     active: true,
     featured: false,
     images: [],
+    videos: [],
     selectedComponents: [],
     installation: {
       has_installation_guide: false,
@@ -201,7 +220,7 @@ export default function ProductsPro() {
             id
           )
         `)
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false, nullsFirst: false });
 
       // If the join fails, try without category join
       if (error) {
@@ -213,7 +232,7 @@ export default function ProductsPro() {
               id
             )
           `)
-          .order('created_at', { ascending: false });
+          .order('updated_at', { ascending: false, nullsFirst: false });
 
         data = fallbackResult.data;
         error = fallbackResult.error;
@@ -465,19 +484,30 @@ export default function ProductsPro() {
           .eq('product_id', product.id);
       }
 
-      if (formData.images.length > 0) {
-        const imageInserts = formData.images.map((image, index) => ({
+      const allMedia = [
+        ...formData.images.map((image, index) => ({
           product_id: product.id,
           url: image.url,
           alt_text: image.alt_text,
           is_primary: image.is_primary,
-          sort_order: index
-        }));
+          sort_order: index,
+          media_type: 'image' as const
+        })),
+        ...formData.videos.map((video, index) => ({
+          product_id: product.id,
+          url: video.url,
+          alt_text: video.alt_text,
+          is_primary: false,
+          sort_order: formData.images.length + index,
+          media_type: 'video' as const
+        }))
+      ];
 
+      if (allMedia.length > 0) {
         const { error: imageError } = await supabase
           .from('product_images_new' as any)
-          .insert(imageInserts);
-        
+          .insert(allMedia);
+
         if (imageError) throw imageError;
       }
 
@@ -566,6 +596,7 @@ export default function ProductsPro() {
       active: true,
       featured: false,
       images: [],
+      videos: [],
       selectedComponents: [],
       installation: {
         has_installation_guide: false,
@@ -616,12 +647,21 @@ export default function ProductsPro() {
         selected: true
       })) || [];
 
-      // Format images for the form
-      const formattedImages = (productImages as any)?.map((img: any) => ({
-        url: img.url,
-        is_primary: img.is_primary || false,
-        alt_text: img.alt_text || ''
-      })) || [];
+      // Format images and videos for the form (split by media_type)
+      const allMedia = (productImages as any) || [];
+      const formattedImages = allMedia
+        .filter((img: any) => img.media_type !== 'video')
+        .map((img: any) => ({
+          url: img.url,
+          is_primary: img.is_primary || false,
+          alt_text: img.alt_text || ''
+        }));
+      const formattedVideos = allMedia
+        .filter((img: any) => img.media_type === 'video')
+        .map((v: any) => ({
+          url: v.url,
+          alt_text: v.alt_text || ''
+        }));
 
       // Format installation data
       const installationFormData: InstallationFormData = installationData ? {
@@ -655,6 +695,7 @@ export default function ProductsPro() {
         active: product.active ?? true,
         featured: product.featured ?? false,
         images: formattedImages,
+        videos: formattedVideos,
         selectedComponents: components,
         installation: installationFormData
       });
@@ -767,8 +808,8 @@ export default function ProductsPro() {
                       <span className="ml-1">({formData.selectedComponents.length})</span>
                     </TabsTrigger>
                     <TabsTrigger value="images" className="text-xs sm:text-sm px-1 sm:px-3">
-                      <span className="hidden sm:inline">Product Images</span>
-                      <span className="sm:hidden">Images</span>
+                      <span className="hidden sm:inline">Images & Videos</span>
+                      <span className="sm:hidden">Media</span>
                     </TabsTrigger>
                     <TabsTrigger value="installation" className="text-xs sm:text-sm px-1 sm:px-3">
                       <Wrench className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
@@ -1305,6 +1346,117 @@ export default function ProductsPro() {
                       </div>
                       <p className="text-[10px] text-gray-400 mt-1">Select multiple files (Ctrl+Click) or paste a URL and press Enter</p>
                     </div>
+
+                    {/* Product Videos Section */}
+                    <div className="mt-6 pt-4 border-t">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                          <Play className="h-4 w-4" />
+                          Product Videos
+                        </h3>
+                        <span className="text-xs text-gray-400">{formData.videos.length}/3 uploaded</span>
+                      </div>
+
+                      {/* Video Grid */}
+                      <div className="grid grid-cols-3 gap-3 mb-3">
+                        {formData.videos.map((video, index) => (
+                          <div key={index} className="relative group aspect-video rounded-lg border overflow-hidden bg-gray-900">
+                            {isEmbeddableUrl(video.url) ? (
+                              <iframe
+                                src={getEmbedUrl(video.url)!}
+                                className="w-full h-full"
+                                allowFullScreen
+                              />
+                            ) : (
+                              <video
+                                src={video.url}
+                                className="w-full h-full object-contain"
+                                preload="metadata"
+                              />
+                            )}
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newVideos = formData.videos.filter((_, i) => i !== index);
+                                  setFormData(prev => ({ ...prev, videos: newVideos }));
+                                }}
+                                className="p-1 bg-red-500 rounded-full text-white hover:bg-red-600"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                            <div className="absolute bottom-1 left-1">
+                              <span className="text-[8px] bg-black/70 text-white px-1 rounded flex items-center gap-0.5">
+                                <Play className="h-2 w-2" /> Video
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {formData.videos.length < 3 && (
+                          <label className="aspect-video rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center cursor-pointer transition-colors bg-gray-50/50">
+                            <Video className="h-5 w-5 text-gray-300 mb-1" />
+                            <span className="text-[9px] text-gray-400">Upload Video</span>
+                            <input
+                              type="file"
+                              accept="video/mp4,video/webm,video/quicktime"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                if (file.size > 100 * 1024 * 1024) {
+                                  toast({ title: 'Video too large', description: 'Max 100MB per video', variant: 'destructive' });
+                                  return;
+                                }
+                                try {
+                                  const fileExt = file.name.split('.').pop() || 'mp4';
+                                  const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+                                  const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
+                                  if (error) throw error;
+                                  const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    videos: [...prev.videos, { url: publicUrl, alt_text: `${prev.name} - Video ${prev.videos.length + 1}` }]
+                                  }));
+                                  toast({ title: 'Video uploaded', description: `${file.name} uploaded successfully` });
+                                } catch (err: any) {
+                                  toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                }
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+
+                      {/* Video URL Input */}
+                      {formData.videos.length < 3 && (
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Paste video URL (YouTube, Vimeo, or direct .mp4) and press Enter..."
+                            className="text-xs h-8 border-gray-900"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const url = (e.target as HTMLInputElement).value.trim();
+                                if (!url) return;
+                                if (formData.videos.length >= 3) {
+                                  toast({ title: 'Max 3 videos', description: 'Remove a video first', variant: 'destructive' });
+                                  return;
+                                }
+                                setFormData(prev => ({
+                                  ...prev,
+                                  videos: [...prev.videos, { url, alt_text: `${prev.name} - Video ${prev.videos.length + 1}` }]
+                                }));
+                                (e.target as HTMLInputElement).value = '';
+                                toast({ title: 'Video added', description: isEmbeddableUrl(url) ? 'YouTube/Vimeo video added' : 'Video URL added' });
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-gray-400 mt-1">Upload video files (MP4, WebM, MOV — max 100MB) or paste YouTube/Vimeo URLs</p>
+                    </div>
                   </TabsContent>
 
                   {/* Installation Guide */}
@@ -1616,6 +1768,7 @@ export default function ProductsPro() {
                     <TableHead>Size</TableHead>
                     <TableHead>Components</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Last Edited</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1663,6 +1816,16 @@ export default function ProductsPro() {
                           </Badge>
                           {product.featured && <Badge variant="outline">Featured</Badge>}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {product.updated_at ? (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground" title={new Date(product.updated_at).toLocaleString()}>
+                            <Clock className="h-3.5 w-3.5" />
+                            {formatTimeAgo(product.updated_at)}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
