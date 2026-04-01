@@ -112,6 +112,8 @@ export default function ProductsPro() {
   const [loading, setLoading] = useState(true);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [mediaDragIndex, setMediaDragIndex] = useState<number | null>(null);
+  const [mediaDragOverIndex, setMediaDragOverIndex] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [brandFilter, setBrandFilter] = useState('all-brands');
@@ -406,10 +408,6 @@ export default function ProductsPro() {
       ...prev,
       selectedComponents: [...prev.selectedComponents, newComponent]
     }));
-
-    // Clear search
-    setSearchTerm('');
-    setSearchResults([]);
 
     toast({
       title: "Component Added",
@@ -1205,9 +1203,31 @@ export default function ProductsPro() {
                           const media = formData.images[index];
                           const isVideo = media?.media_type === 'video';
                           return (
-                            <div key={index} className="relative">
+                            <div
+                              key={index}
+                              className="relative"
+                              onDragOver={(e) => { if (mediaDragIndex !== null) { e.preventDefault(); setMediaDragOverIndex(index); } }}
+                              onDragLeave={() => setMediaDragOverIndex(null)}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                if (mediaDragIndex === null || mediaDragIndex === index) { setMediaDragIndex(null); setMediaDragOverIndex(null); return; }
+                                setFormData(prev => {
+                                  const items = [...prev.images];
+                                  const [moved] = items.splice(mediaDragIndex, 1);
+                                  items.splice(index > mediaDragIndex ? index - (index >= items.length + 1 ? 1 : 0) : index, 0, moved);
+                                  return { ...prev, images: items.map((img, i) => ({ ...img, is_primary: i === 0 })) };
+                                });
+                                setMediaDragIndex(null);
+                                setMediaDragOverIndex(null);
+                              }}
+                            >
                               {media?.url ? (
-                                <div className="relative group aspect-square rounded-lg border overflow-hidden bg-gray-50">
+                                <div
+                                  className={`relative group aspect-square rounded-lg border overflow-hidden bg-gray-50 cursor-grab active:cursor-grabbing ${mediaDragIndex === index ? 'opacity-40' : ''} ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400' : ''}`}
+                                  draggable
+                                  onDragStart={() => setMediaDragIndex(index)}
+                                  onDragEnd={() => { setMediaDragIndex(null); setMediaDragOverIndex(null); }}
+                                >
                                   {isVideo ? (
                                     isEmbeddableUrl(media.url) ? (
                                       <iframe src={getEmbedUrl(media.url)!} className="w-full h-full" allowFullScreen />
@@ -1240,7 +1260,7 @@ export default function ProductsPro() {
                                   )}
                                 </div>
                               ) : (
-                                <div className="aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50">
+                                <div className={`aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50 ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400 border-lime-400' : ''}`}>
                                   <div className="flex gap-1">
                                     <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload image">
                                       <Upload className="h-4 w-4 text-gray-400" />
@@ -1317,9 +1337,31 @@ export default function ProductsPro() {
                           const media = formData.images[index];
                           const isVideo = media?.media_type === 'video';
                           return (
-                            <div key={index} className="relative">
+                            <div
+                              key={index}
+                              className="relative"
+                              onDragOver={(e) => { if (mediaDragIndex !== null) { e.preventDefault(); setMediaDragOverIndex(index); } }}
+                              onDragLeave={() => setMediaDragOverIndex(null)}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                if (mediaDragIndex === null || mediaDragIndex === index) { setMediaDragIndex(null); setMediaDragOverIndex(null); return; }
+                                setFormData(prev => {
+                                  const items = [...prev.images];
+                                  const [moved] = items.splice(mediaDragIndex, 1);
+                                  items.splice(index > mediaDragIndex ? index - (index >= items.length + 1 ? 1 : 0) : index, 0, moved);
+                                  return { ...prev, images: items.map((img, i) => ({ ...img, is_primary: i === 0 })) };
+                                });
+                                setMediaDragIndex(null);
+                                setMediaDragOverIndex(null);
+                              }}
+                            >
                               {media?.url ? (
-                                <div className="relative group aspect-square rounded-lg border overflow-hidden bg-gray-50">
+                                <div
+                                  className={`relative group aspect-square rounded-lg border overflow-hidden bg-gray-50 cursor-grab active:cursor-grabbing ${mediaDragIndex === index ? 'opacity-40' : ''} ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400' : ''}`}
+                                  draggable
+                                  onDragStart={() => setMediaDragIndex(index)}
+                                  onDragEnd={() => { setMediaDragIndex(null); setMediaDragOverIndex(null); }}
+                                >
                                   {isVideo ? (
                                     isEmbeddableUrl(media.url) ? (
                                       <iframe src={getEmbedUrl(media.url)!} className="w-full h-full" allowFullScreen />
@@ -1351,7 +1393,7 @@ export default function ProductsPro() {
                                   )}
                                 </div>
                               ) : (
-                                <div className="aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50">
+                                <div className={`aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50 ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400 border-lime-400' : ''}`}>
                                   <div className="flex gap-1">
                                     <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload image">
                                       <Upload className="h-4 w-4 text-gray-400" />
