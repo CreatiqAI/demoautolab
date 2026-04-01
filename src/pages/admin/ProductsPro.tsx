@@ -32,6 +32,7 @@ interface ComponentSearchResult {
 
 interface SelectedComponent extends ComponentSearchResult {
   selected: boolean;
+  remark?: string;
 }
 
 interface InstallationVideoForm {
@@ -395,7 +396,8 @@ export default function ProductsPro() {
 
     const newComponent: SelectedComponent = {
       ...component,
-      selected: true
+      selected: true,
+      remark: ''
     };
 
     setFormData(prev => ({
@@ -520,7 +522,8 @@ export default function ProductsPro() {
             component_id: comp.id,
             is_required: false,
             is_default: i === 0,
-            display_order: i
+            display_order: i,
+            remark: comp.remark || null
           }]);
 
         if (linkError) {
@@ -607,6 +610,7 @@ export default function ProductsPro() {
       const { data: productComponents, error: compError } = await supabase
         .from('product_components' as any)
         .select(`
+          remark,
           component_library!inner(
             id, component_sku, name, description, component_type,
             stock_level, normal_price, merchant_price, default_image_url
@@ -631,7 +635,8 @@ export default function ProductsPro() {
 
       const components = (productComponents as any)?.map((pc: any) => ({
         ...pc.component_library,
-        selected: true
+        selected: true,
+        remark: pc.remark || ''
       })) || [];
 
       // Format all media for the form (unified slots)
@@ -1112,7 +1117,7 @@ export default function ProductsPro() {
                                       <Package className="h-4 w-4 text-gray-400" />
                                     </div>
                                   )}
-                                  <div className="min-w-0">
+                                  <div className="min-w-0 flex-1">
                                     <div className="font-mono text-xs text-blue-600">{component.component_sku}</div>
                                     <div className="text-sm font-medium truncate">{component.name}</div>
                                     <div className="flex gap-1 mt-0.5 flex-wrap">
@@ -1120,6 +1125,22 @@ export default function ProductsPro() {
                                       <span className="text-[10px]">RM{component.normal_price}</span>
                                       <span className="text-[10px] text-muted-foreground">(cost: RM{component.merchant_price})</span>
                                     </div>
+                                    <input
+                                      type="text"
+                                      placeholder="Remark e.g. H Spec, X Spec"
+                                      value={component.remark || ''}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => {
+                                        const newRemark = e.target.value;
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          selectedComponents: prev.selectedComponents.map(c =>
+                                            c.id === component.id ? { ...c, remark: newRemark } : c
+                                          )
+                                        }));
+                                      }}
+                                      className="w-full text-xs border border-gray-200 rounded px-2 py-1 mt-1 text-gray-600 placeholder:text-gray-400 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30"
+                                    />
                                   </div>
                                 </div>
                                 <Button

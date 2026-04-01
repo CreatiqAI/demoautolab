@@ -29,6 +29,7 @@ interface ComponentData {
   normal_price: number;
   merchant_price: number;
   default_image_url?: string;
+  remark?: string;
 }
 
 interface CartItem {
@@ -189,6 +190,7 @@ const ProductDetails = () => {
       const { data: productComponentData, error: productComponentError } = await supabase
         .from('product_components' as any)
         .select(`
+          remark,
           component_library!inner(
             id, component_sku, name, description, component_type,
             stock_level, normal_price, merchant_price, default_image_url
@@ -218,7 +220,8 @@ const ProductDetails = () => {
           stock_level: component.stock_level || 0,
           normal_price: component.normal_price || 0,
           merchant_price: component.merchant_price || component.normal_price || 0,
-          default_image_url: component.default_image_url || null
+          default_image_url: component.default_image_url || null,
+          remark: pc.remark || null
         };
       });
 
@@ -595,6 +598,9 @@ const ProductDetails = () => {
                                     )}>
                                       {component.name}
                                     </h3>
+                                    {component.remark && (
+                                      <span className="text-xs text-amber-600 font-medium">{component.remark}</span>
+                                    )}
                                     <div className="flex items-center gap-2 mt-1">
                                       <span className="font-semibold text-primary">
                                         {formatPrice(price)}
