@@ -547,7 +547,7 @@ const ProductDetails = () => {
                     <p className="text-gray-500">No components available</p>
                   </div>
                 ) : (
-                  <div className="space-y-2.5 max-h-none md:max-h-[350px] overflow-y-auto pr-1 md:pr-2 custom-scrollbar">
+                  <div className="space-y-2.5 overflow-y-auto pr-1 md:pr-2 custom-scrollbar">
                     {components.map((component) => {
                       const quantity = getLocalCartQuantity(component.id);
                       const isExpanded = expandedComponent === component.id;

@@ -703,6 +703,7 @@ export default function ProductsPro() {
       const { data: productComponentData, error: compError } = await supabase
         .from('product_components' as any)
         .select(`
+          remark,
           component_library!inner(
             id, component_sku, name, description, component_type,
             stock_level, normal_price, merchant_price, default_image_url
@@ -731,7 +732,8 @@ export default function ProductsPro() {
           stock_level: component.stock_level || 0,
           normal_price: component.normal_price || 0,
           merchant_price: component.merchant_price || component.normal_price || 0,
-          default_image_url: component.default_image_url || null
+          default_image_url: component.default_image_url || null,
+          remark: item.remark || null
         };
       });
 
@@ -2077,6 +2079,9 @@ export default function ProductsPro() {
                           )}
                           <div className="flex-1">
                             <h4 className="font-medium">{component.name}</h4>
+                            {component.remark && (
+                              <span className="text-xs text-amber-600 font-medium">{component.remark}</span>
+                            )}
                             <p className="text-sm text-muted-foreground">{component.component_sku}</p>
                             <p className="text-xs text-muted-foreground mt-1">
                               Stock: {component.stock_level} available
