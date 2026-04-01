@@ -396,7 +396,7 @@ const ProductDetails = () => {
 
                 return (
                   <div
-                    className="relative w-full max-h-[300px] sm:max-h-[380px] md:max-h-[450px] bg-white group flex items-center justify-center overflow-hidden"
+                    className="relative w-full min-h-[55vw] sm:min-h-[45vw] lg:min-h-[28vw] max-h-[70vw] sm:max-h-[55vw] lg:max-h-[35vw] bg-white group flex items-center justify-center overflow-hidden"
                     {...(!isVideo ? { onClick: () => openLightbox(product.product_images.filter(img => img.media_type !== 'video').map(img => img.url), selectedImage), style: { cursor: 'pointer' } } : {})}
                   >
                     {isVideo ? (
