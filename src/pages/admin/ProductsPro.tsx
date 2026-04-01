@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
@@ -110,6 +110,8 @@ export default function ProductsPro() {
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [viewingImageInfo, setViewingImageInfo] = useState<{url: string, title: string} | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [brandFilter, setBrandFilter] = useState('all-brands');
@@ -1109,8 +1111,33 @@ export default function ProductsPro() {
                               </p>
                             </div>
                           ) : (
-                            formData.selectedComponents.map((component) => (
-                              <div key={component.id} className="flex items-center justify-between gap-2 px-3 py-2 border-b last:border-b-0 bg-white hover:bg-green-50/50">
+                            formData.selectedComponents.map((component, index) => (
+                              <div
+                                key={component.id}
+                                draggable
+                                onDragStart={() => setDragIndex(index)}
+                                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(index); }}
+                                onDragLeave={() => setDragOverIndex(null)}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  if (dragIndex === null || dragIndex === index) { setDragIndex(null); setDragOverIndex(null); return; }
+                                  setFormData(prev => {
+                                    const items = [...prev.selectedComponents];
+                                    const [moved] = items.splice(dragIndex, 1);
+                                    items.splice(index, 0, moved);
+                                    return { ...prev, selectedComponents: items };
+                                  });
+                                  setDragIndex(null);
+                                  setDragOverIndex(null);
+                                }}
+                                onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                                className={`flex items-center justify-between gap-1 px-2 py-2 border-b last:border-b-0 transition-colors ${
+                                  dragIndex === index ? 'opacity-40 bg-gray-100' : dragOverIndex === index ? 'bg-lime-50 border-t-2 border-t-lime-400' : 'bg-white hover:bg-green-50/50'
+                                }`}
+                              >
+                                <div className="cursor-grab active:cursor-grabbing flex-shrink-0 p-0.5 text-gray-300 hover:text-gray-500">
+                                  <GripVertical className="h-4 w-4" />
+                                </div>
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   {component.default_image_url ? (
                                     <img src={component.default_image_url} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
