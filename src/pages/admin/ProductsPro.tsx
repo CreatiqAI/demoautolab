@@ -1114,8 +1114,7 @@ export default function ProductsPro() {
                             formData.selectedComponents.map((component, index) => (
                               <div
                                 key={component.id}
-                                draggable
-                                onDragStart={() => setDragIndex(index)}
+                                draggable={dragIndex === index}
                                 onDragOver={(e) => { e.preventDefault(); setDragOverIndex(index); }}
                                 onDragLeave={() => setDragOverIndex(null)}
                                 onDrop={(e) => {
@@ -1135,7 +1134,11 @@ export default function ProductsPro() {
                                   dragIndex === index ? 'opacity-40 bg-gray-100' : dragOverIndex === index ? 'bg-lime-50 border-t-2 border-t-lime-400' : 'bg-white hover:bg-green-50/50'
                                 }`}
                               >
-                                <div className="cursor-grab active:cursor-grabbing flex-shrink-0 p-0.5 text-gray-300 hover:text-gray-500">
+                                <div
+                                  className="cursor-grab active:cursor-grabbing flex-shrink-0 p-0.5 text-gray-300 hover:text-gray-500"
+                                  onMouseDown={() => setDragIndex(index)}
+                                  onMouseUp={() => { if (!dragOverIndex && dragOverIndex !== 0) setDragIndex(null); }}
+                                >
                                   <GripVertical className="h-4 w-4" />
                                 </div>
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
