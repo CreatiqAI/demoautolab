@@ -396,7 +396,7 @@ const ProductDetails = () => {
 
                 return (
                   <div
-                    className="relative w-full bg-white group flex items-center justify-center overflow-hidden"
+                    className="relative w-full max-h-[300px] sm:max-h-[380px] md:max-h-[450px] bg-white group flex items-center justify-center overflow-hidden"
                     {...(!isVideo ? { onClick: () => openLightbox(product.product_images.filter(img => img.media_type !== 'video').map(img => img.url), selectedImage), style: { cursor: 'pointer' } } : {})}
                   >
                     {isVideo ? (
@@ -420,7 +420,7 @@ const ProductDetails = () => {
                         <img
                           src={currentMedia?.url || primaryImage?.url || '/placeholder.svg'}
                           alt={currentMedia?.alt_text || product.name}
-                          className="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-700"
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700"
                           loading="lazy"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
