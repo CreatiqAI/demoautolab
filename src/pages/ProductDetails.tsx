@@ -380,7 +380,7 @@ const ProductDetails = () => {
         <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6 md:mb-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
             {/* Left: Product Images */}
-            <div className="bg-[#fbfbfb] lg:border-r border-slate-100 flex flex-col justify-center select-none">
+            <div className="bg-white lg:border-r border-slate-100 flex flex-col select-none">
               {/* Main Image/Video */}
               {(() => {
                 const currentMedia = product.product_images[selectedImage];
@@ -396,21 +396,21 @@ const ProductDetails = () => {
 
                 return (
                   <div
-                    className="relative w-full aspect-square max-h-[280px] sm:max-h-[350px] md:max-h-[400px] bg-[#f8f8f8] group p-2 sm:p-3 md:p-4 flex items-center justify-center"
+                    className="relative w-full bg-white group flex items-center justify-center overflow-hidden"
                     {...(!isVideo ? { onClick: () => openLightbox(product.product_images.filter(img => img.media_type !== 'video').map(img => img.url), selectedImage), style: { cursor: 'pointer' } } : {})}
                   >
                     {isVideo ? (
                       embedUrl ? (
                         <iframe
                           src={embedUrl}
-                          className="w-full h-full rounded-lg"
+                          className="w-full aspect-video"
                           allowFullScreen
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         />
                       ) : (
                         <video
                           src={currentMedia?.url}
-                          className="w-full h-full object-contain rounded-lg"
+                          className="w-full aspect-video object-contain"
                           controls
                           preload="metadata"
                         />
@@ -420,7 +420,7 @@ const ProductDetails = () => {
                         <img
                           src={currentMedia?.url || primaryImage?.url || '/placeholder.svg'}
                           alt={currentMedia?.alt_text || product.name}
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700"
+                          className="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-700"
                           loading="lazy"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
@@ -428,8 +428,8 @@ const ProductDetails = () => {
                           }}
                         />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
-                        <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                          <Eye className="h-5 w-5 text-gray-700" />
+                        <div className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                          <Eye className="h-4 w-4 text-gray-700" />
                         </div>
                       </>
                     )}
