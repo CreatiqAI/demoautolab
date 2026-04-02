@@ -616,7 +616,8 @@ export default function ProductsPro() {
             stock_level, normal_price, merchant_price, default_image_url
           )
         `)
-        .eq('product_id', product.id);
+        .eq('product_id', product.id)
+        .order('display_order', { ascending: true });
 
       // Fetch product images
       const { data: productImages, error: imgError } = await supabase
