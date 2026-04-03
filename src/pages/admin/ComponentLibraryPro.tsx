@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
-import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock, RotateCcw, AlertTriangle, Copy } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock, RotateCcw, AlertTriangle, Copy, ChevronUp } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -69,6 +69,7 @@ export default function ComponentLibraryPro() {
   const [stockAdjustment, setStockAdjustment] = useState({ type: 'add', quantity: 0, reason: '' });
   const [batchDeleteIds, setBatchDeleteIds] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
+  const [batchBarExpanded, setBatchBarExpanded] = useState(false);
   const [deletedComponents, setDeletedComponents] = useState<ComponentItem[]>([]);
   const [activeTab, setActiveTab] = useState('active');
   const [duplicateSkus, setDuplicateSkus] = useState<{sku: string; count: number; items: ComponentItem[]}[]>([]);
@@ -1100,17 +1101,56 @@ export default function ComponentLibraryPro() {
 
       {/* Sticky Batch Delete Bar */}
       {batchDeleteIds.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] px-6 py-3">
-          <div className="container mx-auto flex items-center justify-between">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
+          {/* Expandable preview panel */}
+          {batchBarExpanded && (
+            <div className="border-b border-gray-100 max-h-[40vh] overflow-y-auto">
+              <div className="container mx-auto px-6 py-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {components.filter(c => batchDeleteIds.has(c.id)).map((component) => (
+                    <div key={component.id} className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      {component.default_image_url ? (
+                        <img src={component.default_image_url} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0 text-xs">📦</div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-mono text-red-600">{component.component_sku}</p>
+                        <p className="text-sm font-medium truncate">{component.name}</p>
+                      </div>
+                      <button
+                        onClick={() => setBatchDeleteIds(prev => {
+                          const next = new Set(prev);
+                          next.delete(component.id);
+                          return next;
+                        })}
+                        className="text-gray-400 hover:text-red-500 flex-shrink-0"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Action bar */}
+          <div className="container mx-auto px-6 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-700">{batchDeleteIds.size} component{batchDeleteIds.size !== 1 ? 's' : ''} selected</span>
+              <button
+                onClick={() => setBatchBarExpanded(!batchBarExpanded)}
+                className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900"
+              >
+                <ChevronUp className={`h-4 w-4 transition-transform ${batchBarExpanded ? 'rotate-180' : ''}`} />
+                {batchDeleteIds.size} component{batchDeleteIds.size !== 1 ? 's' : ''} selected
+              </button>
               <Button
                 size="sm"
                 variant="ghost"
                 className="text-xs text-gray-500"
-                onClick={() => setBatchDeleteIds(new Set())}
+                onClick={() => { setBatchDeleteIds(new Set()); setBatchBarExpanded(false); }}
               >
-                Clear Selection
+                Clear
               </Button>
             </div>
             <Button
