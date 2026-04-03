@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
-import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock, RotateCcw, AlertTriangle, Copy, ChevronUp } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock, RotateCcw, AlertTriangle, Copy, ChevronUp, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
