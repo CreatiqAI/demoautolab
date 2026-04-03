@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
@@ -1238,17 +1238,31 @@ export default function ProductsPro() {
                                   ) : (
                                     <img src={media.url} alt={`Media ${index + 1}`} className="w-full h-full object-cover" />
                                   )}
-                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                                    {!isVideo && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setViewingImage(media.url);
+                                          setViewingImageInfo({ url: media.url, title: `Product Image ${index + 1}` });
+                                        }}
+                                        className="p-1.5 bg-white/90 rounded-full text-gray-700 hover:bg-white"
+                                      >
+                                        <Eye className="h-3 w-3" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
-                                      onClick={() => {
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         const newImages = formData.images.filter((_, i) => i !== index);
                                         if (newImages.length > 0 && !newImages.some(img => img.is_primary)) {
                                           newImages[0] = { ...newImages[0], is_primary: true };
                                         }
                                         setFormData(prev => ({ ...prev, images: newImages }));
                                       }}
-                                      className="p-1 bg-red-500 rounded-full text-white hover:bg-red-600"
+                                      className="p-1.5 bg-red-500 rounded-full text-white hover:bg-red-600"
                                     >
                                       <X className="h-3 w-3" />
                                     </button>
@@ -1372,17 +1386,31 @@ export default function ProductsPro() {
                                   ) : (
                                     <img src={media.url} alt={`Media ${index + 1}`} className="w-full h-full object-cover" />
                                   )}
-                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                                    {!isVideo && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setViewingImage(media.url);
+                                          setViewingImageInfo({ url: media.url, title: `Product Image ${index + 1}` });
+                                        }}
+                                        className="p-1.5 bg-white/90 rounded-full text-gray-700 hover:bg-white"
+                                      >
+                                        <Eye className="h-3 w-3" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
-                                      onClick={() => {
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         const newImages = formData.images.filter((_, i) => i !== index);
                                         if (newImages.length > 0 && !newImages.some(img => img.is_primary)) {
                                           newImages[0] = { ...newImages[0], is_primary: true };
                                         }
                                         setFormData(prev => ({ ...prev, images: newImages }));
                                       }}
-                                      className="p-1 bg-red-500 rounded-full text-white hover:bg-red-600"
+                                      className="p-1.5 bg-red-500 rounded-full text-white hover:bg-red-600"
                                     >
                                       <X className="h-3 w-3" />
                                     </button>
