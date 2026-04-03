@@ -12,6 +12,7 @@ import ImageUpload from '@/components/ui/image-upload';
 import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface ComponentItem {
   id: string;
@@ -65,6 +66,8 @@ export default function ComponentLibraryPro() {
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
   const [selectedComponent, setSelectedComponent] = useState<ComponentItem | null>(null);
   const [stockAdjustment, setStockAdjustment] = useState({ type: 'add', quantity: 0, reason: '' });
+  const [batchDeleteIds, setBatchDeleteIds] = useState<Set<string>>(new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -323,22 +326,27 @@ export default function ComponentLibraryPro() {
   };
 
 
+  const removeFromLocalState = (deletedId: string) => {
+    setComponents(prev => prev.filter(c => c.id !== deletedId));
+    setSearchResults(prev => prev.filter(c => c.id !== deletedId));
+  };
+
   const handleDelete = async (id: string, sku: string) => {
     if (!confirm(`Are you sure you want to PERMANENTLY DELETE component "${sku}"? This action cannot be undone.`)) return;
 
     try {
-      
+
       // Try using the hard delete function first
       const { data: functionData, error: functionError } = await (supabase.rpc as any)('delete_component', { component_id: id });
 
       if (!functionError && functionData) {
-        
+
         if (functionData.success) {
           toast({
             title: "Success",
             description: functionData.message || "Component permanently deleted"
           });
-          fetchComponents();
+          removeFromLocalState(id);
           return;
         } else {
           // If safe delete fails due to usage, offer force delete option
@@ -354,7 +362,7 @@ export default function ComponentLibraryPro() {
                 description: forceData.message,
                 variant: "destructive"
               });
-              fetchComponents();
+              removeFromLocalState(id);
               return;
             } else {
               throw new Error(forceData?.message || forceError?.message || 'Force delete failed');
@@ -382,11 +390,11 @@ export default function ComponentLibraryPro() {
       
       // Success! The direct delete worked
       toast({
-        title: "Success", 
+        title: "Success",
         description: "Component permanently deleted"
       });
-      
-      fetchComponents();
+
+      removeFromLocalState(id);
     } catch (error: any) {
       
       let errorMessage = "Failed to delete component";
@@ -408,6 +416,44 @@ export default function ComponentLibraryPro() {
         variant: "destructive"
       });
     }
+  };
+
+  const handleBatchDelete = async () => {
+    const ids = Array.from(batchDeleteIds);
+    if (ids.length === 0) return;
+    if (!confirm(`Are you sure you want to PERMANENTLY DELETE ${ids.length} component${ids.length > 1 ? 's' : ''}? This action cannot be undone.`)) return;
+
+    setBatchDeleting(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const id of ids) {
+      try {
+        const { data: functionData, error: functionError } = await (supabase.rpc as any)('delete_component', { component_id: id });
+        if (!functionError && functionData?.success) {
+          successCount++;
+        } else {
+          // Fallback: direct delete
+          const { error } = await supabase.from('component_library' as any).delete().eq('id', id);
+          if (!error) successCount++;
+          else failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    // Remove deleted items from local state (no page refresh/scroll reset)
+    setComponents(prev => prev.filter(c => !batchDeleteIds.has(c.id)));
+    setSearchResults(prev => prev.filter(c => !batchDeleteIds.has(c.id)));
+    setBatchDeleteIds(new Set());
+    setBatchDeleting(false);
+
+    toast({
+      title: failCount === 0 ? 'Success' : 'Partial Success',
+      description: `${successCount} component${successCount !== 1 ? 's' : ''} deleted${failCount > 0 ? `, ${failCount} failed` : ''}`,
+      variant: failCount > 0 ? 'destructive' : 'default'
+    });
   };
 
   const resetForm = () => {
@@ -643,8 +689,22 @@ export default function ComponentLibraryPro() {
 
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Components</CardTitle>
+          <div className="flex justify-between items-center gap-3">
+            <div className="flex items-center gap-3">
+              <CardTitle>Components</CardTitle>
+              {batchDeleteIds.size > 0 && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleBatchDelete}
+                  disabled={batchDeleting}
+                  className="h-8"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  {batchDeleting ? 'Deleting...' : `Delete ${batchDeleteIds.size} Selected`}
+                </Button>
+              )}
+            </div>
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -664,6 +724,18 @@ export default function ComponentLibraryPro() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={searchResults.length > 0 && searchResults.every(c => batchDeleteIds.has(c.id))}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setBatchDeleteIds(new Set(searchResults.map(c => c.id)));
+                        } else {
+                          setBatchDeleteIds(new Set());
+                        }
+                      }}
+                    />
+                  </TableHead>
                   <TableHead>Image</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Name</TableHead>
@@ -680,7 +752,20 @@ export default function ComponentLibraryPro() {
                 {searchResults.map((component) => {
                   const typeIcon = getTypeIcon(component.component_type);
                   return (
-                    <TableRow key={component.id}>
+                    <TableRow key={component.id} className={batchDeleteIds.has(component.id) ? 'bg-red-50/50' : ''}>
+                      <TableCell>
+                        <Checkbox
+                          checked={batchDeleteIds.has(component.id)}
+                          onCheckedChange={(checked) => {
+                            setBatchDeleteIds(prev => {
+                              const next = new Set(prev);
+                              if (checked) next.add(component.id);
+                              else next.delete(component.id);
+                              return next;
+                            });
+                          }}
+                        />
+                      </TableCell>
                       <TableCell>
                         {component.default_image_url ? (
                           <img
