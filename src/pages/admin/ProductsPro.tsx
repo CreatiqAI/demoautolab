@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye, RotateCcw } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye, RotateCcw, AlertTriangle, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
@@ -101,6 +101,8 @@ export default function ProductsPro() {
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [deletedProducts, setDeletedProducts] = useState<any[]>([]);
+  const [productListTab, setProductListTab] = useState('active');
+  const [duplicateProducts, setDuplicateProducts] = useState<{name: string; count: number; items: any[]}[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
@@ -245,8 +247,23 @@ export default function ProductsPro() {
 
       if (error) throw error;
 
-      setProducts((data as any) || []);
-      setFilteredProducts((data as any) || []);
+      const productList = (data as any) || [];
+      setProducts(productList);
+      setFilteredProducts(productList);
+
+      // Detect duplicate product names/slugs
+      const nameMap = new Map<string, any[]>();
+      productList.forEach((p: any) => {
+        const key = (p.slug || p.name || '').toLowerCase().trim();
+        if (!key) return;
+        if (!nameMap.has(key)) nameMap.set(key, []);
+        nameMap.get(key)!.push(p);
+      });
+      setDuplicateProducts(
+        Array.from(nameMap.entries())
+          .filter(([, items]) => items.length > 1)
+          .map(([, items]) => ({ name: items[0].name, count: items.length, items }))
+      );
     } catch (error: any) {
       toast({
         title: "Error",
@@ -2046,6 +2063,22 @@ export default function ProductsPro() {
       </div>
 
       {/* Products List */}
+      <Tabs value={productListTab} onValueChange={setProductListTab}>
+        <TabsList>
+          <TabsTrigger value="active">Active ({filteredProducts.length})</TabsTrigger>
+          <TabsTrigger value="deleted" className="gap-1.5">
+            <Trash2 className="h-3.5 w-3.5" />
+            Recently Deleted ({deletedProducts.length})
+          </TabsTrigger>
+          {duplicateProducts.length > 0 && (
+            <TabsTrigger value="duplicates" className="gap-1.5 text-amber-600">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Duplicates ({duplicateProducts.length})
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="active">
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -2216,55 +2249,105 @@ export default function ProductsPro() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
 
-      {/* Recently Deleted Products */}
-      {deletedProducts.length > 0 && (
-        <Card className="border-dashed">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Trash2 className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Recently Deleted ({deletedProducts.length})</CardTitle>
-            </div>
-            <CardDescription>Products that have been soft-deleted. Restore or permanently remove them.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Brand / Model</TableHead>
-                  <TableHead>Deleted</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {deletedProducts.map((product) => (
-                  <TableRow key={product.id} className="opacity-60">
-                    <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{product.brand} {product.model}</TableCell>
-                    <TableCell>
-                      {product.updated_at && (
-                        <span className="text-sm text-muted-foreground">{formatTimeAgo(product.updated_at)}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="outline" onClick={() => handleRestoreProduct(product)}>
-                          <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                          Restore
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => handlePermanentDeleteProduct(product)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+        <TabsContent value="deleted">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recently Deleted Products</CardTitle>
+              <CardDescription>Products that have been soft-deleted. Restore or permanently remove them.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {deletedProducts.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Trash2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p>No recently deleted products</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product Name</TableHead>
+                      <TableHead>Brand / Model</TableHead>
+                      <TableHead>Deleted</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deletedProducts.map((product) => (
+                      <TableRow key={product.id} className="opacity-60">
+                        <TableCell className="font-medium">{product.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{product.brand} {product.model}</TableCell>
+                        <TableCell>
+                          {product.updated_at && (
+                            <span className="text-sm text-muted-foreground">{formatTimeAgo(product.updated_at)}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline" onClick={() => handleRestoreProduct(product)}>
+                              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                              Restore
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => handlePermanentDeleteProduct(product)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {duplicateProducts.length > 0 && (
+          <TabsContent value="duplicates">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  Duplicate Products
+                </CardTitle>
+                <CardDescription>Products with identical slugs/names. Review and resolve duplicates.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {duplicateProducts.map(({ name, count, items }) => (
+                    <div key={name} className="border border-amber-200 bg-amber-50/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Copy className="h-4 w-4 text-amber-600" />
+                        <span className="font-medium text-amber-800">{name}</span>
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-700">{count} duplicates</Badge>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+                      <div className="space-y-2">
+                        {items.map((product) => (
+                          <div key={product.id} className="flex items-center justify-between bg-white rounded-md px-3 py-2 border">
+                            <div>
+                              <p className="text-sm font-medium">{product.name}</p>
+                              <p className="text-xs text-muted-foreground">{product.brand} {product.model} · Slug: {product.slug}</p>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="ghost" onClick={() => handleEditProduct(product)}>
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-red-500" onClick={() => handleSoftDeleteProduct(product)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
 
       {/* Product Preview Dialog */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
