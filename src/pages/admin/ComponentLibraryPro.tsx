@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
-import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock, RotateCcw, AlertTriangle, Copy } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -68,6 +69,9 @@ export default function ComponentLibraryPro() {
   const [stockAdjustment, setStockAdjustment] = useState({ type: 'add', quantity: 0, reason: '' });
   const [batchDeleteIds, setBatchDeleteIds] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
+  const [deletedComponents, setDeletedComponents] = useState<ComponentItem[]>([]);
+  const [activeTab, setActiveTab] = useState('active');
+  const [duplicateSkus, setDuplicateSkus] = useState<{sku: string; count: number; items: ComponentItem[]}[]>([]);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -86,6 +90,7 @@ export default function ComponentLibraryPro() {
   useEffect(() => {
     fetchComponents();
     fetchComponentTypes();
+    fetchDeletedComponents();
   }, []);
 
   const fetchComponentTypes = async () => {
@@ -103,6 +108,34 @@ export default function ComponentLibraryPro() {
       setComponentTypes(uniqueTypes);
     } catch (error: any) {
     }
+  };
+
+  const fetchDeletedComponents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('component_library' as any)
+        .select('*')
+        .eq('is_active', false)
+        .order('updated_at', { ascending: false, nullsFirst: false });
+
+      if (error) throw error;
+      setDeletedComponents((data as any) || []);
+    } catch {
+      // Table might not have inactive rows
+    }
+  };
+
+  const detectDuplicateSkus = (items: ComponentItem[]) => {
+    const skuMap = new Map<string, ComponentItem[]>();
+    items.forEach(item => {
+      const sku = item.component_sku.toLowerCase().trim();
+      if (!skuMap.has(sku)) skuMap.set(sku, []);
+      skuMap.get(sku)!.push(item);
+    });
+    const dupes = Array.from(skuMap.entries())
+      .filter(([, items]) => items.length > 1)
+      .map(([sku, items]) => ({ sku: items[0].component_sku, count: items.length, items }));
+    setDuplicateSkus(dupes);
   };
 
   // Debounced search effect
@@ -163,6 +196,7 @@ export default function ComponentLibraryPro() {
 
       setComponents(componentsWithUsage as any);
       setSearchResults(componentsWithUsage as any);
+      detectDuplicateSkus(componentsWithUsage as any);
 
     } catch (error: any) {
       toast({
@@ -326,95 +360,66 @@ export default function ComponentLibraryPro() {
   };
 
 
-  const removeFromLocalState = (deletedId: string) => {
-    setComponents(prev => prev.filter(c => c.id !== deletedId));
-    setSearchResults(prev => prev.filter(c => c.id !== deletedId));
+  const softDeleteComponent = async (id: string) => {
+    const { error } = await supabase
+      .from('component_library' as any)
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    return error;
   };
 
   const handleDelete = async (id: string, sku: string) => {
-    if (!confirm(`Are you sure you want to PERMANENTLY DELETE component "${sku}"? This action cannot be undone.`)) return;
+    if (!confirm(`Delete component "${sku}"? It will be moved to Recently Deleted.`)) return;
 
     try {
+      const error = await softDeleteComponent(id);
+      if (error) throw error;
 
-      // Try using the hard delete function first
-      const { data: functionData, error: functionError } = await (supabase.rpc as any)('delete_component', { component_id: id });
+      // Move to deleted list locally
+      const deleted = components.find(c => c.id === id);
+      if (deleted) setDeletedComponents(prev => [{ ...deleted, is_active: false }, ...prev]);
+      setComponents(prev => prev.filter(c => c.id !== id));
+      setSearchResults(prev => prev.filter(c => c.id !== id));
 
-      if (!functionError && functionData) {
+      toast({ title: "Deleted", description: `${sku} moved to Recently Deleted` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to delete", variant: "destructive" });
+    }
+  };
 
-        if (functionData.success) {
-          toast({
-            title: "Success",
-            description: functionData.message || "Component permanently deleted"
-          });
-          removeFromLocalState(id);
-          return;
-        } else {
-          // If safe delete fails due to usage, offer force delete option
-          if (functionData.message?.includes('used in') && 
-              confirm(`${functionData.message}\n\nDo you want to FORCE DELETE this component and remove it from all products/orders? This is DANGEROUS and cannot be undone.`)) {
-            
-            // Try force delete
-            const { data: forceData, error: forceError } = await (supabase.rpc as any)('force_delete_component', { component_id: id });
-              
-            if (!forceError && forceData?.success) {
-              toast({
-                title: "Force Delete Success",
-                description: forceData.message,
-                variant: "destructive"
-              });
-              removeFromLocalState(id);
-              return;
-            } else {
-              throw new Error(forceData?.message || forceError?.message || 'Force delete failed');
-            }
-          } else {
-            throw new Error(functionData.message || 'Failed to delete component');
-          }
-        }
-      }
-
-      
-      // Fallback: Direct hard delete from table
-      const { data, error } = await supabase
+  const handleRestore = async (id: string, sku: string) => {
+    try {
+      const { error } = await supabase
         .from('component_library' as any)
-        .delete()
-        .eq('id', id)
-        .select();
-
+        .update({ is_active: true, updated_at: new Date().toISOString() })
+        .eq('id', id);
 
       if (error) throw error;
-      
-      if (!data || data.length === 0) {
-        throw new Error('Delete operation completed but no rows were affected. Component may not exist or be protected by foreign key constraints.');
-      }
-      
-      // Success! The direct delete worked
-      toast({
-        title: "Success",
-        description: "Component permanently deleted"
-      });
 
-      removeFromLocalState(id);
+      const restored = deletedComponents.find(c => c.id === id);
+      if (restored) setComponents(prev => [{ ...restored, is_active: true }, ...prev]);
+      setDeletedComponents(prev => prev.filter(c => c.id !== id));
+
+      toast({ title: "Restored", description: `${sku} has been restored` });
     } catch (error: any) {
-      
-      let errorMessage = "Failed to delete component";
-      if (error.code === '23503') {
-        errorMessage = "Cannot delete component - it is referenced by other records (products or orders). Use the force delete option if necessary.";
-      } else if (error.code === '42501') {
-        errorMessage = "Insufficient permissions to delete component. Please check your admin access.";
-      } else if (error.message?.includes('policy')) {
-        errorMessage = "Permission denied. Please ensure you have admin privileges.";
-      } else if (error.message?.includes('used in')) {
-        errorMessage = error.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: error.message || "Failed to restore", variant: "destructive" });
+    }
+  };
+
+  const handlePermanentDelete = async (id: string, sku: string) => {
+    if (!confirm(`PERMANENTLY delete "${sku}"? This cannot be undone.`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('component_library' as any)
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setDeletedComponents(prev => prev.filter(c => c.id !== id));
+      toast({ title: "Permanently Deleted", description: `${sku} has been permanently removed` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to permanently delete", variant: "destructive" });
     }
   };
 
@@ -427,31 +432,28 @@ export default function ComponentLibraryPro() {
     let successCount = 0;
     let failCount = 0;
 
+    // Move to deleted via soft-delete
+    const deletedItems = components.filter(c => batchDeleteIds.has(c.id));
     for (const id of ids) {
       try {
-        const { data: functionData, error: functionError } = await (supabase.rpc as any)('delete_component', { component_id: id });
-        if (!functionError && functionData?.success) {
-          successCount++;
-        } else {
-          // Fallback: direct delete
-          const { error } = await supabase.from('component_library' as any).delete().eq('id', id);
-          if (!error) successCount++;
-          else failCount++;
-        }
+        const error = await softDeleteComponent(id);
+        if (!error) successCount++;
+        else failCount++;
       } catch {
         failCount++;
       }
     }
 
-    // Remove deleted items from local state (no page refresh/scroll reset)
+    // Update local state
+    setDeletedComponents(prev => [...deletedItems.map(c => ({ ...c, is_active: false })), ...prev]);
     setComponents(prev => prev.filter(c => !batchDeleteIds.has(c.id)));
     setSearchResults(prev => prev.filter(c => !batchDeleteIds.has(c.id)));
     setBatchDeleteIds(new Set());
     setBatchDeleting(false);
 
     toast({
-      title: failCount === 0 ? 'Success' : 'Partial Success',
-      description: `${successCount} component${successCount !== 1 ? 's' : ''} deleted${failCount > 0 ? `, ${failCount} failed` : ''}`,
+      title: failCount === 0 ? 'Deleted' : 'Partial Success',
+      description: `${successCount} component${successCount !== 1 ? 's' : ''} moved to Recently Deleted${failCount > 0 ? `, ${failCount} failed` : ''}`,
       variant: failCount > 0 ? 'destructive' : 'default'
     });
   };
@@ -687,6 +689,24 @@ export default function ComponentLibraryPro() {
         </Dialog>
       </div>
 
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="active">
+            Active ({components.length})
+          </TabsTrigger>
+          <TabsTrigger value="deleted" className="gap-1.5">
+            <Trash2 className="h-3.5 w-3.5" />
+            Recently Deleted ({deletedComponents.length})
+          </TabsTrigger>
+          {duplicateSkus.length > 0 && (
+            <TabsTrigger value="duplicates" className="gap-1.5 text-amber-600">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Duplicated SKUs ({duplicateSkus.length})
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="active">
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center gap-3">
@@ -872,6 +892,122 @@ export default function ComponentLibraryPro() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="deleted">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recently Deleted Components</CardTitle>
+              <CardDescription>Components that have been soft-deleted. You can restore or permanently delete them.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {deletedComponents.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Trash2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p>No recently deleted components</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Image</TableHead>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Deleted</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deletedComponents.map((component) => (
+                      <TableRow key={component.id} className="opacity-70">
+                        <TableCell>
+                          {component.default_image_url ? (
+                            <img src={component.default_image_url} alt={component.name} className="w-10 h-10 rounded object-cover" />
+                          ) : (
+                            <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-sm">📦</div>
+                          )}
+                        </TableCell>
+                        <TableCell><span className="font-mono text-sm">{component.component_sku}</span></TableCell>
+                        <TableCell><span className="font-medium">{component.name}</span></TableCell>
+                        <TableCell><Badge variant="secondary">{component.component_type}</Badge></TableCell>
+                        <TableCell>
+                          {component.updated_at && (
+                            <span className="text-sm text-muted-foreground">{formatTimeAgo(component.updated_at)}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline" onClick={() => handleRestore(component.id, component.component_sku)}>
+                              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                              Restore
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => handlePermanentDelete(component.id, component.component_sku)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {duplicateSkus.length > 0 && (
+          <TabsContent value="duplicates">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  Duplicated SKUs
+                </CardTitle>
+                <CardDescription>These SKUs appear on multiple components. Review and resolve duplicates.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {duplicateSkus.map(({ sku, count, items }) => (
+                    <div key={sku} className="border border-amber-200 bg-amber-50/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Copy className="h-4 w-4 text-amber-600" />
+                        <span className="font-mono font-medium text-amber-800">{sku}</span>
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-700">{count} duplicates</Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {items.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between bg-white rounded-md px-3 py-2 border">
+                            <div className="flex items-center gap-3">
+                              {item.default_image_url ? (
+                                <img src={item.default_image_url} alt={item.name} className="w-8 h-8 rounded object-cover" />
+                              ) : (
+                                <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-xs">📦</div>
+                              )}
+                              <div>
+                                <p className="text-sm font-medium">{item.name}</p>
+                                <p className="text-xs text-muted-foreground">{item.component_type} · RM{item.normal_price}</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="ghost" onClick={() => handleEdit(item)}>
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-red-500" onClick={() => handleDelete(item.id, item.component_sku)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
 
       {/* Stock Adjustment Dialog */}
       <Dialog open={stockDialogOpen} onOpenChange={setStockDialogOpen}>
@@ -961,6 +1097,34 @@ export default function ComponentLibraryPro() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Sticky Batch Delete Bar */}
+      {batchDeleteIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] px-6 py-3">
+          <div className="container mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-700">{batchDeleteIds.size} component{batchDeleteIds.size !== 1 ? 's' : ''} selected</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-xs text-gray-500"
+                onClick={() => setBatchDeleteIds(new Set())}
+              >
+                Clear Selection
+              </Button>
+            </div>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleBatchDelete}
+              disabled={batchDeleting}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              {batchDeleting ? 'Deleting...' : `Delete ${batchDeleteIds.size} Selected`}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

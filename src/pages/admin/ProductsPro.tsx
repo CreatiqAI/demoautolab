@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
@@ -100,6 +100,7 @@ const SCREEN_SIZES = [
 export default function ProductsPro() {
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
+  const [deletedProducts, setDeletedProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
@@ -152,6 +153,7 @@ export default function ProductsPro() {
 
   useEffect(() => {
     fetchProducts();
+    fetchDeletedProducts();
     fetchAllComponents();
     fetchCategories();
   }, []);
@@ -253,6 +255,70 @@ export default function ProductsPro() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDeletedProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products_new' as any)
+        .select('id, name, brand, model, slug, active, updated_at')
+        .eq('active', false)
+        .order('updated_at', { ascending: false, nullsFirst: false });
+
+      if (!error) setDeletedProducts((data as any) || []);
+    } catch {
+      // No deleted products
+    }
+  };
+
+  const handleSoftDeleteProduct = async (product: any) => {
+    if (!confirm(`Delete "${product.name}"? It will be moved to Recently Deleted.`)) return;
+    try {
+      const { error } = await supabase
+        .from('products_new' as any)
+        .update({ active: false, updated_at: new Date().toISOString() })
+        .eq('id', product.id);
+
+      if (error) throw error;
+      setDeletedProducts(prev => [{ ...product, active: false }, ...prev]);
+      setProducts(prev => prev.filter(p => p.id !== product.id));
+      setFilteredProducts(prev => prev.filter(p => p.id !== product.id));
+      toast({ title: "Deleted", description: `${product.name} moved to Recently Deleted` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to delete", variant: "destructive" });
+    }
+  };
+
+  const handleRestoreProduct = async (product: any) => {
+    try {
+      const { error } = await supabase
+        .from('products_new' as any)
+        .update({ active: true, updated_at: new Date().toISOString() })
+        .eq('id', product.id);
+
+      if (error) throw error;
+      setDeletedProducts(prev => prev.filter(p => p.id !== product.id));
+      fetchProducts();
+      toast({ title: "Restored", description: `${product.name} has been restored` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to restore", variant: "destructive" });
+    }
+  };
+
+  const handlePermanentDeleteProduct = async (product: any) => {
+    if (!confirm(`PERMANENTLY delete "${product.name}"? This cannot be undone.`)) return;
+    try {
+      const { error } = await supabase
+        .from('products_new' as any)
+        .delete()
+        .eq('id', product.id);
+
+      if (error) throw error;
+      setDeletedProducts(prev => prev.filter(p => p.id !== product.id));
+      toast({ title: "Permanently Deleted", description: `${product.name} has been permanently removed` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to permanently delete", variant: "destructive" });
     }
   };
 
@@ -1196,7 +1262,7 @@ export default function ProductsPro() {
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-medium text-gray-700">Product Media</h3>
-                        <span className="text-xs text-gray-400">{formData.images.filter(img => img.url).length}/9 slots used</span>
+                        <span className="text-xs text-gray-400">{formData.images.filter(img => img.url).length}/15 slots used</span>
                       </div>
                       {/* Row 1: 5 slots */}
                       <div className="grid grid-cols-5 gap-2 mb-2">
@@ -1345,10 +1411,157 @@ export default function ProductsPro() {
                           );
                         })}
                       </div>
-                      {/* Row 2: 4 slots */}
-                      <div className="grid grid-cols-5 gap-2">
-                        {[...Array(4)].map((_, i) => {
+                      {/* Row 2: 5 slots */}
+                      <div className="grid grid-cols-5 gap-2 mb-2">
+                        {[...Array(5)].map((_, i) => {
                           const index = i + 5;
+                          const media = formData.images[index];
+                          const isVideo = media?.media_type === 'video';
+                          return (
+                            <div
+                              key={index}
+                              className="relative"
+                              onDragOver={(e) => { if (mediaDragIndex !== null) { e.preventDefault(); setMediaDragOverIndex(index); } }}
+                              onDragLeave={() => setMediaDragOverIndex(null)}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                if (mediaDragIndex === null || mediaDragIndex === index) { setMediaDragIndex(null); setMediaDragOverIndex(null); return; }
+                                setFormData(prev => {
+                                  const items = [...prev.images];
+                                  const [moved] = items.splice(mediaDragIndex, 1);
+                                  items.splice(index > mediaDragIndex ? index - (index >= items.length + 1 ? 1 : 0) : index, 0, moved);
+                                  return { ...prev, images: items.map((img, i) => ({ ...img, is_primary: i === 0 })) };
+                                });
+                                setMediaDragIndex(null);
+                                setMediaDragOverIndex(null);
+                              }}
+                            >
+                              {media?.url ? (
+                                <div
+                                  className={`relative group aspect-square rounded-lg border overflow-hidden bg-gray-50 cursor-grab active:cursor-grabbing ${mediaDragIndex === index ? 'opacity-40' : ''} ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400' : ''}`}
+                                  draggable
+                                  onDragStart={() => setMediaDragIndex(index)}
+                                  onDragEnd={() => { setMediaDragIndex(null); setMediaDragOverIndex(null); }}
+                                >
+                                  {isVideo ? (
+                                    isEmbeddableUrl(media.url) ? (
+                                      <iframe src={getEmbedUrl(media.url)!} className="w-full h-full" allowFullScreen />
+                                    ) : (
+                                      <video src={media.url} className="w-full h-full object-cover" preload="metadata" />
+                                    )
+                                  ) : (
+                                    <img src={media.url} alt={`Media ${index + 1}`} className="w-full h-full object-cover" />
+                                  )}
+                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                                    {!isVideo && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setViewingImage(media.url);
+                                          setViewingImageInfo({ url: media.url, title: `Product Image ${index + 1}` });
+                                        }}
+                                        className="p-1.5 bg-white/90 rounded-full text-gray-700 hover:bg-white"
+                                      >
+                                        <Eye className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const newImages = formData.images.filter((_, i) => i !== index);
+                                        if (newImages.length > 0 && !newImages.some(img => img.is_primary)) {
+                                          newImages[0] = { ...newImages[0], is_primary: true };
+                                        }
+                                        setFormData(prev => ({ ...prev, images: newImages }));
+                                      }}
+                                      className="p-1.5 bg-red-500 rounded-full text-white hover:bg-red-600"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                  {isVideo && (
+                                    <span className="absolute bottom-1 left-1 text-[8px] bg-black/70 text-white px-1 rounded flex items-center gap-0.5">
+                                      <Play className="h-2 w-2" /> Video
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className={`aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50 ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400 border-lime-400' : ''}`}>
+                                  <div className="flex gap-1">
+                                    <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload image">
+                                      <Upload className="h-4 w-4 text-gray-400" />
+                                      <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                          const file = e.target.files?.[0];
+                                          if (!file) return;
+                                          try {
+                                            const imageCompression = (await import('browser-image-compression')).default;
+                                            const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
+                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
+                                            const { error } = await supabase.storage.from('product-images').upload(filePath, compressed, { contentType: 'image/webp' });
+                                            if (error) throw error;
+                                            const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
+                                            setFormData(prev => {
+                                              const newImages = [...prev.images];
+                                              newImages.splice(index, 0, { url: publicUrl, is_primary: prev.images.length === 0, alt_text: `${prev.name} - Image ${index + 1}`, media_type: 'image' });
+                                              return { ...prev, images: newImages };
+                                            });
+                                          } catch (err: any) {
+                                            toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                          }
+                                          e.target.value = '';
+                                        }}
+                                      />
+                                    </label>
+                                    <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload video">
+                                      <Video className="h-4 w-4 text-gray-400" />
+                                      <input
+                                        type="file"
+                                        accept="video/mp4,video/webm,video/quicktime"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                          const file = e.target.files?.[0];
+                                          if (!file) return;
+                                          if (file.size > 100 * 1024 * 1024) {
+                                            toast({ title: 'Video too large', description: 'Max 100MB per video', variant: 'destructive' });
+                                            return;
+                                          }
+                                          try {
+                                            const fileExt = file.name.split('.').pop() || 'mp4';
+                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
+                                            if (error) throw error;
+                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
+                                            setFormData(prev => {
+                                              const newImages = [...prev.images];
+                                              newImages.splice(index, 0, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video ${index + 1}`, media_type: 'video' });
+                                              return { ...prev, images: newImages };
+                                            });
+                                            toast({ title: 'Video uploaded', description: `${file.name} uploaded successfully` });
+                                          } catch (err: any) {
+                                            toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                          }
+                                          e.target.value = '';
+                                        }}
+                                      />
+                                    </label>
+                                  </div>
+                                  <span className="text-[9px] text-gray-400 mt-0.5">{index + 1}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Row 3: 5 slots */}
+                      <div className="grid grid-cols-5 gap-2">
+                        {[...Array(5)].map((_, i) => {
+                          const index = i + 10;
                           const media = formData.images[index];
                           const isVideo = media?.media_type === 'video';
                           return (
@@ -1506,7 +1719,7 @@ export default function ProductsPro() {
                               const files = Array.from(e.target.files || []);
                               if (!files.length) return;
                               const currentCount = formData.images.length;
-                              const slotsAvailable = 9 - currentCount;
+                              const slotsAvailable = 15 - currentCount;
                               if (files.length > slotsAvailable) {
                                 toast({ title: `Only ${slotsAvailable} slots available`, description: `Selected ${files.length} files, uploading first ${slotsAvailable}`, variant: 'destructive' });
                               }
@@ -1544,7 +1757,7 @@ export default function ProductsPro() {
                               const files = Array.from(e.target.files || []);
                               if (!files.length) return;
                               const currentCount = formData.images.length;
-                              const slotsAvailable = 9 - currentCount;
+                              const slotsAvailable = 15 - currentCount;
                               const filesToUpload = files.slice(0, slotsAvailable);
                               for (const file of filesToUpload) {
                                 if (file.size > 100 * 1024 * 1024) {
@@ -1578,7 +1791,7 @@ export default function ProductsPro() {
                               e.preventDefault();
                               const url = (e.target as HTMLInputElement).value.trim();
                               if (!url) return;
-                              if (formData.images.length >= 9) {
+                              if (formData.images.length >= 15) {
                                 toast({ title: 'All slots full', description: 'Remove a media item first', variant: 'destructive' });
                                 return;
                               }
@@ -1989,48 +2202,7 @@ export default function ProductsPro() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={async () => {
-                              if (confirm(`Are you sure you want to PERMANENTLY DELETE product "${product.name}"? This action cannot be undone and will remove all related components and images.`)) {
-                                try {
-                                  const { data: functionData, error: functionError } = await (supabase
-                                    .rpc as any)('delete_product', { product_id: product.id });
-
-                                  if (functionError) {
-                                    const { error: directError } = await supabase
-                                      .from('products_new' as any)
-                                      .delete()
-                                      .eq('id', product.id);
-
-                                    if (directError) throw directError;
-
-                                    toast({
-                                      title: "Product Deleted",
-                                      description: `Product "${product.name}" has been deleted (fallback method)`
-                                    });
-                                  } else if (functionData?.success) {
-                                    toast({
-                                      title: "Product Deleted",
-                                      description: functionData.message || `Product "${product.name}" has been permanently deleted`
-                                    });
-                                  } else {
-                                    toast({
-                                      title: "Delete Failed",
-                                      description: functionData?.message || "Failed to delete product",
-                                      variant: "destructive"
-                                    });
-                                    return;
-                                  }
-
-                                  fetchProducts();
-                                } catch (error: any) {
-                                  toast({
-                                    title: "Error",
-                                    description: error.message || "Failed to delete product",
-                                    variant: "destructive"
-                                  });
-                                }
-                              }
-                            }}
+                            onClick={() => handleSoftDeleteProduct(product)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -2044,6 +2216,55 @@ export default function ProductsPro() {
           )}
         </CardContent>
       </Card>
+
+      {/* Recently Deleted Products */}
+      {deletedProducts.length > 0 && (
+        <Card className="border-dashed">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Trash2 className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base">Recently Deleted ({deletedProducts.length})</CardTitle>
+            </div>
+            <CardDescription>Products that have been soft-deleted. Restore or permanently remove them.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product Name</TableHead>
+                  <TableHead>Brand / Model</TableHead>
+                  <TableHead>Deleted</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deletedProducts.map((product) => (
+                  <TableRow key={product.id} className="opacity-60">
+                    <TableCell className="font-medium">{product.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{product.brand} {product.model}</TableCell>
+                    <TableCell>
+                      {product.updated_at && (
+                        <span className="text-sm text-muted-foreground">{formatTimeAgo(product.updated_at)}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="outline" onClick={() => handleRestoreProduct(product)}>
+                          <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                          Restore
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => handlePermanentDeleteProduct(product)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Product Preview Dialog */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
