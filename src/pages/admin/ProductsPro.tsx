@@ -114,6 +114,7 @@ export default function ProductsPro() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [mediaDragIndex, setMediaDragIndex] = useState<number | null>(null);
   const [mediaDragOverIndex, setMediaDragOverIndex] = useState<number | null>(null);
+  const [batchDeleteIds, setBatchDeleteIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [brandFilter, setBrandFilter] = useState('all-brands');
@@ -602,6 +603,7 @@ export default function ProductsPro() {
     setActiveTab('basic');
     setSearchTerm('');
     setSearchResults([]);
+    setBatchDeleteIds(new Set());
   };
 
   const handleEditProduct = async (product: any) => {
@@ -1090,9 +1092,29 @@ export default function ProductsPro() {
                       {/* Right: Selected Components */}
                       <div className="flex flex-col min-h-0 h-[25vh] sm:h-[30vh] lg:h-full">
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-sm">
-                            Selected ({formData.selectedComponents.length})
-                          </h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium text-sm">
+                              Selected ({formData.selectedComponents.length})
+                            </h4>
+                            {batchDeleteIds.size > 0 && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                className="h-6 text-[10px] px-2"
+                                onClick={() => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    selectedComponents: prev.selectedComponents.filter(c => !batchDeleteIds.has(c.id))
+                                  }));
+                                  setBatchDeleteIds(new Set());
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Remove {batchDeleteIds.size}
+                              </Button>
+                            )}
+                          </div>
                           {formData.selectedComponents.length > 0 && (
                             <span className="text-xs text-muted-foreground">
                               Total: RM{formData.selectedComponents.reduce((sum, c) => sum + c.normal_price, 0).toFixed(2)}
@@ -1133,6 +1155,20 @@ export default function ProductsPro() {
                                   dragIndex === index ? 'opacity-40 bg-gray-100' : dragOverIndex === index ? 'bg-lime-50 border-t-2 border-t-lime-400' : 'bg-white hover:bg-green-50/50'
                                 }`}
                               >
+                                <input
+                                  type="checkbox"
+                                  checked={batchDeleteIds.has(component.id)}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    setBatchDeleteIds(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(component.id)) next.delete(component.id);
+                                      else next.add(component.id);
+                                      return next;
+                                    });
+                                  }}
+                                  className="h-3.5 w-3.5 rounded border-gray-300 text-red-500 focus:ring-red-400 flex-shrink-0 cursor-pointer"
+                                />
                                 <div
                                   className="cursor-grab active:cursor-grabbing flex-shrink-0 p-0.5 text-gray-300 hover:text-gray-500"
                                   onMouseDown={() => setDragIndex(index)}
