@@ -1358,71 +1358,57 @@ export default function ProductsPro() {
                                   )}
                                 </div>
                               ) : (
-                                <div className={`aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50 ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400 border-lime-400' : ''}`}>
-                                  <div className="flex gap-1">
-                                    <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload image">
-                                      <Upload className="h-4 w-4 text-gray-400" />
-                                      <input
-                                        type="file"
-                                        accept="image/jpeg,image/png,image/webp,image/gif"
-                                        className="hidden"
-                                        onChange={async (e) => {
-                                          const file = e.target.files?.[0];
-                                          if (!file) return;
-                                          try {
+                                <label className={`aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50 cursor-pointer ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400 border-lime-400' : ''}`}>
+                                  <Upload className="h-4 w-4 text-gray-300 mb-0.5" />
+                                  <span className="text-[9px] text-gray-400">{index + 1}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                                    multiple
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const files = Array.from(e.target.files || []);
+                                      if (!files.length) return;
+                                      const slotsAvailable = 15 - formData.images.length;
+                                      const filesToUpload = files.slice(0, slotsAvailable);
+                                      for (const file of filesToUpload) {
+                                        const isVideoFile = file.type.startsWith('video/');
+                                        try {
+                                          if (isVideoFile) {
+                                            if (file.size > 100 * 1024 * 1024) {
+                                              toast({ title: 'Video too large', description: `${file.name} exceeds 100MB`, variant: 'destructive' });
+                                              continue;
+                                            }
+                                            const fileExt = file.name.split('.').pop() || 'mp4';
+                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
+                                            if (error) throw error;
+                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
+                                            setFormData(prev => ({
+                                              ...prev,
+                                              images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }]
+                                            }));
+                                          } else {
                                             const imageCompression = (await import('browser-image-compression')).default;
                                             const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
                                             const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
                                             const { error } = await supabase.storage.from('product-images').upload(filePath, compressed, { contentType: 'image/webp' });
                                             if (error) throw error;
                                             const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
-                                            setFormData(prev => {
-                                              const newImages = [...prev.images];
-                                              newImages.splice(index, 0, { url: publicUrl, is_primary: prev.images.length === 0, alt_text: `${prev.name} - Image ${index + 1}`, media_type: 'image' });
-                                              return { ...prev, images: newImages };
-                                            });
-                                          } catch (err: any) {
-                                            toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                            setFormData(prev => ({
+                                              ...prev,
+                                              images: [...prev.images, { url: publicUrl, is_primary: prev.images.length === 0, alt_text: `${prev.name} - Image`, media_type: 'image' as const }]
+                                            }));
                                           }
-                                          e.target.value = '';
-                                        }}
-                                      />
-                                    </label>
-                                    <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload video">
-                                      <Video className="h-4 w-4 text-gray-400" />
-                                      <input
-                                        type="file"
-                                        accept="video/mp4,video/webm,video/quicktime"
-                                        className="hidden"
-                                        onChange={async (e) => {
-                                          const file = e.target.files?.[0];
-                                          if (!file) return;
-                                          if (file.size > 100 * 1024 * 1024) {
-                                            toast({ title: 'Video too large', description: 'Max 100MB per video', variant: 'destructive' });
-                                            return;
-                                          }
-                                          try {
-                                            const fileExt = file.name.split('.').pop() || 'mp4';
-                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
-                                            if (error) throw error;
-                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
-                                            setFormData(prev => {
-                                              const newImages = [...prev.images];
-                                              newImages.splice(index, 0, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video ${index + 1}`, media_type: 'video' });
-                                              return { ...prev, images: newImages };
-                                            });
-                                            toast({ title: 'Video uploaded', description: `${file.name} uploaded successfully` });
-                                          } catch (err: any) {
-                                            toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
-                                          }
-                                          e.target.value = '';
-                                        }}
-                                      />
-                                    </label>
-                                  </div>
-                                  <span className="text-[9px] text-gray-400 mt-0.5">{index + 1}</span>
-                                </div>
+                                        } catch (err: any) {
+                                          toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                        }
+                                      }
+                                      if (filesToUpload.length > 0) toast({ title: 'Upload complete', description: `${filesToUpload.length} file(s) uploaded` });
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
                               )}
                             </div>
                           );
@@ -1505,71 +1491,57 @@ export default function ProductsPro() {
                                   )}
                                 </div>
                               ) : (
-                                <div className={`aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50 ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400 border-lime-400' : ''}`}>
-                                  <div className="flex gap-1">
-                                    <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload image">
-                                      <Upload className="h-4 w-4 text-gray-400" />
-                                      <input
-                                        type="file"
-                                        accept="image/jpeg,image/png,image/webp,image/gif"
-                                        className="hidden"
-                                        onChange={async (e) => {
-                                          const file = e.target.files?.[0];
-                                          if (!file) return;
-                                          try {
+                                <label className={`aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50 cursor-pointer ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400 border-lime-400' : ''}`}>
+                                  <Upload className="h-4 w-4 text-gray-300 mb-0.5" />
+                                  <span className="text-[9px] text-gray-400">{index + 1}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                                    multiple
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const files = Array.from(e.target.files || []);
+                                      if (!files.length) return;
+                                      const slotsAvailable = 15 - formData.images.length;
+                                      const filesToUpload = files.slice(0, slotsAvailable);
+                                      for (const file of filesToUpload) {
+                                        const isVideoFile = file.type.startsWith('video/');
+                                        try {
+                                          if (isVideoFile) {
+                                            if (file.size > 100 * 1024 * 1024) {
+                                              toast({ title: 'Video too large', description: `${file.name} exceeds 100MB`, variant: 'destructive' });
+                                              continue;
+                                            }
+                                            const fileExt = file.name.split('.').pop() || 'mp4';
+                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
+                                            if (error) throw error;
+                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
+                                            setFormData(prev => ({
+                                              ...prev,
+                                              images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }]
+                                            }));
+                                          } else {
                                             const imageCompression = (await import('browser-image-compression')).default;
                                             const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
                                             const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
                                             const { error } = await supabase.storage.from('product-images').upload(filePath, compressed, { contentType: 'image/webp' });
                                             if (error) throw error;
                                             const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
-                                            setFormData(prev => {
-                                              const newImages = [...prev.images];
-                                              newImages.splice(index, 0, { url: publicUrl, is_primary: prev.images.length === 0, alt_text: `${prev.name} - Image ${index + 1}`, media_type: 'image' });
-                                              return { ...prev, images: newImages };
-                                            });
-                                          } catch (err: any) {
-                                            toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                            setFormData(prev => ({
+                                              ...prev,
+                                              images: [...prev.images, { url: publicUrl, is_primary: prev.images.length === 0, alt_text: `${prev.name} - Image`, media_type: 'image' as const }]
+                                            }));
                                           }
-                                          e.target.value = '';
-                                        }}
-                                      />
-                                    </label>
-                                    <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload video">
-                                      <Video className="h-4 w-4 text-gray-400" />
-                                      <input
-                                        type="file"
-                                        accept="video/mp4,video/webm,video/quicktime"
-                                        className="hidden"
-                                        onChange={async (e) => {
-                                          const file = e.target.files?.[0];
-                                          if (!file) return;
-                                          if (file.size > 100 * 1024 * 1024) {
-                                            toast({ title: 'Video too large', description: 'Max 100MB per video', variant: 'destructive' });
-                                            return;
-                                          }
-                                          try {
-                                            const fileExt = file.name.split('.').pop() || 'mp4';
-                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
-                                            if (error) throw error;
-                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
-                                            setFormData(prev => {
-                                              const newImages = [...prev.images];
-                                              newImages.splice(index, 0, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video ${index + 1}`, media_type: 'video' });
-                                              return { ...prev, images: newImages };
-                                            });
-                                            toast({ title: 'Video uploaded', description: `${file.name} uploaded successfully` });
-                                          } catch (err: any) {
-                                            toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
-                                          }
-                                          e.target.value = '';
-                                        }}
-                                      />
-                                    </label>
-                                  </div>
-                                  <span className="text-[9px] text-gray-400 mt-0.5">{index + 1}</span>
-                                </div>
+                                        } catch (err: any) {
+                                          toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                        }
+                                      }
+                                      if (filesToUpload.length > 0) toast({ title: 'Upload complete', description: `${filesToUpload.length} file(s) uploaded` });
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
                               )}
                             </div>
                           );
@@ -1652,71 +1624,57 @@ export default function ProductsPro() {
                                   )}
                                 </div>
                               ) : (
-                                <div className={`aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50 ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400 border-lime-400' : ''}`}>
-                                  <div className="flex gap-1">
-                                    <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload image">
-                                      <Upload className="h-4 w-4 text-gray-400" />
-                                      <input
-                                        type="file"
-                                        accept="image/jpeg,image/png,image/webp,image/gif"
-                                        className="hidden"
-                                        onChange={async (e) => {
-                                          const file = e.target.files?.[0];
-                                          if (!file) return;
-                                          try {
+                                <label className={`aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-gray-400 flex flex-col items-center justify-center transition-colors bg-gray-50/50 cursor-pointer ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400 border-lime-400' : ''}`}>
+                                  <Upload className="h-4 w-4 text-gray-300 mb-0.5" />
+                                  <span className="text-[9px] text-gray-400">{index + 1}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                                    multiple
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const files = Array.from(e.target.files || []);
+                                      if (!files.length) return;
+                                      const slotsAvailable = 15 - formData.images.length;
+                                      const filesToUpload = files.slice(0, slotsAvailable);
+                                      for (const file of filesToUpload) {
+                                        const isVideoFile = file.type.startsWith('video/');
+                                        try {
+                                          if (isVideoFile) {
+                                            if (file.size > 100 * 1024 * 1024) {
+                                              toast({ title: 'Video too large', description: `${file.name} exceeds 100MB`, variant: 'destructive' });
+                                              continue;
+                                            }
+                                            const fileExt = file.name.split('.').pop() || 'mp4';
+                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
+                                            if (error) throw error;
+                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
+                                            setFormData(prev => ({
+                                              ...prev,
+                                              images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }]
+                                            }));
+                                          } else {
                                             const imageCompression = (await import('browser-image-compression')).default;
                                             const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
                                             const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
                                             const { error } = await supabase.storage.from('product-images').upload(filePath, compressed, { contentType: 'image/webp' });
                                             if (error) throw error;
                                             const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
-                                            setFormData(prev => {
-                                              const newImages = [...prev.images];
-                                              newImages.splice(index, 0, { url: publicUrl, is_primary: prev.images.length === 0, alt_text: `${prev.name} - Image ${index + 1}`, media_type: 'image' });
-                                              return { ...prev, images: newImages };
-                                            });
-                                          } catch (err: any) {
-                                            toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                            setFormData(prev => ({
+                                              ...prev,
+                                              images: [...prev.images, { url: publicUrl, is_primary: prev.images.length === 0, alt_text: `${prev.name} - Image`, media_type: 'image' as const }]
+                                            }));
                                           }
-                                          e.target.value = '';
-                                        }}
-                                      />
-                                    </label>
-                                    <label className="cursor-pointer p-1.5 rounded hover:bg-gray-100 transition-colors" title="Upload video">
-                                      <Video className="h-4 w-4 text-gray-400" />
-                                      <input
-                                        type="file"
-                                        accept="video/mp4,video/webm,video/quicktime"
-                                        className="hidden"
-                                        onChange={async (e) => {
-                                          const file = e.target.files?.[0];
-                                          if (!file) return;
-                                          if (file.size > 100 * 1024 * 1024) {
-                                            toast({ title: 'Video too large', description: 'Max 100MB per video', variant: 'destructive' });
-                                            return;
-                                          }
-                                          try {
-                                            const fileExt = file.name.split('.').pop() || 'mp4';
-                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
-                                            if (error) throw error;
-                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
-                                            setFormData(prev => {
-                                              const newImages = [...prev.images];
-                                              newImages.splice(index, 0, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video ${index + 1}`, media_type: 'video' });
-                                              return { ...prev, images: newImages };
-                                            });
-                                            toast({ title: 'Video uploaded', description: `${file.name} uploaded successfully` });
-                                          } catch (err: any) {
-                                            toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
-                                          }
-                                          e.target.value = '';
-                                        }}
-                                      />
-                                    </label>
-                                  </div>
-                                  <span className="text-[9px] text-gray-400 mt-0.5">{index + 1}</span>
-                                </div>
+                                        } catch (err: any) {
+                                          toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                        }
+                                      }
+                                      if (filesToUpload.length > 0) toast({ title: 'Upload complete', description: `${filesToUpload.length} file(s) uploaded` });
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
                               )}
                             </div>
                           );
@@ -1726,10 +1684,10 @@ export default function ProductsPro() {
                       <div className="mt-3 flex gap-2">
                         <label className="flex items-center gap-1.5 px-3 h-8 bg-gray-900 text-white text-xs font-medium rounded-md cursor-pointer hover:bg-gray-800 transition-colors shrink-0">
                           <Upload className="h-3.5 w-3.5" />
-                          Images
+                          Select Files
                           <input
                             type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
                             multiple
                             className="hidden"
                             onChange={async (e) => {
@@ -1742,60 +1700,39 @@ export default function ProductsPro() {
                               }
                               const filesToUpload = files.slice(0, slotsAvailable);
                               for (const file of filesToUpload) {
+                                const isVideoFile = file.type.startsWith('video/');
                                 try {
-                                  const imageCompression = (await import('browser-image-compression')).default;
-                                  const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
-                                  const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
-                                  const { error } = await supabase.storage.from('product-images').upload(filePath, compressed, { contentType: 'image/webp' });
-                                  if (error) throw error;
-                                  const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
-                                  setFormData(prev => {
-                                    const newImages = [...prev.images, { url: publicUrl, is_primary: prev.images.length === 0, alt_text: `${prev.name} - Image`, media_type: 'image' as const }];
-                                    return { ...prev, images: newImages };
-                                  });
+                                  if (isVideoFile) {
+                                    if (file.size > 100 * 1024 * 1024) {
+                                      toast({ title: 'Video too large', description: `${file.name} exceeds 100MB`, variant: 'destructive' });
+                                      continue;
+                                    }
+                                    const fileExt = file.name.split('.').pop() || 'mp4';
+                                    const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+                                    const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
+                                    if (error) throw error;
+                                    const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }]
+                                    }));
+                                  } else {
+                                    const imageCompression = (await import('browser-image-compression')).default;
+                                    const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
+                                    const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
+                                    const { error } = await supabase.storage.from('product-images').upload(filePath, compressed, { contentType: 'image/webp' });
+                                    if (error) throw error;
+                                    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      images: [...prev.images, { url: publicUrl, is_primary: prev.images.length === 0, alt_text: `${prev.name} - Image`, media_type: 'image' as const }]
+                                    }));
+                                  }
                                 } catch (err: any) {
                                   toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
                                 }
                               }
-                              toast({ title: 'Upload complete', description: `${filesToUpload.length} image(s) uploaded` });
-                              e.target.value = '';
-                            }}
-                          />
-                        </label>
-                        <label className="flex items-center gap-1.5 px-3 h-8 bg-gray-800 text-white text-xs font-medium rounded-md cursor-pointer hover:bg-gray-700 transition-colors shrink-0">
-                          <Video className="h-3.5 w-3.5" />
-                          Videos
-                          <input
-                            type="file"
-                            accept="video/mp4,video/webm,video/quicktime"
-                            multiple
-                            className="hidden"
-                            onChange={async (e) => {
-                              const files = Array.from(e.target.files || []);
-                              if (!files.length) return;
-                              const currentCount = formData.images.length;
-                              const slotsAvailable = 15 - currentCount;
-                              const filesToUpload = files.slice(0, slotsAvailable);
-                              for (const file of filesToUpload) {
-                                if (file.size > 100 * 1024 * 1024) {
-                                  toast({ title: 'Video too large', description: `${file.name} exceeds 100MB limit`, variant: 'destructive' });
-                                  continue;
-                                }
-                                try {
-                                  const fileExt = file.name.split('.').pop() || 'mp4';
-                                  const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-                                  const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
-                                  if (error) throw error;
-                                  const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
-                                  setFormData(prev => ({
-                                    ...prev,
-                                    images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }]
-                                  }));
-                                } catch (err: any) {
-                                  toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
-                                }
-                              }
-                              toast({ title: 'Upload complete', description: `${filesToUpload.length} video(s) uploaded` });
+                              if (filesToUpload.length > 0) toast({ title: 'Upload complete', description: `${filesToUpload.length} file(s) uploaded` });
                               e.target.value = '';
                             }}
                           />
@@ -1828,7 +1765,7 @@ export default function ProductsPro() {
                           }}
                         />
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1">Each slot can be an image or video. Bulk upload or paste URLs (YouTube/Vimeo auto-detected).</p>
+                      <p className="text-[10px] text-gray-400 mt-1">Click any empty slot or "Select Files" for batch upload. Images & videos auto-detected. Paste URLs for YouTube/Vimeo.</p>
                     </div>
                   </TabsContent>
 
