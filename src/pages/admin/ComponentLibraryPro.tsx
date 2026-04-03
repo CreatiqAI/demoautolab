@@ -70,6 +70,7 @@ export default function ComponentLibraryPro() {
   const [batchDeleteIds, setBatchDeleteIds] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [batchBarExpanded, setBatchBarExpanded] = useState(false);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [deletedComponents, setDeletedComponents] = useState<ComponentItem[]>([]);
   const [activeTab, setActiveTab] = useState('active');
   const [duplicateSkus, setDuplicateSkus] = useState<{sku: string; count: number; items: ComponentItem[]}[]>([]);
@@ -773,7 +774,7 @@ export default function ComponentLibraryPro() {
                 {searchResults.map((component) => {
                   const typeIcon = getTypeIcon(component.component_type);
                   return (
-                    <TableRow key={component.id} className={batchDeleteIds.has(component.id) ? 'bg-red-50/50' : ''}>
+                    <TableRow key={component.id} id={`component-row-${component.id}`} className={`transition-colors duration-700 ${highlightedId === component.id ? 'bg-lime-100' : batchDeleteIds.has(component.id) ? 'bg-red-50/50' : ''}`}>
                       <TableCell>
                         <Checkbox
                           checked={batchDeleteIds.has(component.id)}
@@ -1108,7 +1109,22 @@ export default function ComponentLibraryPro() {
               <div className="container mx-auto px-6 py-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {components.filter(c => batchDeleteIds.has(c.id)).map((component) => (
-                    <div key={component.id} className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                    <div
+                      key={component.id}
+                      className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2 cursor-pointer hover:bg-red-100/70 transition-colors"
+                      onClick={() => {
+                        setBatchBarExpanded(false);
+                        setActiveTab('active');
+                        setTimeout(() => {
+                          const row = document.getElementById(`component-row-${component.id}`);
+                          if (row) {
+                            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            setHighlightedId(component.id);
+                            setTimeout(() => setHighlightedId(null), 2000);
+                          }
+                        }, 100);
+                      }}
+                    >
                       {component.default_image_url ? (
                         <img src={component.default_image_url} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
                       ) : (
