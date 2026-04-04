@@ -27,6 +27,7 @@ import {
   Download,
   X,
   Send,
+  Printer,
   Search,
   ExternalLink
 } from 'lucide-react';
@@ -85,20 +86,15 @@ interface WarehouseOrder {
 
 type OrderStatus =
   | 'PROCESSING'
-  | 'PICKING'
   | 'PACKING'
-  | 'READY_FOR_DELIVERY'
   | 'OUT_FOR_DELIVERY'
-  | 'DELIVERED'
   | 'COMPLETED';
 
 const STATUS_WORKFLOW: { status: OrderStatus; label: string; description: string; icon: any; color: string }[] = [
-  { status: 'PROCESSING', label: 'Processing', description: 'Payment approved, ready for warehouse', icon: Clock, color: 'bg-blue-100 text-blue-800 border-blue-200' },
-  { status: 'PICKING', label: 'Picking', description: 'Items being picked from inventory', icon: Package, color: 'bg-orange-100 text-orange-800 border-orange-200' },
-  { status: 'PACKING', label: 'Packing', description: 'Items being packed for delivery', icon: PackageCheck, color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-  { status: 'READY_FOR_DELIVERY', label: 'Ready', description: 'Ready for pickup/delivery', icon: CheckCircle, color: 'bg-green-100 text-green-800 border-green-200' },
-  { status: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', description: 'With courier, in transit', icon: Truck, color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
-  { status: 'DELIVERED', label: 'Delivered', description: 'Delivered to customer, awaiting completion', icon: CheckCircle, color: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+  { status: 'PROCESSING', label: 'Processing', description: 'Payment confirmed, preparing order', icon: Clock, color: 'bg-blue-100 text-blue-800 border-blue-200' },
+  { status: 'PACKING', label: 'Packing', description: 'Items being packed for delivery', icon: PackageCheck, color: 'bg-amber-100 text-amber-800 border-amber-200' },
+  { status: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', description: 'With courier, in transit', icon: Truck, color: 'bg-purple-100 text-purple-800 border-purple-200' },
+  { status: 'COMPLETED', label: 'Completed', description: 'Order delivered to customer', icon: CheckCircle, color: 'bg-green-100 text-green-800 border-green-200' }
 ];
 
 export default function WarehouseOperations() {
@@ -107,7 +103,7 @@ export default function WarehouseOperations() {
   const [selectedOrder, setSelectedOrder] = useState<WarehouseOrder | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateNotes, setUpdateNotes] = useState('');
-  const [newStatus, setNewStatus] = useState<OrderStatus>('PICKING');
+  const [newStatus, setNewStatus] = useState<OrderStatus>('PACKING');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<OrderStatus>('PROCESSING');
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
@@ -121,6 +117,8 @@ export default function WarehouseOperations() {
   const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
   const [trackingInfo, setTrackingInfo] = useState<TrackingInfo | null>(null);
   const [loadingTracking, setLoadingTracking] = useState(false);
+  const [invoicePrintOrders, setInvoicePrintOrders] = useState<WarehouseOrder[]>([]);
+  const [isInvoicePrintOpen, setIsInvoicePrintOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -146,7 +144,7 @@ export default function WarehouseOperations() {
       setLoading(true);
 
       // Warehouse operation statuses (PROCESSING = auto-approved orders)
-      const warehouseStatuses = ['PROCESSING', 'PICKING', 'PACKING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+      const warehouseStatuses = ['PROCESSING', 'PACKING', 'OUT_FOR_DELIVERY', 'READY_FOR_COLLECTION', 'COMPLETED'];
 
       // Get orders with warehouse statuses and their items
       const { data: ordersWithItems, error: ordersError } = await supabase
@@ -798,7 +796,7 @@ export default function WarehouseOperations() {
       </div>
 
       {/* Status Overview */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {STATUS_WORKFLOW.map(({ status }) => (
           <StatusCard key={status} status={status} count={getOrdersByStatus(status).length} />
         ))}
@@ -807,7 +805,7 @@ export default function WarehouseOperations() {
       {/* Orders by Status Tabs */}
       <Tabs value={currentTab} onValueChange={(value) => setCurrentTab(value as OrderStatus)} className="w-full">
         {/* Desktop Tabs - Hidden on mobile/tablet */}
-        <TabsList className="hidden lg:grid w-full grid-cols-6">
+        <TabsList className="hidden lg:grid w-full grid-cols-4">
           {STATUS_WORKFLOW.map(({ status, label }) => (
             <TabsTrigger key={status} value={status} className="text-xs">
               {label} ({getOrdersByStatus(status).length})
@@ -869,37 +867,80 @@ export default function WarehouseOperations() {
                       {selectedInTab} order{selectedInTab > 1 ? 's' : ''} selected
                     </span>
 
-                    {/* Show Generate Picking List for PROCESSING tab */}
+                    {/* Processing: Print Invoices */}
                     {status === 'PROCESSING' && (
                       <Button
-                        onClick={openPickingListModal}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                        size="sm"
-                      >
-                        <Package className="h-4 w-4 mr-2" />
-                        Generate Picking List
-                      </Button>
-                    )}
-
-                    {/* Show Generate Packing List for PICKING tab */}
-                    {status === 'PICKING' && (
-                      <Button
-                        onClick={openPackingListModal}
-                        className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                        size="sm"
-                      >
-                        <PackageCheck className="h-4 w-4 mr-2" />
-                        Generate Packing List
-                      </Button>
-                    )}
-
-                    {/* Bulk Update Button */}
-                    {getNextStatus(status) && (
-                      <Button
-                        onClick={() => bulkUpdateOrders(getNextStatus(status)!.status)}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => {
+                          const selected = getOrdersByStatus('PROCESSING').filter(o => selectedOrderIds.has(o.id));
+                          setInvoicePrintOrders(selected);
+                          setIsInvoicePrintOpen(true);
+                        }}
                         size="sm"
                         disabled={isUpdating}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Print Invoices
+                      </Button>
+                    )}
+
+                    {/* Packing: Create Shipment for delivery orders / Ready for Collection for self-pickup */}
+                    {status === 'PACKING' && (() => {
+                      const selectedOrders = getOrdersByStatus('PACKING').filter(o => selectedOrderIds.has(o.id));
+                      const deliveryOrders = selectedOrders.filter(o => o.delivery_method !== 'self-pickup');
+                      const pickupOrders = selectedOrders.filter(o => o.delivery_method === 'self-pickup');
+                      return (
+                        <>
+                          {deliveryOrders.length > 0 && (
+                            <Button
+                              onClick={() => {
+                                if (deliveryOrders.length > 0) {
+                                  setCourierOrder(deliveryOrders[0]);
+                                  setIsCourierDialogOpen(true);
+                                }
+                              }}
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              <Send className="h-4 w-4 mr-2" />
+                              Create Shipment ({deliveryOrders.length})
+                            </Button>
+                          )}
+                          {pickupOrders.length > 0 && (
+                            <Button
+                              onClick={async () => {
+                                try {
+                                  setIsUpdating(true);
+                                  const ids = pickupOrders.map(o => o.id);
+                                  const { error } = await supabase.from('orders' as any)
+                                    .update({ status: 'READY_FOR_COLLECTION' as any, updated_at: new Date().toISOString() })
+                                    .in('id', ids);
+                                  if (error) throw error;
+                                  toast({ title: 'Ready for Collection', description: `${ids.length} self-pickup order(s) ready for collection.` });
+                                  setSelectedOrderIds(new Set());
+                                  fetchWarehouseOrders();
+                                } catch (err: any) { toast({ title: 'Error', description: err.message, variant: 'destructive' }); }
+                                finally { setIsUpdating(false); }
+                              }}
+                              size="sm"
+                              disabled={isUpdating}
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Ready for Collection ({pickupOrders.length})
+                            </Button>
+                          )}
+                        </>
+                      );
+                    })()}
+
+                    {/* Other tabs: Move to next status */}
+                    {!['PROCESSING', 'PACKING'].includes(status) && getNextStatus(status) && (
+                      <Button
+                        onClick={() => bulkUpdateOrders(getNextStatus(status)!.status)}
+                        size="sm"
+                        disabled={isUpdating}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
                         <ArrowRight className="h-4 w-4 mr-2" />
                         Move to {getNextStatus(status)!.label}
@@ -991,20 +1032,45 @@ export default function WarehouseOperations() {
                                 </TableCell>
                                 <TableCell className="text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                    {/* Show courier buttons for READY_FOR_DELIVERY status */}
-                                    {status === 'READY_FOR_DELIVERY' && !order.courier_tracking_number && (
-                                      <Button
-                                        variant="default"
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openCourierDialog(order);
-                                        }}
-                                        className="bg-blue-600 hover:bg-blue-700"
-                                      >
-                                        <Send className="h-4 w-4 mr-1" />
-                                        Create Shipment
-                                      </Button>
+                                    {/* Packing: Create Shipment for delivery / Ready for Collection for self-pickup */}
+                                    {status === 'PACKING' && !order.courier_tracking_number && (
+                                      order.delivery_method === 'self-pickup' ? (
+                                        <Button
+                                          variant="default"
+                                          size="sm"
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            try {
+                                              setIsUpdating(true);
+                                              const { error } = await supabase.from('orders' as any)
+                                                .update({ status: 'READY_FOR_COLLECTION' as any, updated_at: new Date().toISOString() })
+                                                .eq('id', order.id);
+                                              if (error) throw error;
+                                              toast({ title: 'Ready for Collection', description: `Order #${order.order_no} is ready for collection.` });
+                                              fetchWarehouseOrders();
+                                            } catch (err: any) { toast({ title: 'Error', description: err.message, variant: 'destructive' }); }
+                                            finally { setIsUpdating(false); }
+                                          }}
+                                          className="bg-blue-600 hover:bg-blue-700"
+                                          disabled={isUpdating}
+                                        >
+                                          <CheckCircle className="h-4 w-4 mr-1" />
+                                          Ready for Collection
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          variant="default"
+                                          size="sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openCourierDialog(order);
+                                          }}
+                                          className="bg-blue-600 hover:bg-blue-700"
+                                        >
+                                          <Send className="h-4 w-4 mr-1" />
+                                          Create Shipment
+                                        </Button>
+                                      )
                                     )}
 
                                     {/* Show tracking/label buttons for orders with courier assigned */}
@@ -1038,7 +1104,7 @@ export default function WarehouseOperations() {
                                     )}
 
                                     {/* Default process button for other statuses */}
-                                    {status !== 'READY_FOR_DELIVERY' && !order.courier_tracking_number && (
+                                    {status !== 'PACKING' && !order.courier_tracking_number && (
                                       <Button
                                         variant="outline"
                                         size="sm"
@@ -1046,7 +1112,7 @@ export default function WarehouseOperations() {
                                           e.stopPropagation();
                                           setSelectedOrder(order);
                                           const validNextStatuses = getValidNextStatuses(order.status as OrderStatus);
-                                          setNewStatus((validNextStatuses[0]?.status as OrderStatus) || 'PICKING');
+                                          setNewStatus((validNextStatuses[0]?.status as OrderStatus) || 'PACKING');
                                         }}
                                       >
                                         <ArrowRight className="h-4 w-4 mr-1" />
@@ -1058,98 +1124,61 @@ export default function WarehouseOperations() {
                             </TableRow>
                               {expandedOrderId === order.id && (
                                 <TableRow>
-                                  <TableCell colSpan={7} className="bg-muted/30">
-                                    <div className="p-4 space-y-4">
-                                      <div className="grid md:grid-cols-2 gap-4">
-                                        {/* Delivery Address */}
+                                  <TableCell colSpan={7} className="bg-gray-50/50 border-t">
+                                    <div className="py-4 space-y-4">
+                                      {/* 3-column: Customer, Delivery, Summary */}
+                                      <div className="grid grid-cols-3 gap-6">
                                         <div>
-                                          <h4 className="font-medium mb-2 flex items-center gap-2">
-                                            <MapPin className="h-4 w-4" />
-                                            Delivery Address
-                                          </h4>
-                                          {order.delivery_address ? (
-                                            <div className="bg-gray-50 p-3 rounded-md text-sm">
-                                              <p className="font-medium">
-                                                {order.delivery_address.fullName || order.customer_name}
-                                              </p>
-                                              <p className="text-muted-foreground">
-                                                {order.delivery_address.phoneNumber || order.customer_phone}
-                                              </p>
-                                              <div className="mt-2 space-y-1">
-                                                {/* Handle new address format (single address field) */}
-                                                {order.delivery_address.address && (
-                                                  <p className="whitespace-pre-line">{order.delivery_address.address}</p>
-                                                )}
-
-                                                {/* Handle old address format (multiple fields) - for backward compatibility */}
-                                                {order.delivery_address.address_line_1 && (
-                                                  <p>{order.delivery_address.address_line_1}</p>
-                                                )}
-                                                {order.delivery_address.address_line_2 && (
-                                                  <p>{order.delivery_address.address_line_2}</p>
-                                                )}
-                                                {order.delivery_address.city && order.delivery_address.postal_code && (
-                                                  <p>{order.delivery_address.postal_code} {order.delivery_address.city}</p>
-                                                )}
-                                                {order.delivery_address.state && (
-                                                  <p>{order.delivery_address.state}</p>
-                                                )}
-
-                                                {/* Show special delivery notes if available */}
-                                                {order.delivery_address.notes && (
-                                                  <div className="mt-2 pt-2 border-t border-gray-200">
-                                                    <p className="text-xs font-medium text-gray-600">Special Instructions:</p>
-                                                    <p className="text-xs text-gray-700 italic">{order.delivery_address.notes}</p>
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </div>
-                                          ) : (
-                                            <p className="text-sm text-muted-foreground">No address provided</p>
+                                          <p className="text-xs font-semibold text-gray-500 mb-2">CUSTOMER</p>
+                                          <p className="text-sm font-medium">{order.customer_name}</p>
+                                          <p className="text-sm text-muted-foreground">{order.customer_phone}</p>
+                                          {order.customer_email && <p className="text-sm text-muted-foreground">{order.customer_email}</p>}
+                                        </div>
+                                        <div>
+                                          <p className="text-xs font-semibold text-gray-500 mb-2">DELIVERY</p>
+                                          <p className="text-sm font-medium capitalize">{order.delivery_method?.replace('-', ' ')} | {order.total > 0 ? 'FREE' : ''}</p>
+                                          {order.delivery_address?.address && (
+                                            <p className="text-sm text-muted-foreground mt-1 bg-white border rounded px-2 py-1.5">{order.delivery_address.address}</p>
+                                          )}
+                                          {!order.delivery_address?.address && order.delivery_method === 'self-pickup' && (
+                                            <p className="text-sm text-muted-foreground mt-1">Self-pickup at store</p>
+                                          )}
+                                          {order.courier_tracking_number && (
+                                            <p className="text-sm text-blue-600 mt-1 font-mono">{order.courier_tracking_number} <span className="text-xs text-muted-foreground">({order.courier_provider})</span></p>
                                           )}
                                         </div>
-
-                                        {/* Warehouse Picking List */}
                                         <div>
-                                          <h4 className="font-medium mb-2 flex items-center gap-2">
-                                            <Package className="h-4 w-4" />
-                                            Picking List ({order.order_items.length} items)
-                                          </h4>
-                                          <div className="space-y-2">
-                                            {order.order_items.map((item) => (
-                                              <div key={item.id} className="bg-white border rounded-lg p-3">
-                                                <div className="flex items-center justify-between">
-                                                  <div className="flex items-center gap-3">
-                                                    <Badge variant="secondary" className="text-lg font-bold px-2 py-1">
-                                                      {item.quantity}
-                                                    </Badge>
-                                                    <div>
-                                                      <p className="font-mono font-bold text-sm text-blue-600">{item.component_sku}</p>
-                                                      <p className="text-sm font-medium">{item.component_name}</p>
-                                                      {item.product_context && (
-                                                        <p className="text-xs text-muted-foreground">For: {item.product_context}</p>
-                                                      )}
-                                                    </div>
-                                                  </div>
-                                                  <div className="text-right text-sm text-muted-foreground">
-                                                    {formatCurrency(item.unit_price)} each
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            ))}
+                                          <p className="text-xs font-semibold text-gray-500 mb-2">SUMMARY</p>
+                                          <div className="text-sm space-y-1">
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(order.total)}</span></div>
+                                            <div className="flex justify-between font-medium border-t pt-1 mt-1"><span>Total</span><span>{formatCurrency(order.total)}</span></div>
                                           </div>
                                         </div>
                                       </div>
 
-                                      {/* Processing Notes */}
-                                      {order.processing_notes && (
-                                        <div>
-                                          <h4 className="font-medium mb-2 flex items-center gap-2">
-                                            <FileText className="h-4 w-4" />
-                                            Processing Notes
-                                          </h4>
-                                          <p className="text-sm text-muted-foreground bg-yellow-50 p-3 rounded-md">{order.processing_notes}</p>
+                                      {/* Items — flat list like admin Orders */}
+                                      <div>
+                                        <p className="text-xs font-semibold text-gray-500 mb-2">ITEMS ({order.order_items.length})</p>
+                                        <div className="divide-y border-t">
+                                          {order.order_items.map((item) => (
+                                            <div key={item.id} className="flex items-center justify-between py-2 text-sm">
+                                              <div>
+                                                <span className="font-medium">{item.component_name}</span>
+                                                <span className="text-xs text-muted-foreground ml-2">{item.component_sku}</span>
+                                              </div>
+                                              <div className="flex items-center gap-4">
+                                                <span className="text-muted-foreground">{item.quantity}x</span>
+                                                <span className="font-medium w-24 text-right">{formatCurrency(item.total_price)}</span>
+                                              </div>
+                                            </div>
+                                          ))}
                                         </div>
+                                      </div>
+
+                                      {order.processing_notes && (
+                                        <p className="text-sm text-muted-foreground bg-yellow-50 px-3 py-2 rounded">
+                                          <span className="font-medium text-gray-700">Note:</span> {order.processing_notes}
+                                        </p>
                                       )}
                                     </div>
                                   </TableCell>
@@ -1263,7 +1292,7 @@ export default function WarehouseOperations() {
                                   e.stopPropagation();
                                   setSelectedOrder(order);
                                   const validNextStatuses = getValidNextStatuses(order.status as OrderStatus);
-                                  setNewStatus((validNextStatuses[0]?.status as OrderStatus) || 'PICKING');
+                                  setNewStatus((validNextStatuses[0]?.status as OrderStatus) || 'PACKING');
                                 }}
                               >
                                 <ArrowRight className="h-4 w-4 mr-2" />
@@ -1861,6 +1890,115 @@ export default function WarehouseOperations() {
         </DialogContent>
       </Dialog>
 
+      {/* Invoice Print Modal */}
+      {isInvoicePrintOpen && invoicePrintOrders.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setIsInvoicePrintOpen(false); }}>
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto shadow-xl">
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
+              <h2 className="text-base font-semibold">Invoices ({invoicePrintOrders.length} orders)</h2>
+              <button onClick={() => setIsInvoicePrintOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div id="warehouse-invoice-content">
+              {invoicePrintOrders.map((order, orderIdx) => (
+                <div key={order.id} className="p-5 bg-white" style={orderIdx > 0 ? { pageBreakBefore: 'always' } : {}}>
+                  <div style={{ padding: '10px', fontFamily: 'Arial, sans-serif', fontSize: '9px', display: 'flex', flexDirection: 'column', minHeight: '95vh' }}>
+                    <div style={{ flex: '0 0 auto' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <div>
+                          <h2 style={{ margin: '0', fontSize: '16px' }}>AUTO LABS SDN BHD</h2>
+                          <p style={{ margin: '2px 0', fontSize: '9px' }}>17, Jalan 7/95B, Cheras Utama</p>
+                          <p style={{ margin: '2px 0', fontSize: '9px' }}>56100 Cheras, Wilayah Persekutuan Kuala Lumpur</p>
+                          <p style={{ margin: '2px 0', fontSize: '9px' }}>Tel: 03-4297 7668</p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ border: '1px solid #000', padding: '5px 15px', display: 'inline-block' }}>
+                            <h2 style={{ margin: '0', textAlign: 'center', fontSize: '14px' }}>INVOICE</h2>
+                            <p style={{ margin: '3px 0', fontSize: '9px' }}><strong>Order ID: </strong>{order.order_no}</p>
+                          </div>
+                          <p style={{ margin: '5px 0 2px', fontSize: '9px' }}><strong>Date: </strong>{new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>Bill To: </strong>{order.customer_name}</p>
+                        <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>Tel: </strong>{order.customer_phone || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div style={{ flex: '1 1 auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr><td colSpan={6} style={{ borderTop: '1px solid #000', padding: '0' }} /></tr>
+                          <tr>
+                            <th style={{ padding: '3px', textAlign: 'left', fontSize: '9px' }}>No.</th>
+                            <th style={{ padding: '3px', textAlign: 'left', fontSize: '9px' }}>Stock Code</th>
+                            <th style={{ padding: '3px', textAlign: 'left', fontSize: '9px' }}>Description</th>
+                            <th style={{ padding: '3px', textAlign: 'center', fontSize: '9px' }}>Qty</th>
+                            <th style={{ padding: '3px', textAlign: 'right', fontSize: '9px' }}>Unit Price</th>
+                            <th style={{ padding: '3px', textAlign: 'right', fontSize: '9px' }}>Amount</th>
+                          </tr>
+                          <tr><td colSpan={6} style={{ borderBottom: '1px solid #000', padding: '0' }} /></tr>
+                        </thead>
+                        <tbody>
+                          {order.order_items.map((item, i) => (
+                            <tr key={item.id}>
+                              <td style={{ fontSize: '9px', padding: '2px 3px' }}>{i + 1}</td>
+                              <td style={{ fontSize: '9px', padding: '2px 3px' }}>{item.component_sku}</td>
+                              <td style={{ fontSize: '9px', padding: '2px 3px' }}>{item.component_name}</td>
+                              <td style={{ fontSize: '9px', textAlign: 'center', padding: '2px 3px' }}>{item.quantity}</td>
+                              <td style={{ fontSize: '9px', textAlign: 'right', padding: '2px 3px' }}>RM {item.unit_price.toFixed(2)}</td>
+                              <td style={{ fontSize: '9px', textAlign: 'right', padding: '2px 3px' }}>RM {item.total_price.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ flex: '0 0 auto', borderTop: '1px solid #000', paddingTop: '5px', marginTop: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <strong style={{ fontSize: '10px' }}>TOTAL: RM {order.total.toFixed(2)}</strong>
+                      </div>
+                      <div style={{ textAlign: 'center', marginTop: '20px', fontStyle: 'italic', fontSize: '8px' }}>
+                        <p>This is a computer generated invoice. No signature is required.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t p-4 flex justify-center gap-3">
+              <Button onClick={() => { window.print(); }} size="sm">
+                <Printer className="h-4 w-4 mr-2" /> Print Invoices
+              </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    setIsUpdating(true);
+                    const ids = invoicePrintOrders.map(o => o.id);
+                    const { error } = await supabase
+                      .from('orders' as any)
+                      .update({ status: 'PACKING' as any, invoice_printed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+                      .in('id', ids);
+                    if (error) throw error;
+                    toast({ title: 'Done', description: `${ids.length} order(s) printed and moved to Packing.` });
+                    setSelectedOrderIds(new Set());
+                    setIsInvoicePrintOpen(false);
+                    setInvoicePrintOrders([]);
+                    fetchWarehouseOrders();
+                  } catch (err: any) { toast({ title: 'Error', description: err.message, variant: 'destructive' }); }
+                  finally { setIsUpdating(false); }
+                }}
+                variant="outline"
+                size="sm"
+                disabled={isUpdating}
+              >
+                <ArrowRight className="h-4 w-4 mr-2" /> Move to Packing
+              </Button>
+              <Button onClick={() => setIsInvoicePrintOpen(false)} variant="outline" size="sm">Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Print Styles */}
       <style dangerouslySetInnerHTML={{
         __html: `
@@ -1871,11 +2009,14 @@ export default function WarehouseOperations() {
             #picking-list-content,
             #picking-list-content *,
             #packing-list-content,
-            #packing-list-content * {
+            #packing-list-content *,
+            #warehouse-invoice-content,
+            #warehouse-invoice-content * {
               visibility: visible;
             }
             #picking-list-content,
-            #packing-list-content {
+            #packing-list-content,
+            #warehouse-invoice-content {
               position: absolute;
               left: 0;
               top: 0;
@@ -1899,11 +2040,9 @@ export default function WarehouseOperations() {
 const getNextStatus = (currentStatus: OrderStatus) => {
   const WAREHOUSE_WORKFLOW = [
     { status: 'PROCESSING' as OrderStatus, label: 'Processing', icon: Clock },
-    { status: 'PICKING' as OrderStatus, label: 'Picking', icon: Package },
     { status: 'PACKING' as OrderStatus, label: 'Packing', icon: PackageCheck },
-    { status: 'READY_FOR_DELIVERY' as OrderStatus, label: 'Ready', icon: CheckCircle },
-    { status: 'OUT_FOR_DELIVERY' as OrderStatus, label: 'Dispatched', icon: Truck },
-    { status: 'DELIVERED' as OrderStatus, label: 'Delivered', icon: CheckCircle }
+    { status: 'OUT_FOR_DELIVERY' as OrderStatus, label: 'Out for Delivery', icon: Truck },
+    { status: 'COMPLETED' as OrderStatus, label: 'Completed', icon: CheckCircle }
   ];
 
   const statusIndex = WAREHOUSE_WORKFLOW.findIndex(s => s.status === currentStatus);
@@ -1916,11 +2055,8 @@ const getNextStatus = (currentStatus: OrderStatus) => {
 const getValidNextStatuses = (currentStatus: string) => {
   const WAREHOUSE_WORKFLOW = [
     { status: 'PROCESSING', label: 'Processing', icon: Clock },
-    { status: 'PICKING', label: 'Picking', icon: Package },
     { status: 'PACKING', label: 'Packing', icon: PackageCheck },
-    { status: 'READY_FOR_DELIVERY', label: 'Ready', icon: CheckCircle },
-    { status: 'OUT_FOR_DELIVERY', label: 'Dispatched', icon: Truck },
-    { status: 'DELIVERED', label: 'Delivered', icon: CheckCircle },
+    { status: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', icon: Truck },
     { status: 'COMPLETED', label: 'Completed', icon: CheckCircle }
   ];
 

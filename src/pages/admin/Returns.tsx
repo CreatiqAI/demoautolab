@@ -97,7 +97,10 @@ export default function AdminReturns() {
   const {
     approveReturn,
     rejectReturn,
-    updateReturnStatus
+    updateReturnStatus,
+    adminCreateReturn,
+    processRefund,
+    restockItems
   } = useReturns();
 
   // State
@@ -114,12 +117,30 @@ export default function AdminReturns() {
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
+  const [showCreateReturnDialog, setShowCreateReturnDialog] = useState(false);
+  const [showRefundDialog, setShowRefundDialog] = useState(false);
 
   // Form states
   const [adminNotes, setAdminNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [newStatus, setNewStatus] = useState<ReturnStatus | ''>('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Create return form
+  const [createReturnForm, setCreateReturnForm] = useState({
+    orderNo: '',
+    reason: 'DEFECTIVE' as 'DEFECTIVE' | 'WRONG_ITEM',
+    reasonDetails: '',
+    refundMethod: 'ORIGINAL_PAYMENT' as 'ORIGINAL_PAYMENT' | 'EXCHANGE',
+    returnInstructions: `Please ship the item(s) back to:\nAUTO LABS SDN BHD\n17, Jalan 7/95B, Cheras Utama\n56100 Cheras, WP Kuala Lumpur\n\nPlease include:\n- RMA number written on the outside of the package\n- Original packaging if available`,
+    returnAddress: '17, Jalan 7/95B, Cheras Utama, 56100 Cheras, WP Kuala Lumpur',
+  });
+  const [foundOrder, setFoundOrder] = useState<any>(null);
+  const [searchingOrder, setSearchingOrder] = useState(false);
+
+  // Refund form
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReference, setRefundReference] = useState('');
 
   // Fetch returns
   const fetchReturns = async () => {
@@ -484,8 +505,43 @@ export default function AdminReturns() {
                 setNewStatus(item.status as ReturnStatus);
                 setShowStatusDialog(true);
               }}
+              title="Update Status"
             >
               <RefreshCw className="h-4 w-4" />
+            </Button>
+          )}
+
+          {['ITEM_RECEIVED', 'INSPECTING'].includes(item.status) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedReturn(item);
+                setRefundAmount(item.refund_amount?.toString() || '');
+                setShowRefundDialog(true);
+              }}
+              title="Process Refund"
+            >
+              RM
+            </Button>
+          )}
+
+          {['ITEM_RECEIVED', 'INSPECTING', 'REFUND_PROCESSING', 'COMPLETED'].includes(item.status) && !(item as any).restocked && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-green-600 hover:text-green-700 hover:bg-green-50"
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (!confirm('Restock items from this return back to inventory?')) return;
+                await restockItems(item.id);
+                fetchReturns();
+              }}
+              title="Restock Items"
+            >
+              <Package className="h-4 w-4" />
             </Button>
           )}
 
@@ -514,9 +570,15 @@ export default function AdminReturns() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Returns Management</h1>
-        <p className="text-muted-foreground">Manage customer return requests and refunds</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Returns Management</h1>
+          <p className="text-muted-foreground">Manage customer return requests and refunds</p>
+        </div>
+        <Button onClick={() => setShowCreateReturnDialog(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+          <RotateCcw className="h-4 w-4 mr-2" />
+          Create Return
+        </Button>
       </div>
 
       {/* Stats cards */}
@@ -1081,6 +1143,199 @@ export default function AdminReturns() {
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               Update Status
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Return Dialog */}
+      <Dialog open={showCreateReturnDialog} onOpenChange={(open) => { setShowCreateReturnDialog(open); if (!open) { setFoundOrder(null); setCreateReturnForm(prev => ({ ...prev, orderNo: '', reasonDetails: '' })); } }}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Return (Admin)</DialogTitle>
+            <DialogDescription>Create a return request on behalf of a customer</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label>Order Number</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  value={createReturnForm.orderNo}
+                  onChange={(e) => setCreateReturnForm(prev => ({ ...prev, orderNo: e.target.value }))}
+                  placeholder="e.g. ORD-ABC123"
+                />
+                <Button
+                  variant="outline"
+                  disabled={searchingOrder || !createReturnForm.orderNo}
+                  onClick={async () => {
+                    setSearchingOrder(true);
+                    try {
+                      const { data, error } = await supabase
+                        .from('orders' as any)
+                        .select(`*, order_items (id, component_sku, component_name, quantity, unit_price, total_price)`)
+                        .eq('order_no', createReturnForm.orderNo)
+                        .maybeSingle();
+                      if (error) throw error;
+                      if (!data) {
+                        toast({ title: 'Not Found', description: 'Order not found.', variant: 'destructive' });
+                        setFoundOrder(null);
+                      } else {
+                        setFoundOrder(data);
+                      }
+                    } catch (err: any) {
+                      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                    } finally {
+                      setSearchingOrder(false);
+                    }
+                  }}
+                >
+                  {searchingOrder ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            {foundOrder && (
+              <>
+                <div className="p-3 bg-gray-50 rounded-lg text-sm">
+                  <div className="font-medium">{foundOrder.customer_name}</div>
+                  <div className="text-gray-500">{foundOrder.customer_phone} | Status: {foundOrder.status}</div>
+                  <div className="text-gray-500">Total: RM {parseFloat(foundOrder.total).toFixed(2)}</div>
+                </div>
+
+                <div>
+                  <Label>Reason</Label>
+                  <Select value={createReturnForm.reason} onValueChange={(v: any) => setCreateReturnForm(prev => ({ ...prev, reason: v }))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DEFECTIVE">Defective / Damaged</SelectItem>
+                      <SelectItem value="WRONG_ITEM">Wrong Item Received</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Details</Label>
+                  <Textarea value={createReturnForm.reasonDetails} onChange={(e) => setCreateReturnForm(prev => ({ ...prev, reasonDetails: e.target.value }))} placeholder="Describe the issue..." className="mt-1" />
+                </div>
+
+                <div>
+                  <Label>Refund Method</Label>
+                  <Select value={createReturnForm.refundMethod} onValueChange={(v: any) => setCreateReturnForm(prev => ({ ...prev, refundMethod: v }))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ORIGINAL_PAYMENT">Refund to Original Payment</SelectItem>
+                      <SelectItem value="EXCHANGE">Exchange for Replacement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Return Instructions (sent to customer)</Label>
+                  <Textarea value={createReturnForm.returnInstructions} onChange={(e) => setCreateReturnForm(prev => ({ ...prev, returnInstructions: e.target.value }))} className="mt-1" rows={5} />
+                </div>
+
+                <div>
+                  <Label>Items to Return</Label>
+                  <div className="mt-2 space-y-2">
+                    {(foundOrder.order_items || []).map((item: any) => (
+                      <div key={item.id} className="flex items-center justify-between p-2 bg-white border rounded text-sm">
+                        <div>
+                          <div className="font-medium">{item.component_name}</div>
+                          <div className="text-xs text-gray-500">{item.component_sku} | Qty: {item.quantity} | RM {parseFloat(item.unit_price).toFixed(2)}</div>
+                        </div>
+                        <Checkbox defaultChecked />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateReturnDialog(false)}>Cancel</Button>
+            <Button
+              disabled={!foundOrder || submitting}
+              onClick={async () => {
+                if (!foundOrder) return;
+                setSubmitting(true);
+                const items = (foundOrder.order_items || []).map((item: any) => ({
+                  order_item_id: item.id,
+                  component_sku: item.component_sku,
+                  component_name: item.component_name,
+                  quantity: item.quantity,
+                  unit_price: parseFloat(item.unit_price),
+                }));
+                const result = await adminCreateReturn({
+                  order_id: foundOrder.id,
+                  customer_id: foundOrder.user_id,
+                  reason: createReturnForm.reason,
+                  reason_details: createReturnForm.reasonDetails,
+                  refund_method: createReturnForm.refundMethod,
+                  return_instructions: createReturnForm.returnInstructions,
+                  return_address: createReturnForm.returnAddress,
+                  items,
+                });
+                setSubmitting(false);
+                if (result) {
+                  setShowCreateReturnDialog(false);
+                  setFoundOrder(null);
+                  fetchReturns();
+                }
+              }}
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Create & Approve Return
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Process Refund Dialog */}
+      <Dialog open={showRefundDialog} onOpenChange={setShowRefundDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Process Refund</DialogTitle>
+            <DialogDescription>Process refund for return {selectedReturn?.return_no}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label>Refund Amount (RM)</Label>
+              <Input type="number" step="0.01" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} placeholder="0.00" className="mt-1" />
+              {selectedReturn?.refund_amount && (
+                <p className="text-xs text-gray-500 mt-1">Calculated amount: RM {selectedReturn.refund_amount}</p>
+              )}
+            </div>
+            <div>
+              <Label>Reference Number (Optional)</Label>
+              <Input value={refundReference} onChange={(e) => setRefundReference(e.target.value)} placeholder="Bank transfer ref, etc." className="mt-1" />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRefundDialog(false)}>Cancel</Button>
+            <Button
+              disabled={!refundAmount || submitting}
+              onClick={async () => {
+                if (!selectedReturn || !refundAmount) return;
+                setSubmitting(true);
+                const success = await processRefund(selectedReturn.id, {
+                  refund_amount: parseFloat(refundAmount),
+                  refund_reference: refundReference || undefined,
+                });
+                setSubmitting(false);
+                if (success) {
+                  setShowRefundDialog(false);
+                  setRefundAmount('');
+                  setRefundReference('');
+                  fetchReturns();
+                }
+              }}
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Process Refund
             </Button>
           </DialogFooter>
         </DialogContent>

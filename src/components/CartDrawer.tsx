@@ -131,7 +131,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
       {/* Drawer */}
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-lg bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 h-full w-full max-w-lg bg-white text-gray-900 shadow-2xl z-50 transform transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -249,16 +249,16 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity - 1)}
                           disabled={item.quantity <= 1}
-                          className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-700"
                         >
                           <Minus className="h-3 w-3" />
                         </button>
-                        <span className="w-9 text-center text-sm font-medium">
+                        <span className="w-9 text-center text-sm font-medium text-gray-900">
                           {item.quantity}
                         </span>
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                          className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors text-gray-700"
                         >
                           <Plus className="h-3 w-3" />
                         </button>

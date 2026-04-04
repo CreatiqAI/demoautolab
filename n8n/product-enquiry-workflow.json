@@ -1,0 +1,446 @@
+{
+  "name": "AutoLab Product Enquiry AI Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "product-enquiry",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 400],
+      "webhookId": "product-enquiry-autolab"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ reply: $('AI Agent').first().json.output }) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1520, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract incoming message from webhook payload\n// Supports WhatsApp Cloud API format or direct JSON { phone, message }\nconst body = $input.first().json.body || $input.first().json;\n\nlet senderPhone = '';\nlet messageText = '';\nlet senderName = '';\n\n// WhatsApp Cloud API format\nif (body.entry) {\n  const entry = body.entry[0];\n  const changes = entry.changes[0];\n  const value = changes.value;\n\n  if (!value.messages || !value.messages[0]) {\n    return []; // Skip status updates\n  }\n\n  const msg = value.messages[0];\n  senderPhone = msg.from;\n  messageText = msg.text?.body || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';\n\n  if (value.contacts && value.contacts[0]) {\n    senderName = value.contacts[0].profile?.name || '';\n  }\n}\n// Direct JSON format: { phone: '60123456789', message: 'hi', name: 'John' }\nelse if (body.phone || body.from) {\n  senderPhone = body.phone || body.from;\n  messageText = body.message || body.text?.body || body.body || '';\n  senderName = body.name || body.profile_name || '';\n}\n\n// Normalize phone (remove + prefix)\nsenderPhone = senderPhone.replace(/^\\+/, '');\n\nif (!senderPhone || !messageText) {\n  return [];\n}\n\nreturn {\n  json: {\n    senderPhone,\n    messageText: messageText.trim(),\n    senderName: senderName || 'Customer',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "extract-message",
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "env-supabase-url",
+              "name": "SUPABASE_URL",
+              "value": "=YOUR_SUPABASE_URL",
+              "type": "string"
+            },
+            {
+              "id": "env-supabase-key",
+              "name": "SUPABASE_SERVICE_KEY",
+              "value": "=YOUR_SUPABASE_SERVICE_ROLE_KEY",
+              "type": "string"
+            },
+            {
+              "id": "env-website-url",
+              "name": "WEBSITE_URL",
+              "value": "=https://autolab.my",
+              "type": "string"
+            },
+            {
+              "id": "env-sender-phone",
+              "name": "senderPhone",
+              "value": "={{ $('Extract Message').first().json.senderPhone }}",
+              "type": "string"
+            },
+            {
+              "id": "env-sender-name",
+              "name": "senderName",
+              "value": "={{ $('Extract Message').first().json.senderName }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "env-setup",
+      "name": "Environment Setup",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_lookup_customer",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_phone: $('Environment Setup').first().json.senderPhone }) }}",
+        "options": {}
+      },
+      "id": "lookup-customer",
+      "name": "Lookup Customer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse customer lookup result and prepare context for AI Agent\nconst lookupResult = $input.first().json;\n\n// The RPC returns an array; take first row or default to guest\nconst customer = Array.isArray(lookupResult) && lookupResult.length > 0\n  ? lookupResult[0]\n  : { customer_type: 'normal', pricing_label: 'Retail', is_registered: false, customer_name: 'Guest' };\n\nconst message = $('Extract Message').first().json.messageText;\nconst phone = $('Environment Setup').first().json.senderPhone;\nconst name = $('Environment Setup').first().json.senderName;\n\nreturn {\n  json: {\n    customerType: customer.customer_type || 'normal',\n    pricingLabel: customer.pricing_label || 'Retail',\n    isRegistered: customer.is_registered || false,\n    customerName: customer.customer_name || name || 'Customer',\n    isMerchant: customer.customer_type === 'merchant',\n    senderPhone: phone,\n    messageText: message\n  }\n};"
+      },
+      "id": "prepare-context",
+      "name": "Prepare Customer Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Customer: {{ $('Prepare Customer Context').first().json.customerName }}\nPhone: {{ $('Prepare Customer Context').first().json.senderPhone }}\nCustomer type: {{ $('Prepare Customer Context').first().json.pricingLabel }} ({{ $('Prepare Customer Context').first().json.isMerchant ? 'Merchant account — show merchant_price' : 'Normal customer — show normal_price' }})\nRegistered: {{ $('Prepare Customer Context').first().json.isRegistered ? 'Yes' : 'No (Guest / B2C)' }}\n\nMessage: {{ $('Prepare Customer Context').first().json.messageText }}",
+        "options": {
+          "systemMessage": "=You are AutoLab's product enquiry assistant. AutoLab is a Malaysian auto parts & car accessories e-commerce store.\n\nWebsite: {{ $('Environment Setup').first().json.WEBSITE_URL }}\n\n## Your Role\nHelp customers find the right car accessories — specifically 9/10 inch Android Player casings and related products. You are friendly, concise, and knowledgeable.\n\n## Conversation Flow\n1. **Identify the car**: Ask the customer what car brand they have (Proton, Perodua, Toyota, Honda, BMW, etc.)\n2. **Get the model**: Ask which model (e.g., Saga, Myvi, Vios, City, 3 Series)\n3. **Understand the need**: Ask what product they're looking for. Our main products are 9/10 inch casing for Android player. But we also carry accessories, cameras, dashcams, wiring harnesses, etc.\n4. **Search products**: Use `search_products` with the car brand, model, and product type\n5. **Present results with correct pricing**:\n   - If the customer context says **Merchant account — show merchant_price**, display `merchant_price` and label it as *B2B Price* or *Merchant Price*\n   - If the customer context says **Normal customer — show normal_price**, display `normal_price` and label it as *Price*\n   - If the customer is **not registered (Guest/B2C)**, show `normal_price` and mention they can register on the website for member benefits\n6. **Show product details**: For each product, show name, applicable car years, SKU components (call `get_product_components`), pricing, and stock status\n7. **Fallback**: If no products found, send the website link: {{ $('Environment Setup').first().json.WEBSITE_URL }}/catalog and suggest the customer browse there for the full catalog with images\n\n## CRITICAL RULES\n- NEVER make up product info or prices — ALWAYS use search tools\n- NEVER show merchant_price to normal/guest customers\n- NEVER show normal_price labeled as merchant price\n- All prices are in RM (Malaysian Ringgit)\n- Keep responses concise — this is a chat, not an email\n- Use WhatsApp formatting: *bold* for product names and prices\n- If user asks something outside product enquiry (orders, returns, etc.), direct them to the main WhatsApp chatbot or website\n\n## Response Format\nWhen showing products:\n\n*Product Name*\nFor: Car Brand Model (Year-Year)\nPrice: RM X,XXX.XX\nStock: In Stock / Out of Stock\n\nComponents included:\n- Component 1 (SKU) — RM XX.XX\n- Component 2 (SKU) — RM XX.XX\n\nLink: {{ $('Environment Setup').first().json.WEBSITE_URL }}/product/{slug}\n\n## When No Results Found\nSay something like:\nSorry, we don't have that product in stock right now. You can browse our full catalog here: {{ $('Environment Setup').first().json.WEBSITE_URL }}/catalog — we have images and pricing for all products there!\n\n## Smart Shortcuts\n- If customer says their car brand AND model AND product in one message, skip straight to searching — don't ask redundant questions\n- If customer just says 'hi' or 'hello', greet them and ask what car they drive\n- If customer asks about price only, still search and show full product info with price highlighted"
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [1320, 400]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 1000
+        }
+      },
+      "id": "openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [1100, 640],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-key",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=enquiry_{{ $('Prepare Customer Context').first().json.senderPhone }}",
+        "contextWindowLength": 10
+      },
+      "id": "memory-buffer",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [1300, 640]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search for auto parts and car accessories. Returns product name, slug, description, brand, model, category, normal_price, merchant_price, year range, image, and stock status. Pass the relevant filters — car brand, car model, product keyword, or category. Empty strings are treated as 'no filter'.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_search_products",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_query",
+              "value": "={{ $fromAI('query', 'Product search text (e.g. android player, casing, dashcam). Empty string to skip.', 'string') }}"
+            },
+            {
+              "name": "p_car_brand",
+              "value": "={{ $fromAI('car_brand', 'Car brand (e.g. Toyota, Proton). Empty string to skip.', 'string') }}"
+            },
+            {
+              "name": "p_car_model",
+              "value": "={{ $fromAI('car_model', 'Car model (e.g. Vios, Saga). Empty string to skip.', 'string') }}"
+            },
+            {
+              "name": "p_category_name",
+              "value": "={{ $fromAI('category', 'Category name (e.g. Head Unit, Camera). Empty string to skip.', 'string') }}"
+            },
+            {
+              "name": "p_limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-search-products",
+      "name": "search_products",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [1100, 840]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get the component SKUs included in a product. Returns component name, SKU, normal_price, merchant_price, stock level. Call this after search_products to show the customer what SKUs are included in the product and their individual prices.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_product_components",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_product_id",
+              "value": "={{ $fromAI('product_id', 'Product UUID from search_products results', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-get-components",
+      "name": "get_product_components",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [1320, 840]
+    },
+    {
+      "parameters": {
+        "toolDescription": "List available car brands that have products in the store. Use when a customer is unsure what car brands are available. Returns brand names.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_list_car_makes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {}
+      },
+      "id": "tool-list-car-makes",
+      "name": "list_car_brands",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [1540, 840]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search car models for a given brand. Use when the customer provided a brand but you need to ask which model. Returns model names with year ranges.",
+        "method": "POST",
+        "url": "={{ $('Environment Setup').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_search_car_models",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Environment Setup').first().json.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_make_name",
+              "value": "={{ $fromAI('make_name', 'Car brand name (e.g. Toyota, Honda, Proton)', 'string') }}"
+            },
+            {
+              "name": "p_model_query",
+              "value": "={{ $fromAI('model_query', 'Optional model name to filter by. Empty string to list all models for the brand.', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-search-car-models",
+      "name": "search_car_models",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [880, 1040]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          { "node": "Extract Message", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Extract Message": {
+      "main": [
+        [
+          { "node": "Environment Setup", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Environment Setup": {
+      "main": [
+        [
+          { "node": "Lookup Customer", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Lookup Customer": {
+      "main": [
+        [
+          { "node": "Prepare Customer Context", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Prepare Customer Context": {
+      "main": [
+        [
+          { "node": "AI Agent", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          { "node": "AI Agent", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          { "node": "AI Agent", "type": "ai_memory", "index": 0 }
+        ]
+      ]
+    },
+    "search_products": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "get_product_components": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "list_car_brands": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "search_car_models": {
+      "ai_tool": [
+        [
+          { "node": "AI Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "chatbot" },
+    { "name": "product-enquiry" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-03-25T00:00:00.000Z",
+  "versionId": "1"
+}

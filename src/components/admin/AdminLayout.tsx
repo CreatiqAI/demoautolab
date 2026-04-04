@@ -62,8 +62,8 @@ const navigation: NavigationElement[] = [
     icon: ShoppingBag,
     items: [
       { name: 'All Orders', href: '/admin/orders', icon: ShoppingBag },
-      { name: 'Returns', href: '/admin/returns', icon: RotateCcw },
       { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
+      { name: 'Returns', href: '/admin/returns', icon: RotateCcw },
       { name: 'Archived Orders', href: '/admin/archived-orders', icon: Archive },
     ]
   },

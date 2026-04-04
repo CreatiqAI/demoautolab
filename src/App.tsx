@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,6 +9,7 @@ import { PricingProvider } from '@/hooks/usePricing';
 import { CartProvider } from '@/hooks/useCartDB';
 import { useSessionEnforcement } from '@/hooks/useSessionEnforcement';
 import ScrollToTop from './components/ScrollToTop';
+import ChatBot from './components/ChatBot';
 
 import Home from './pages/Home';
 import About from './pages/About';
@@ -79,6 +80,13 @@ function SessionEnforcer() {
   return null;
 }
 
+function CustomerChatBot() {
+  const { pathname } = useLocation();
+  // Hide on admin and warehouse pages
+  if (pathname.startsWith('/admin') || pathname.startsWith('/warehouse')) return null;
+  return <ChatBot />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <HelmetProvider>
@@ -91,6 +99,7 @@ const App = () => (
             <CartProvider>
               <BrowserRouter>
                 <ScrollToTop />
+                <CustomerChatBot />
                 <Routes>
                   <Route path="/" element={<Home />} />
                   <Route path="/about" element={<About />} />

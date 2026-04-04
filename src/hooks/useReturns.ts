@@ -186,7 +186,7 @@ export function useReturns() {
       }
 
       // Check if delivered
-      if (!['DELIVERED', 'COMPLETED'].includes(order.status)) {
+      if (!['COMPLETED'].includes(order.status)) {
         return {
           eligible: false,
           reason: 'Order has not been delivered yet. Returns can only be requested for delivered orders.',
@@ -603,6 +603,120 @@ export function useReturns() {
     }
   };
 
+  // ============================================================================
+  // Admin: Create return on behalf of customer
+  // ============================================================================
+  const adminCreateReturn = async (data: {
+    order_id: string;
+    customer_id: string;
+    reason: ReturnReason;
+    reason_details?: string;
+    refund_method: RefundMethod;
+    return_instructions?: string;
+    return_address?: string;
+    items: {
+      order_item_id: string;
+      component_sku: string;
+      component_name: string;
+      quantity: number;
+      unit_price: number;
+      item_condition?: string;
+    }[];
+  }): Promise<Return | null> => {
+    try {
+      const { data: returnData, error: returnError } = await supabase
+        .from('returns' as any)
+        .insert({
+          order_id: data.order_id,
+          customer_id: data.customer_id,
+          reason: data.reason,
+          reason_details: data.reason_details || null,
+          refund_method: data.refund_method,
+          status: 'APPROVED',
+          created_by_admin: true,
+          return_instructions: data.return_instructions || null,
+          return_address: data.return_address || null,
+          approved_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (returnError) throw returnError;
+
+      // Insert return items
+      if (data.items.length > 0 && returnData) {
+        const itemsToInsert = data.items.map(item => ({
+          return_id: (returnData as any).id,
+          order_item_id: item.order_item_id,
+          component_sku: item.component_sku,
+          component_name: item.component_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          item_condition: item.item_condition || null,
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('return_items' as any)
+          .insert(itemsToInsert);
+
+        if (itemsError) throw itemsError;
+      }
+
+      toast({ title: 'Return Created', description: `Return created and auto-approved for order.` });
+      return returnData as Return;
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create return', variant: 'destructive' });
+      return null;
+    }
+  };
+
+  // ============================================================================
+  // Admin: Process refund
+  // ============================================================================
+  const processRefund = async (returnId: string, refundData: {
+    refund_amount: number;
+    refund_reference?: string;
+  }): Promise<boolean> => {
+    try {
+      const { error } = await supabase
+        .from('returns' as any)
+        .update({
+          refund_status: 'COMPLETED',
+          refund_amount: refundData.refund_amount,
+          refund_reference: refundData.refund_reference || null,
+          refund_processed_at: new Date().toISOString(),
+          status: 'REFUND_PROCESSING',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', returnId);
+
+      if (error) throw error;
+
+      toast({ title: 'Refund Processed', description: `Refund of RM ${refundData.refund_amount.toFixed(2)} processed.` });
+      return true;
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to process refund', variant: 'destructive' });
+      return false;
+    }
+  };
+
+  // ============================================================================
+  // Admin: Restock return items
+  // ============================================================================
+  const restockItems = async (returnId: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase.rpc('restock_return_items', { p_return_id: returnId });
+
+      if (error) throw error;
+
+      toast({ title: 'Items Restocked', description: 'Return items have been added back to inventory.' });
+      return true;
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to restock items', variant: 'destructive' });
+      return false;
+    }
+  };
+
   // Load returns on mount
   useEffect(() => {
     if (user) {
@@ -629,7 +743,10 @@ export function useReturns() {
     fetchAllReturns,
     approveReturn,
     rejectReturn,
-    updateReturnStatus
+    updateReturnStatus,
+    adminCreateReturn,
+    processRefund,
+    restockItems
   };
 }
 

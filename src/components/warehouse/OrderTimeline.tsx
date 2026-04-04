@@ -21,11 +21,10 @@ interface OrderTimelineProps {
 
 // Order status workflow
 const STATUS_WORKFLOW = [
-  { status: 'PROCESSING', label: 'Order Placed', description: 'Payment confirmed, preparing order', icon: CreditCard },
+  { status: 'PROCESSING', label: 'Processing', description: 'Payment confirmed, preparing order', icon: CreditCard },
   { status: 'PACKING', label: 'Packing', description: 'Items being packed', icon: PackageCheck },
-  { status: 'READY_FOR_DELIVERY', label: 'Ready', description: 'Ready for pickup/delivery', icon: CheckCircle },
-  { status: 'OUT_FOR_DELIVERY', label: 'Shipping', description: 'On the way to you', icon: Truck },
-  { status: 'DELIVERED', label: 'Delivered', description: 'Order delivered', icon: CheckCircle },
+  { status: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', description: 'On the way to you', icon: Truck },
+  { status: 'COMPLETED', label: 'Completed', description: 'Order delivered', icon: CheckCircle },
 ];
 
 // Get status index (-1 for special statuses like CANCELLED)
@@ -35,7 +34,7 @@ function getStatusIndex(status: string): number {
 
 // Check if status is a terminal/special status
 function isSpecialStatus(status: string): boolean {
-  return ['CANCELLED', 'PAYMENT_FAILED', 'COMPLETED'].includes(status);
+  return ['CANCELLED', 'PAYMENT_FAILED'].includes(status);
 }
 
 export default function OrderTimeline({
@@ -58,10 +57,6 @@ export default function OrderTimeline({
       // For special statuses, mark all as incomplete
       isComplete = false;
       isCurrent = false;
-    } else if (currentStatus === 'COMPLETED') {
-      // COMPLETED means all steps are done
-      isComplete = true;
-      isCurrent = index === STATUS_WORKFLOW.length - 1;
     } else {
       isComplete = index < currentIndex;
       isCurrent = index === currentIndex;

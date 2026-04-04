@@ -20,6 +20,8 @@ export interface ProductNew {
   updated_at: string;
 }
 
+export type MediaType = 'image' | 'video';
+
 export interface ProductImage {
   id: string;
   product_id: string;
@@ -27,6 +29,8 @@ export interface ProductImage {
   alt_text?: string;
   sort_order: number;
   is_primary: boolean;
+  media_type: MediaType;
+  thumbnail_url?: string;
   tenant_id?: string;
   created_at: string;
   updated_at: string;
@@ -67,6 +71,8 @@ export interface ComponentVariantImage {
   alt_text?: string;
   sort_order: number;
   is_primary: boolean;
+  media_type?: MediaType;
+  thumbnail_url?: string;
   tenant_id?: string;
   created_at: string;
   updated_at: string;
