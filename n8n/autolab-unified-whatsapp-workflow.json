@@ -1,22 +1,22 @@
 {
-  "name": "AutoLab WhatsApp Customer Chatbot & Notifications",
+  "name": "AutoLab Customer Chatbot & Notifications (Webhook)",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "whatsapp-autolab",
+        "path": "autolab-chatbot",
         "responseMode": "responseNode",
         "options": {}
       },
       "id": "wh-chatbot",
-      "name": "WhatsApp Webhook",
+      "name": "Chatbot Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
         200,
         400
       ],
-      "webhookId": "whatsapp-autolab"
+      "webhookId": "autolab-chatbot"
     },
     {
       "parameters": {
@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract message from WhatsApp Cloud API webhook payload\nconst body = $input.first().json.body || $input.first().json;\n\nlet senderPhone = '';\nlet messageText = '';\nlet messageType = 'text';\nlet senderName = '';\n\n// WhatsApp Cloud API format\nif (body.entry) {\n  const entry = body.entry[0];\n  const changes = entry.changes[0];\n  const value = changes.value;\n\n  // Skip status updates (only process messages)\n  if (!value.messages || !value.messages[0]) {\n    return []; // Empty = stop execution\n  }\n\n  const msg = value.messages[0];\n  senderPhone = msg.from;\n  messageText = msg.text?.body || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';\n  messageType = msg.type;\n\n  if (value.contacts && value.contacts[0]) {\n    senderName = value.contacts[0].profile?.name || '';\n  }\n}\n// Fallback for direct payload\nelse if (body.from) {\n  senderPhone = body.from;\n  messageText = body.text?.body || body.body || '';\n  senderName = body.profile_name || '';\n}\n\n// Normalize phone: remove + prefix, handle 0 prefix -> 60\nsenderPhone = senderPhone.replace(/^\\+/, '');\nif (senderPhone.startsWith('0')) {\n  senderPhone = '60' + senderPhone.substring(1);\n}\n\nif (!senderPhone || !messageText) {\n  return []; // Stop if no valid message\n}\n\nreturn {\n  json: {\n    senderPhone,\n    messageText: messageText.trim(),\n    messageType,\n    senderName: senderName || 'Customer',\n    timestamp: new Date().toISOString()\n  }\n};"
+        "jsCode": "// Extract message from incoming webhook\n// Supports: WhatsApp Cloud API format OR simple JSON { phone, message }\nconst body = .first().json.body || .first().json;\n\nlet senderPhone = '';\nlet messageText = '';\nlet senderName = '';\n\n// Format 1: Simple webhook { phone, message, name? }\nif (body.phone && body.message) {\n  senderPhone = String(body.phone);\n  messageText = String(body.message);\n  senderName = body.name || 'Customer';\n}\n// Format 2: WhatsApp Cloud API format\nelse if (body.entry) {\n  const entry = body.entry[0];\n  const changes = entry.changes[0];\n  const value = changes.value;\n  if (!value.messages || !value.messages[0]) return [];\n  const msg = value.messages[0];\n  senderPhone = msg.from;\n  messageText = msg.text?.body || msg.interactive?.button_reply?.title || '';\n  if (value.contacts && value.contacts[0]) {\n    senderName = value.contacts[0].profile?.name || '';\n  }\n}\n// Format 3: Fallback { from, text/body }\nelse if (body.from) {\n  senderPhone = body.from;\n  messageText = body.text?.body || body.body || '';\n  senderName = body.profile_name || '';\n}\n\n// Normalize phone\nsenderPhone = senderPhone.replace(/^+/, '');\nif (senderPhone.startsWith('0')) senderPhone = '60' + senderPhone.substring(1);\n\nif (!senderPhone || !messageText) return [];\n\nreturn {\n  json: {\n    senderPhone,\n    messageText: messageText.trim(),\n    senderName: senderName || 'Customer',\n    timestamp: new Date().toISOString()\n  }\n};"
       },
       "id": "extract-message",
       "name": "Extract Message",
@@ -83,7 +83,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const customer = $('Lookup Customer').first().json;\nconst msg = $('Extract Message').first().json;\nconst config = $('Config').first().json;\n\n// Handle array response from RPC\nconst data = Array.isArray(customer) ? customer[0] : customer;\n\nconst customerName = data?.customer_name || msg.senderName || 'Customer';\nconst customerType = data?.customer_type || 'B2C';\nconst isRegistered = data?.is_registered || false;\nconst pricingLabel = customerType === 'B2B' ? 'Wholesale/Merchant' : 'Retail';\nconst priceField = customerType === 'B2B' ? 'merchant_price' : 'retail_price';\n\nreturn {\n  json: {\n    senderPhone: msg.senderPhone,\n    messageText: msg.messageText,\n    senderName: msg.senderName,\n    customerName,\n    customerType,\n    isRegistered,\n    pricingLabel,\n    priceField,\n    SUPABASE_URL: config.SUPABASE_URL,\n    SUPABASE_KEY: config.SUPABASE_KEY,\n    WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,\n    WHATSAPP_ACCESS_TOKEN: config.WHATSAPP_ACCESS_TOKEN,\n    WEBSITE_URL: config.WEBSITE_URL,\n    ADMIN_PHONE: config.ADMIN_PHONE\n  }\n};"
+        "jsCode": "const customer = $('Lookup Customer').first().json;\nconst msg = $('Extract Message').first().json;\nconst config = $('Config').first().json;\n\n// Handle array response from RPC\nconst data = Array.isArray(customer) ? customer[0] : customer;\n\nconst customerName = data?.customer_name || msg.senderName || 'Customer';\nconst customerType = data?.customer_type || 'B2C';\nconst isRegistered = data?.is_registered || false;\nconst pricingLabel = customerType === 'B2B' ? 'Wholesale/Merchant' : 'Retail';\nconst priceField = customerType === 'B2B' ? 'merchant_price' : 'retail_price';\n\nreturn {\n  json: {\n    senderPhone: msg.senderPhone,\n    messageText: msg.messageText,\n    senderName: msg.senderName,\n    customerName,\n    customerType,\n    isRegistered,\n    pricingLabel,\n    priceField,\n    SUPABASE_URL: config.SUPABASE_URL,\n    SUPABASE_KEY: config.SUPABASE_KEY,\n    WEBHOOK_SEND_URL: config.WEBHOOK_SEND_URL,\n    WEBHOOK_SEND_URL: config.WEBHOOK_SEND_URL,\n    WEBSITE_URL: config.WEBSITE_URL,\n    ADMIN_PHONE: config.ADMIN_PHONE\n  }\n};"
       },
       "id": "prepare-context",
       "name": "Prepare Customer Context",
@@ -549,27 +549,15 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $('Prepare Customer Context').first().json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $('Prepare Customer Context').first().json.WHATSAPP_ACCESS_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "={{ $('Config').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": false,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Prepare Customer Context').first().json.senderPhone, type: 'text', text: { preview_url: true, body: $json.output } }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $('Extract Message').first().json.senderPhone, message: $('AI Agent').first().json.output }) }}",
         "options": {}
       },
       "id": "send-chatbot-reply",
-      "name": "Send WhatsApp Reply",
+      "name": "Send Webhook Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -594,18 +582,6 @@
               "type": "string"
             },
             {
-              "id": "cfg-wa-phone-id",
-              "name": "WHATSAPP_PHONE_NUMBER_ID",
-              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
-              "type": "string"
-            },
-            {
-              "id": "cfg-wa-token",
-              "name": "WHATSAPP_ACCESS_TOKEN",
-              "value": "=YOUR_WHATSAPP_ACCESS_TOKEN",
-              "type": "string"
-            },
-            {
               "id": "cfg-website-url",
               "name": "WEBSITE_URL",
               "value": "=https://demoautolab.vercel.app",
@@ -615,6 +591,12 @@
               "id": "cfg-admin-phone",
               "name": "ADMIN_PHONE",
               "value": "=60342977668",
+              "type": "string"
+            },
+            {
+              "id": "webhook-send-url",
+              "name": "WEBHOOK_SEND_URL",
+              "value": "YOUR_WEBHOOK_SEND_URL",
               "type": "string"
             }
           ]
@@ -664,18 +646,6 @@
               "type": "string"
             },
             {
-              "id": "ncfg-wa-phone-id",
-              "name": "WHATSAPP_PHONE_NUMBER_ID",
-              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
-              "type": "string"
-            },
-            {
-              "id": "ncfg-wa-token",
-              "name": "WHATSAPP_ACCESS_TOKEN",
-              "value": "=YOUR_WHATSAPP_ACCESS_TOKEN",
-              "type": "string"
-            },
-            {
               "id": "ncfg-website-url",
               "name": "WEBSITE_URL",
               "value": "=https://demoautolab.vercel.app",
@@ -685,6 +655,12 @@
               "id": "ncfg-admin-phone",
               "name": "ADMIN_PHONE",
               "value": "=60342977668",
+              "type": "string"
+            },
+            {
+              "id": "webhook-send-url",
+              "name": "WEBHOOK_SEND_URL",
+              "value": "YOUR_WEBHOOK_SEND_URL",
               "type": "string"
             }
           ]
@@ -702,7 +678,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst config = $('Notification Config').first().json;\n\n// Supabase database webhook sends: type, table, record, old_record\nconst table = body.table || '';\nconst eventType = body.type || ''; // INSERT, UPDATE, DELETE\nconst record = body.record || {};\nconst oldRecord = body.old_record || {};\n\nlet notifType = 'UNKNOWN';\nlet data = { ...record };\n\nif (table === 'orders') {\n  if (eventType === 'INSERT') {\n    notifType = 'ORDER_CREATED';\n  } else if (eventType === 'UPDATE') {\n    // Check what changed\n    if (record.status !== oldRecord.status) {\n      notifType = 'ORDER_STATUS_CHANGED';\n    }\n    if (record.tracking_number && !oldRecord.tracking_number) {\n      notifType = 'TRACKING_NUMBER_ADDED';\n    }\n    if (record.payment_state !== oldRecord.payment_state) {\n      notifType = 'PAYMENT_STATE_CHANGED';\n    }\n  }\n} else if (table === 'returns') {\n  if (eventType === 'INSERT') {\n    notifType = 'RETURN_CREATED';\n  } else if (eventType === 'UPDATE' && record.status !== oldRecord.status) {\n    notifType = 'RETURN_STATUS_CHANGED';\n  }\n}\n\n// Normalize phone\nlet customerPhone = record.customer_phone || record.phone || '';\ncustomerPhone = customerPhone.replace(/^\\+/, '');\nif (customerPhone.startsWith('0')) {\n  customerPhone = '60' + customerPhone.substring(1);\n}\n\nreturn {\n  json: {\n    notifType,\n    table,\n    record: data,\n    oldRecord,\n    customerPhone,\n    customerName: record.customer_name || record.name || 'Customer',\n    orderNo: record.order_no || record.order_number || '',\n    total: record.total || record.grand_total || 0,\n    status: record.status || '',\n    oldStatus: oldRecord.status || '',\n    paymentState: record.payment_state || '',\n    oldPaymentState: oldRecord.payment_state || '',\n    deliveryMethod: record.delivery_method || record.shipping_method || '',\n    courierProvider: record.courier_provider || record.courier || '',\n    trackingNumber: record.tracking_number || '',\n    reason: record.reason || record.return_reason || '',\n    timestamp: new Date().toISOString(),\n    SUPABASE_URL: config.SUPABASE_URL,\n    SUPABASE_KEY: config.SUPABASE_KEY,\n    WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,\n    WHATSAPP_ACCESS_TOKEN: config.WHATSAPP_ACCESS_TOKEN,\n    WEBSITE_URL: config.WEBSITE_URL,\n    ADMIN_PHONE: config.ADMIN_PHONE\n  }\n};"
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst config = $('Notification Config').first().json;\n\n// Supabase database webhook sends: type, table, record, old_record\nconst table = body.table || '';\nconst eventType = body.type || ''; // INSERT, UPDATE, DELETE\nconst record = body.record || {};\nconst oldRecord = body.old_record || {};\n\nlet notifType = 'UNKNOWN';\nlet data = { ...record };\n\nif (table === 'orders') {\n  if (eventType === 'INSERT') {\n    notifType = 'ORDER_CREATED';\n  } else if (eventType === 'UPDATE') {\n    // Check what changed\n    if (record.status !== oldRecord.status) {\n      notifType = 'ORDER_STATUS_CHANGED';\n    }\n    if (record.tracking_number && !oldRecord.tracking_number) {\n      notifType = 'TRACKING_NUMBER_ADDED';\n    }\n    if (record.payment_state !== oldRecord.payment_state) {\n      notifType = 'PAYMENT_STATE_CHANGED';\n    }\n  }\n} else if (table === 'returns') {\n  if (eventType === 'INSERT') {\n    notifType = 'RETURN_CREATED';\n  } else if (eventType === 'UPDATE' && record.status !== oldRecord.status) {\n    notifType = 'RETURN_STATUS_CHANGED';\n  }\n}\n\n// Normalize phone\nlet customerPhone = record.customer_phone || record.phone || '';\ncustomerPhone = customerPhone.replace(/^\\+/, '');\nif (customerPhone.startsWith('0')) {\n  customerPhone = '60' + customerPhone.substring(1);\n}\n\nreturn {\n  json: {\n    notifType,\n    table,\n    record: data,\n    oldRecord,\n    customerPhone,\n    customerName: record.customer_name || record.name || 'Customer',\n    orderNo: record.order_no || record.order_number || '',\n    total: record.total || record.grand_total || 0,\n    status: record.status || '',\n    oldStatus: oldRecord.status || '',\n    paymentState: record.payment_state || '',\n    oldPaymentState: oldRecord.payment_state || '',\n    deliveryMethod: record.delivery_method || record.shipping_method || '',\n    courierProvider: record.courier_provider || record.courier || '',\n    trackingNumber: record.tracking_number || '',\n    reason: record.reason || record.return_reason || '',\n    timestamp: new Date().toISOString(),\n    SUPABASE_URL: config.SUPABASE_URL,\n    SUPABASE_KEY: config.SUPABASE_KEY,\n    WEBHOOK_SEND_URL: config.WEBHOOK_SEND_URL,\n    WEBHOOK_SEND_URL: config.WEBHOOK_SEND_URL,\n    WEBSITE_URL: config.WEBSITE_URL,\n    ADMIN_PHONE: config.ADMIN_PHONE\n  }\n};"
       },
       "id": "parse-notification",
       "name": "Parse Notification Payload",
@@ -933,27 +909,15 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "={{ $json.WEBHOOK_SEND_URL || $('Notification Config').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": false,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.customer_phone, message: $json.customer_message }) }}",
         "options": {}
       },
       "id": "send-customer-notif-1",
-      "name": "Send Customer Notification (Order Created)",
+      "name": "Send Notification (Order Created)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -964,27 +928,15 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "={{ $json.WEBHOOK_SEND_URL || $('Notification Config').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": false,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.customer_phone, message: $json.customer_message }) }}",
         "options": {}
       },
       "id": "send-customer-notif-2",
-      "name": "Send Customer Notification (Status)",
+      "name": "Send Notification (Status)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -995,27 +947,15 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "={{ $json.WEBHOOK_SEND_URL || $('Notification Config').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": false,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.customer_phone, message: $json.customer_message }) }}",
         "options": {}
       },
       "id": "send-customer-notif-3",
-      "name": "Send Customer Notification (Tracking)",
+      "name": "Send Notification (Tracking)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1026,27 +966,15 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "={{ $json.WEBHOOK_SEND_URL || $('Notification Config').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": false,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.customer_phone, message: $json.customer_message }) }}",
         "options": {}
       },
       "id": "send-customer-notif-4",
-      "name": "Send Customer Notification (Payment)",
+      "name": "Send Notification (Payment)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1057,27 +985,15 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "={{ $json.WEBHOOK_SEND_URL || $('Notification Config').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": false,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.customer_phone, message: $json.customer_message }) }}",
         "options": {}
       },
       "id": "send-customer-notif-5",
-      "name": "Send Customer Notification (Return Created)",
+      "name": "Send Notification (Return Created)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1088,27 +1004,15 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "={{ $json.WEBHOOK_SEND_URL || $('Notification Config').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": false,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.customer_phone, message: $json.customer_message }) }}",
         "options": {}
       },
       "id": "send-customer-notif-6",
-      "name": "Send Customer Notification (Return Status)",
+      "name": "Send Notification (Return Status)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1153,18 +1057,6 @@
               "type": "string"
             },
             {
-              "id": "ccfg-wa-phone-id",
-              "name": "WHATSAPP_PHONE_NUMBER_ID",
-              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
-              "type": "string"
-            },
-            {
-              "id": "ccfg-wa-token",
-              "name": "WHATSAPP_ACCESS_TOKEN",
-              "value": "=YOUR_WHATSAPP_ACCESS_TOKEN",
-              "type": "string"
-            },
-            {
               "id": "ccfg-website-url",
               "name": "WEBSITE_URL",
               "value": "=https://demoautolab.vercel.app",
@@ -1174,6 +1066,12 @@
               "id": "ccfg-admin-phone",
               "name": "ADMIN_PHONE",
               "value": "=60342977668",
+              "type": "string"
+            },
+            {
+              "id": "webhook-send-url",
+              "name": "WEBHOOK_SEND_URL",
+              "value": "YOUR_WEBHOOK_SEND_URL",
               "type": "string"
             }
           ]
@@ -1226,7 +1124,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst config = $('Cron Config').first().json;\nconst now = new Date();\nconst results = [];\n\nfor (const item of items) {\n  const order = item.json;\n  \n  // Skip if no phone\n  let phone = order.customer_phone || order.phone || '';\n  phone = phone.replace(/^\\+/, '');\n  if (phone.startsWith('0')) {\n    phone = '60' + phone.substring(1);\n  }\n  if (!phone) continue;\n\n  const createdAt = new Date(order.created_at);\n  const hoursAgo = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);\n\n  let reminderTier = '';\n  let reminderMsg = '';\n  const customerName = order.customer_name || 'Customer';\n  const orderNo = order.order_no || order.order_number || '';\n  const total = Number(order.total || order.grand_total || 0).toFixed(2);\n\n  if (hoursAgo < 24) {\n    reminderTier = 'gentle';\n    reminderMsg = `👋 *Friendly Reminder*\\n\\nHi ${customerName}, your order #${orderNo} (RM${total}) is awaiting payment.\\n\\nComplete your payment to start processing! 🙏`;\n  } else if (hoursAgo < 48) {\n    reminderTier = 'nudge';\n    reminderMsg = `⏰ *Payment Reminder*\\n\\nHi ${customerName}, your order #${orderNo} (RM${total}) is still unpaid.\\n\\nPlease complete payment soon to avoid cancellation.\\n📱 Need help? wa.me/60342977668`;\n  } else if (hoursAgo < 72) {\n    reminderTier = 'urgent';\n    reminderMsg = `⚠️ *Action Required*\\n\\nHi ${customerName}, your order #${orderNo} (RM${total}) will be *auto-cancelled in 24 hours* if payment is not received.\\n\\nPlease pay now or contact us for assistance.\\n📱 wa.me/60342977668`;\n  } else {\n    // > 72h: skip, will be auto-cancelled\n    continue;\n  }\n\n  results.push({\n    json: {\n      customerPhone: phone,\n      customerName,\n      orderNo,\n      total,\n      reminderTier,\n      reminderMsg,\n      hoursAgo: Math.round(hoursAgo),\n      WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,\n      WHATSAPP_ACCESS_TOKEN: config.WHATSAPP_ACCESS_TOKEN,\n      WEBSITE_URL: config.WEBSITE_URL,\n      ADMIN_PHONE: config.ADMIN_PHONE,\n      SUPABASE_URL: config.SUPABASE_URL,\n      SUPABASE_KEY: config.SUPABASE_KEY\n    }\n  });\n}\n\nreturn results;"
+        "jsCode": "const items = $input.all();\nconst config = $('Cron Config').first().json;\nconst now = new Date();\nconst results = [];\n\nfor (const item of items) {\n  const order = item.json;\n  \n  // Skip if no phone\n  let phone = order.customer_phone || order.phone || '';\n  phone = phone.replace(/^\\+/, '');\n  if (phone.startsWith('0')) {\n    phone = '60' + phone.substring(1);\n  }\n  if (!phone) continue;\n\n  const createdAt = new Date(order.created_at);\n  const hoursAgo = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);\n\n  let reminderTier = '';\n  let reminderMsg = '';\n  const customerName = order.customer_name || 'Customer';\n  const orderNo = order.order_no || order.order_number || '';\n  const total = Number(order.total || order.grand_total || 0).toFixed(2);\n\n  if (hoursAgo < 24) {\n    reminderTier = 'gentle';\n    reminderMsg = `👋 *Friendly Reminder*\\n\\nHi ${customerName}, your order #${orderNo} (RM${total}) is awaiting payment.\\n\\nComplete your payment to start processing! 🙏`;\n  } else if (hoursAgo < 48) {\n    reminderTier = 'nudge';\n    reminderMsg = `⏰ *Payment Reminder*\\n\\nHi ${customerName}, your order #${orderNo} (RM${total}) is still unpaid.\\n\\nPlease complete payment soon to avoid cancellation.\\n📱 Need help? wa.me/60342977668`;\n  } else if (hoursAgo < 72) {\n    reminderTier = 'urgent';\n    reminderMsg = `⚠️ *Action Required*\\n\\nHi ${customerName}, your order #${orderNo} (RM${total}) will be *auto-cancelled in 24 hours* if payment is not received.\\n\\nPlease pay now or contact us for assistance.\\n📱 wa.me/60342977668`;\n  } else {\n    // > 72h: skip, will be auto-cancelled\n    continue;\n  }\n\n  results.push({\n    json: {\n      customerPhone: phone,\n      customerName,\n      orderNo,\n      total,\n      reminderTier,\n      reminderMsg,\n      hoursAgo: Math.round(hoursAgo),\n      WEBHOOK_SEND_URL: config.WEBHOOK_SEND_URL,\n      WEBHOOK_SEND_URL: config.WEBHOOK_SEND_URL,\n      WEBSITE_URL: config.WEBSITE_URL,\n      ADMIN_PHONE: config.ADMIN_PHONE,\n      SUPABASE_URL: config.SUPABASE_URL,\n      SUPABASE_KEY: config.SUPABASE_KEY\n    }\n  });\n}\n\nreturn results;"
       },
       "id": "classify-reminders",
       "name": "Classify Reminder Tiers",
@@ -1240,23 +1138,11 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "={{ $json.WEBHOOK_SEND_URL || $('Cron Config').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": false,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.reminderMsg } }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.customer_phone, message: $json.reminder_message }) }}",
         "options": {}
       },
       "id": "send-reminder",
@@ -1319,7 +1205,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst config = $('Cron Config').first().json;\nconst results = [];\n\nfor (const item of items) {\n  const order = item.json;\n  \n  // Skip if response is not an array of cancelled orders\n  if (!order.order_no && !order.order_number) continue;\n\n  let phone = order.customer_phone || order.phone || '';\n  phone = phone.replace(/^\\+/, '');\n  if (phone.startsWith('0')) {\n    phone = '60' + phone.substring(1);\n  }\n  if (!phone) continue;\n\n  const customerName = order.customer_name || 'Customer';\n  const orderNo = order.order_no || order.order_number || '';\n\n  const cancelMsg = `🚫 *Order Auto-Cancelled*\\n\\nHi ${customerName}, your order #${orderNo} has been cancelled due to non-payment after 72 hours.\\n\\nYou're welcome to place a new order anytime at ${config.WEBSITE_URL} 🙏`;\n\n  results.push({\n    json: {\n      customerPhone: phone,\n      customerName,\n      orderNo,\n      cancelMsg,\n      WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,\n      WHATSAPP_ACCESS_TOKEN: config.WHATSAPP_ACCESS_TOKEN,\n      ADMIN_PHONE: config.ADMIN_PHONE\n    }\n  });\n}\n\nreturn results.length > 0 ? results : [{ json: { skip: true } }];"
+        "jsCode": "const items = $input.all();\nconst config = $('Cron Config').first().json;\nconst results = [];\n\nfor (const item of items) {\n  const order = item.json;\n  \n  // Skip if response is not an array of cancelled orders\n  if (!order.order_no && !order.order_number) continue;\n\n  let phone = order.customer_phone || order.phone || '';\n  phone = phone.replace(/^\\+/, '');\n  if (phone.startsWith('0')) {\n    phone = '60' + phone.substring(1);\n  }\n  if (!phone) continue;\n\n  const customerName = order.customer_name || 'Customer';\n  const orderNo = order.order_no || order.order_number || '';\n\n  const cancelMsg = `🚫 *Order Auto-Cancelled*\\n\\nHi ${customerName}, your order #${orderNo} has been cancelled due to non-payment after 72 hours.\\n\\nYou're welcome to place a new order anytime at ${config.WEBSITE_URL} 🙏`;\n\n  results.push({\n    json: {\n      customerPhone: phone,\n      customerName,\n      orderNo,\n      cancelMsg,\n      WEBHOOK_SEND_URL: config.WEBHOOK_SEND_URL,\n      WEBHOOK_SEND_URL: config.WEBHOOK_SEND_URL,\n      ADMIN_PHONE: config.ADMIN_PHONE\n    }\n  });\n}\n\nreturn results.length > 0 ? results : [{ json: { skip: true } }];"
       },
       "id": "format-cancelled",
       "name": "Format Cancellation Notices",
@@ -1362,23 +1248,11 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "={{ $json.WEBHOOK_SEND_URL || $('Cron Config').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": false,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.cancelMsg } }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.customer_phone, message: $json.cancel_message }) }}",
         "options": {}
       },
       "id": "send-cancel-notice",
@@ -1392,7 +1266,7 @@
     }
   ],
   "connections": {
-    "WhatsApp Webhook": {
+    "Chatbot Webhook": {
       "main": [
         [
           {
@@ -1456,7 +1330,7 @@
       "main": [
         [
           {
-            "node": "Send WhatsApp Reply",
+            "node": "Send Webhook Reply",
             "type": "main",
             "index": 0
           }
@@ -1678,14 +1552,14 @@
       "main": [
         [
           {
-            "node": "Send Customer Notification (Order Created)",
+            "node": "Send Notification (Order Created)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Customer Notification (Order Created)": {
+    "Send Notification (Order Created)": {
       "main": [
         []
       ]
@@ -1694,14 +1568,14 @@
       "main": [
         [
           {
-            "node": "Send Customer Notification (Status)",
+            "node": "Send Notification (Status)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Customer Notification (Status)": {
+    "Send Notification (Status)": {
       "main": [
         []
       ]
@@ -1710,14 +1584,14 @@
       "main": [
         [
           {
-            "node": "Send Customer Notification (Tracking)",
+            "node": "Send Notification (Tracking)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Customer Notification (Tracking)": {
+    "Send Notification (Tracking)": {
       "main": [
         []
       ]
@@ -1726,14 +1600,14 @@
       "main": [
         [
           {
-            "node": "Send Customer Notification (Payment)",
+            "node": "Send Notification (Payment)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Customer Notification (Payment)": {
+    "Send Notification (Payment)": {
       "main": [
         []
       ]
@@ -1742,14 +1616,14 @@
       "main": [
         [
           {
-            "node": "Send Customer Notification (Return Created)",
+            "node": "Send Notification (Return Created)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Customer Notification (Return Created)": {
+    "Send Notification (Return Created)": {
       "main": [
         []
       ]
@@ -1758,14 +1632,14 @@
       "main": [
         [
           {
-            "node": "Send Customer Notification (Return Status)",
+            "node": "Send Notification (Return Status)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Customer Notification (Return Status)": {
+    "Send Notification (Return Status)": {
       "main": [
         []
       ]
