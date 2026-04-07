@@ -1,0 +1,1896 @@
+{
+  "name": "AutoLab WhatsApp Customer Chatbot & Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-autolab",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-chatbot",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        400
+      ],
+      "webhookId": "whatsapp-autolab"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok' }) }}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract message from WhatsApp Cloud API webhook payload\nconst body = $input.first().json.body || $input.first().json;\n\nlet senderPhone = '';\nlet messageText = '';\nlet messageType = 'text';\nlet senderName = '';\n\n// WhatsApp Cloud API format\nif (body.entry) {\n  const entry = body.entry[0];\n  const changes = entry.changes[0];\n  const value = changes.value;\n\n  // Skip status updates (only process messages)\n  if (!value.messages || !value.messages[0]) {\n    return []; // Empty = stop execution\n  }\n\n  const msg = value.messages[0];\n  senderPhone = msg.from;\n  messageText = msg.text?.body || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';\n  messageType = msg.type;\n\n  if (value.contacts && value.contacts[0]) {\n    senderName = value.contacts[0].profile?.name || '';\n  }\n}\n// Fallback for direct payload\nelse if (body.from) {\n  senderPhone = body.from;\n  messageText = body.text?.body || body.body || '';\n  senderName = body.profile_name || '';\n}\n\n// Normalize phone: remove + prefix, handle 0 prefix -> 60\nsenderPhone = senderPhone.replace(/^\\+/, '');\nif (senderPhone.startsWith('0')) {\n  senderPhone = '60' + senderPhone.substring(1);\n}\n\nif (!senderPhone || !messageText) {\n  return []; // Stop if no valid message\n}\n\nreturn {\n  json: {\n    senderPhone,\n    messageText: messageText.trim(),\n    messageType,\n    senderName: senderName || 'Customer',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "extract-message",
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_lookup_customer",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_phone: $('Extract Message').first().json.senderPhone }) }}",
+        "options": {}
+      },
+      "id": "lookup-customer",
+      "name": "Lookup Customer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const customer = $('Lookup Customer').first().json;\nconst msg = $('Extract Message').first().json;\nconst config = $('Config').first().json;\n\n// Handle array response from RPC\nconst data = Array.isArray(customer) ? customer[0] : customer;\n\nconst customerName = data?.customer_name || msg.senderName || 'Customer';\nconst customerType = data?.customer_type || 'B2C';\nconst isRegistered = data?.is_registered || false;\nconst pricingLabel = customerType === 'B2B' ? 'Wholesale/Merchant' : 'Retail';\nconst priceField = customerType === 'B2B' ? 'merchant_price' : 'retail_price';\n\nreturn {\n  json: {\n    senderPhone: msg.senderPhone,\n    messageText: msg.messageText,\n    senderName: msg.senderName,\n    customerName,\n    customerType,\n    isRegistered,\n    pricingLabel,\n    priceField,\n    SUPABASE_URL: config.SUPABASE_URL,\n    SUPABASE_KEY: config.SUPABASE_KEY,\n    WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,\n    WHATSAPP_ACCESS_TOKEN: config.WHATSAPP_ACCESS_TOKEN,\n    WEBSITE_URL: config.WEBSITE_URL,\n    ADMIN_PHONE: config.ADMIN_PHONE\n  }\n};"
+      },
+      "id": "prepare-context",
+      "name": "Prepare Customer Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Customer phone: {{ $('Prepare Customer Context').first().json.senderPhone }}\nCustomer name: {{ $('Prepare Customer Context').first().json.customerName }}\nCustomer type: {{ $('Prepare Customer Context').first().json.customerType }} ({{ $('Prepare Customer Context').first().json.pricingLabel }})\nRegistered: {{ $('Prepare Customer Context').first().json.isRegistered }}\n\nCustomer message: {{ $('Prepare Customer Context').first().json.messageText }}",
+        "options": {
+          "systemMessage": "=You are AutoLab's WhatsApp shopping assistant 🚗 — a friendly, knowledgeable guide for automotive accessories in Malaysia.\n\n## Your Capabilities:\n1. **Product Search** — Help customers find car casings, sockets, canbus, and accessories by car brand/model\n2. **Order Tracking** — Look up order status and delivery tracking\n3. **Cart Management** — Add/remove items, view cart\n4. **Returns** — Guide customers through the return process\n5. **Customer Support** — Answer general questions about AutoLab\n\n## Customer Context:\n- Customer Name: {{ $('Prepare Customer Context').first().json.customerName }}\n- Customer Type: {{ $('Prepare Customer Context').first().json.customerType }} ({{ $('Prepare Customer Context').first().json.pricingLabel }})\n- Registered: {{ $('Prepare Customer Context').first().json.isRegistered }}\n- When showing prices, use {{ $('Prepare Customer Context').first().json.priceField }} column from results\n- For unregistered customers, encourage them to register at {{ $('Prepare Customer Context').first().json.WEBSITE_URL }}/auth for member benefits\n\n## Search Strategy:\n1. Always ask for the car brand first if not provided\n2. Then ask for the specific model\n3. Search with both brand and model for best results\n4. Show product name, price, stock status, and link\n5. If multiple results, present as a numbered list\n\n## Formatting Rules (WhatsApp):\n- Use *bold* for emphasis\n- Use _italic_ for subtle notes\n- Use bullet points with •\n- Keep messages concise (under 300 words)\n- Include product links: {{ $('Prepare Customer Context').first().json.WEBSITE_URL }}/product/{product_id}\n- Include tracking links for J&T: https://www.jtexpress.my/tracking?billcode={tracking_number}\n\n## Price Display:\n- For B2B merchants: Show merchant price as \"Member Price\"\n- For B2C retail: Show normal price as \"Retail Price\"\n- Always format as RM X.XX\n\n## Contact Info:\n- Admin WhatsApp: wa.me/60342977668\n- Phone: 03-4297 7668\n- Website: {{ $('Prepare Customer Context').first().json.WEBSITE_URL }}\n\n## Important Rules:\n- Never make up product information — always use search tools\n- If a product is out of stock, say so clearly\n- For returns, direct customers to contact admin via WhatsApp\n- Always be polite and use appropriate emojis\n- If you don't know something, say so and offer to connect with admin\n\n## When Customer Says Hi / Menu / Start\nShow a welcome message with these options:\n🔍 *Find Products* - Search car parts & accessories\n📦 *My Orders* - Track your orders\n🛒 *My Cart* - View your shopping cart\n👤 *Talk to Admin* - Connect with our team"
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1340,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 800
+        }
+      },
+      "id": "openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        740
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-key",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Extract Message').first().json.senderPhone }}",
+        "contextWindowLength": 12
+      },
+      "id": "memory-buffer",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        1300,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search for automotive products by name, brand, model, or category. Returns products with components, prices, and stock info.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_smart_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_query",
+              "value": "={{ $fromAI('query', 'Search text for product name, brand, model, or category', 'string') }}"
+            },
+            {
+              "name": "p_limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-search-products",
+      "name": "search_products",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get detailed components (SKUs, prices, stock) for a specific product.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_product_components",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_product_id",
+              "value": "={{ $fromAI('product_id', 'The UUID of the product from search results', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-get-components",
+      "name": "get_product_components",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "List available car brands/makes.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_list_car_makes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {}
+      },
+      "id": "tool-car-brands",
+      "name": "search_car_brands",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search car models for a specific brand.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_search_car_models",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_make_name",
+              "value": "={{ $fromAI('make_name', 'Car brand name e.g. Toyota, Honda', 'string') }}"
+            },
+            {
+              "name": "p_model_query",
+              "value": "={{ $fromAI('model_query', 'Optional model name to filter', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-car-models",
+      "name": "search_car_models",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get recent orders for this customer. Auto-uses sender's phone.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_customer_orders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Prepare Customer Context').first().json.senderPhone }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-get-orders",
+      "name": "get_customer_orders",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get full details of a specific order including items.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_order_details",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_order_no",
+              "value": "={{ $fromAI('order_no', 'The order number e.g. ORD-20260225-000012', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-order-details",
+      "name": "get_order_details",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Add a component to the customer's cart by SKU.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_add_to_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Prepare Customer Context').first().json.senderPhone }}\",\n  \"p_component_sku\": \"{{ $fromAI('component_sku', 'The component SKU from get_product_components results', 'string') }}\",\n  \"p_quantity\": {{ $fromAI('quantity', 'Number of items to add (default 1)', 'number') }}\n}",
+        "options": {}
+      },
+      "id": "tool-add-to-cart",
+      "name": "add_to_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "View all items in the customer's cart.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Prepare Customer Context').first().json.senderPhone }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-view-cart",
+      "name": "view_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Remove a component from the cart. Call view_cart first to get SKUs.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_remove_from_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Prepare Customer Context').first().json.senderPhone }}\",\n  \"p_component_sku\": \"{{ $fromAI('component_sku', 'The component SKU of the item to remove (from view_cart results)', 'string') }}\",\n  \"p_quantity\": {{ $fromAI('quantity', 'Number of items to remove', 'number') }}\n}",
+        "options": {}
+      },
+      "id": "tool-remove-from-cart",
+      "name": "remove_from_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Clear all items from the customer's cart.",
+        "method": "POST",
+        "url": "={{ $('Prepare Customer Context').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_clear_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Prepare Customer Context').first().json.senderPhone }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-clear-cart",
+      "name": "clear_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Prepare Customer Context').first().json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Prepare Customer Context').first().json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Prepare Customer Context').first().json.senderPhone, type: 'text', text: { preview_url: true, body: $json.output } }) }}",
+        "options": {}
+      },
+      "id": "send-chatbot-reply",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-supabase-url",
+              "name": "SUPABASE_URL",
+              "value": "=YOUR_SUPABASE_URL",
+              "type": "string"
+            },
+            {
+              "id": "cfg-supabase-key",
+              "name": "SUPABASE_KEY",
+              "value": "=YOUR_SUPABASE_SERVICE_ROLE_KEY",
+              "type": "string"
+            },
+            {
+              "id": "cfg-wa-phone-id",
+              "name": "WHATSAPP_PHONE_NUMBER_ID",
+              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "cfg-wa-token",
+              "name": "WHATSAPP_ACCESS_TOKEN",
+              "value": "=YOUR_WHATSAPP_ACCESS_TOKEN",
+              "type": "string"
+            },
+            {
+              "id": "cfg-website-url",
+              "name": "WEBSITE_URL",
+              "value": "=https://demoautolab.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "cfg-admin-phone",
+              "name": "ADMIN_PHONE",
+              "value": "=60342977668",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        640,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-notifications",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "wh-notifications",
+      "name": "Order Notification Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        1600
+      ],
+      "webhookId": "order-notifications"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ncfg-supabase-url",
+              "name": "SUPABASE_URL",
+              "value": "=YOUR_SUPABASE_URL",
+              "type": "string"
+            },
+            {
+              "id": "ncfg-supabase-key",
+              "name": "SUPABASE_KEY",
+              "value": "=YOUR_SUPABASE_SERVICE_ROLE_KEY",
+              "type": "string"
+            },
+            {
+              "id": "ncfg-wa-phone-id",
+              "name": "WHATSAPP_PHONE_NUMBER_ID",
+              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "ncfg-wa-token",
+              "name": "WHATSAPP_ACCESS_TOKEN",
+              "value": "=YOUR_WHATSAPP_ACCESS_TOKEN",
+              "type": "string"
+            },
+            {
+              "id": "ncfg-website-url",
+              "name": "WEBSITE_URL",
+              "value": "=https://demoautolab.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "ncfg-admin-phone",
+              "name": "ADMIN_PHONE",
+              "value": "=60342977668",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notif-config",
+      "name": "Notification Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        420,
+        1600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst config = $('Notification Config').first().json;\n\n// Supabase database webhook sends: type, table, record, old_record\nconst table = body.table || '';\nconst eventType = body.type || ''; // INSERT, UPDATE, DELETE\nconst record = body.record || {};\nconst oldRecord = body.old_record || {};\n\nlet notifType = 'UNKNOWN';\nlet data = { ...record };\n\nif (table === 'orders') {\n  if (eventType === 'INSERT') {\n    notifType = 'ORDER_CREATED';\n  } else if (eventType === 'UPDATE') {\n    // Check what changed\n    if (record.status !== oldRecord.status) {\n      notifType = 'ORDER_STATUS_CHANGED';\n    }\n    if (record.tracking_number && !oldRecord.tracking_number) {\n      notifType = 'TRACKING_NUMBER_ADDED';\n    }\n    if (record.payment_state !== oldRecord.payment_state) {\n      notifType = 'PAYMENT_STATE_CHANGED';\n    }\n  }\n} else if (table === 'returns') {\n  if (eventType === 'INSERT') {\n    notifType = 'RETURN_CREATED';\n  } else if (eventType === 'UPDATE' && record.status !== oldRecord.status) {\n    notifType = 'RETURN_STATUS_CHANGED';\n  }\n}\n\n// Normalize phone\nlet customerPhone = record.customer_phone || record.phone || '';\ncustomerPhone = customerPhone.replace(/^\\+/, '');\nif (customerPhone.startsWith('0')) {\n  customerPhone = '60' + customerPhone.substring(1);\n}\n\nreturn {\n  json: {\n    notifType,\n    table,\n    record: data,\n    oldRecord,\n    customerPhone,\n    customerName: record.customer_name || record.name || 'Customer',\n    orderNo: record.order_no || record.order_number || '',\n    total: record.total || record.grand_total || 0,\n    status: record.status || '',\n    oldStatus: oldRecord.status || '',\n    paymentState: record.payment_state || '',\n    oldPaymentState: oldRecord.payment_state || '',\n    deliveryMethod: record.delivery_method || record.shipping_method || '',\n    courierProvider: record.courier_provider || record.courier || '',\n    trackingNumber: record.tracking_number || '',\n    reason: record.reason || record.return_reason || '',\n    timestamp: new Date().toISOString(),\n    SUPABASE_URL: config.SUPABASE_URL,\n    SUPABASE_KEY: config.SUPABASE_KEY,\n    WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,\n    WHATSAPP_ACCESS_TOKEN: config.WHATSAPP_ACCESS_TOKEN,\n    WEBSITE_URL: config.WEBSITE_URL,\n    ADMIN_PHONE: config.ADMIN_PHONE\n  }\n};"
+      },
+      "id": "parse-notification",
+      "name": "Parse Notification Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        1600
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.notifType }}",
+                    "rightValue": "ORDER_CREATED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": "ORDER_CREATED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.notifType }}",
+                    "rightValue": "ORDER_STATUS_CHANGED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": "ORDER_STATUS_CHANGED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.notifType }}",
+                    "rightValue": "TRACKING_NUMBER_ADDED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": "TRACKING_NUMBER_ADDED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.notifType }}",
+                    "rightValue": "PAYMENT_STATE_CHANGED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": "PAYMENT_STATE_CHANGED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.notifType }}",
+                    "rightValue": "RETURN_CREATED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": "RETURN_CREATED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.notifType }}",
+                    "rightValue": "RETURN_STATUS_CHANGED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": "RETURN_STATUS_CHANGED"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "route-notification",
+      "name": "Route by Event Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        880,
+        1600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst websiteUrl = d.WEBSITE_URL;\n\nconst customerMsg = `🎉 *Order Confirmed!*\\n\\nHi ${d.customerName}, your order has been placed!\\n\\n📋 *Order:* #${d.orderNo}\\n💰 *Total:* RM${Number(d.total).toFixed(2)}\\n🚚 *Delivery:* ${d.deliveryMethod}\\n💳 *Payment:* ${d.paymentState}\\n\\nWe'll notify you when your order is being packed. Thank you for shopping with AutoLab! 🙏`;\n\nconst adminMsg = `🔔 *NEW ORDER*\\n\\n📋 #${d.orderNo}\\n👤 ${d.customerName} (${d.customerPhone})\\n💰 RM${Number(d.total).toFixed(2)}\\n💳 ${d.paymentState}\\n🚚 ${d.deliveryMethod}\\n⏰ ${d.timestamp}`;\n\nreturn {\n  json: {\n    ...d,\n    customerMsg,\n    adminMsg\n  }\n};"
+      },
+      "id": "fmt-order-created",
+      "name": "Format Order Created",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst websiteUrl = d.WEBSITE_URL;\nconst status = d.status;\nlet customerMsg = '';\nlet adminMsg = '';\n\nswitch (status) {\n  case 'packing':\n    const packingDelivery = d.deliveryMethod === 'self-pickup' ? 'collection' : 'delivery';\n    customerMsg = `📦 *Order Being Packed*\\n\\nYour order #${d.orderNo} is now being packed by our warehouse team.\\n\\nWe'll update you once it's ready for ${packingDelivery}.`;\n    adminMsg = `📦 Order #${d.orderNo} status changed to PACKING`;\n    break;\n\n  case 'ready_for_collection':\n    customerMsg = `📍 *Ready for Collection!*\\n\\nYour order #${d.orderNo} is ready for pickup!\\n\\n📍 *Location:* Auto Lab Sdn Bhd\\nNo 17, Jalan 7/98B, Cheras Utama\\n56100 Kuala Lumpur\\n\\n🕐 *Operating Hours:*\\nMon-Fri: 9:00 AM - 6:00 PM\\nSat: 9:00 AM - 1:00 PM\\n\\nPlease bring your order confirmation. Thank you! 🙏`;\n    adminMsg = `📍 Order #${d.orderNo} is READY FOR COLLECTION`;\n    break;\n\n  case 'out_for_delivery':\n    const trackingLink = d.trackingNumber ? `https://www.jtexpress.my/tracking?billcode=${d.trackingNumber}` : '';\n    customerMsg = `🚚 *Out for Delivery!*\\n\\nYour order #${d.orderNo} is on its way!\\n\\n📦 *Courier:* ${d.courierProvider}\\n🔍 *Tracking:* ${d.trackingNumber}\\n${trackingLink ? '🔗 ' + trackingLink : ''}\\n\\nEstimated delivery: 2-4 business days.`;\n    adminMsg = `🚚 Order #${d.orderNo} is OUT FOR DELIVERY (${d.courierProvider} - ${d.trackingNumber})`;\n    break;\n\n  case 'completed':\n    customerMsg = `✅ *Order Delivered!*\\n\\nYour order #${d.orderNo} has been delivered. Thank you for choosing AutoLab! 🙏\\n\\nIf you have any issues, contact us:\\n📱 wa.me/60342977668\\n📞 03-4297 7668\\n\\nLeave us a review at ${websiteUrl}/my-orders 💚`;\n    adminMsg = `✅ Order #${d.orderNo} COMPLETED`;\n    break;\n\n  case 'cancelled':\n    customerMsg = `❌ *Order Cancelled*\\n\\nYour order #${d.orderNo} has been cancelled.\\n\\nIf this was a mistake, please contact us:\\n📱 wa.me/60342977668`;\n    adminMsg = `❌ Order #${d.orderNo} CANCELLED`;\n    break;\n\n  default:\n    customerMsg = `📦 Your order #${d.orderNo} status has been updated to: *${status}*`;\n    adminMsg = `📦 Order #${d.orderNo} status: ${status}`;\n}\n\nreturn {\n  json: {\n    ...d,\n    customerMsg,\n    adminMsg\n  }\n};"
+      },
+      "id": "fmt-order-status",
+      "name": "Format Order Status Change",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst trackingLink = d.trackingNumber ? `https://www.jtexpress.my/tracking?billcode=${d.trackingNumber}` : '';\n\nconst customerMsg = `📬 *Tracking Number Available*\\n\\nYour order #${d.orderNo} tracking is ready:\\n\\n📦 *Courier:* ${d.courierProvider}\\n🔍 *Tracking:* ${d.trackingNumber}\\n🔗 Track here: ${trackingLink}`;\n\nconst adminMsg = `📬 Tracking added to Order #${d.orderNo}: ${d.courierProvider} - ${d.trackingNumber}`;\n\nreturn {\n  json: {\n    ...d,\n    customerMsg,\n    adminMsg\n  }\n};"
+      },
+      "id": "fmt-tracking",
+      "name": "Format Tracking Added",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst websiteUrl = d.WEBSITE_URL;\nconst state = d.paymentState;\nlet customerMsg = '';\nlet adminMsg = '';\n\nswitch (state) {\n  case 'submitted':\n    customerMsg = `📸 *Payment Proof Received*\\n\\nWe've received your payment proof for order #${d.orderNo}.\\nOur team will verify it within 1-2 hours during business hours.`;\n    adminMsg = `💳 *PAYMENT PROOF SUBMITTED*\\n\\n📋 #${d.orderNo}\\n👤 ${d.customerName}\\n💰 RM${Number(d.total).toFixed(2)}\\n\\n⚡ Review at: ${websiteUrl}/admin/orders`;\n    break;\n\n  case 'approved':\n    customerMsg = `✅ *Payment Verified!*\\n\\nYour payment for order #${d.orderNo} (RM${Number(d.total).toFixed(2)}) has been approved!\\nWe'll start processing your order now.`;\n    adminMsg = `✅ Payment APPROVED for Order #${d.orderNo} (RM${Number(d.total).toFixed(2)})`;\n    break;\n\n  case 'rejected':\n    customerMsg = `❌ *Payment Rejected*\\n\\nSorry, your payment for order #${d.orderNo} could not be verified.\\nPlease resubmit or contact us:\\n📱 wa.me/60342977668`;\n    adminMsg = `❌ Payment REJECTED for Order #${d.orderNo}`;\n    break;\n\n  default:\n    customerMsg = `💳 Your payment status for order #${d.orderNo} has been updated to: *${state}*`;\n    adminMsg = `💳 Payment state for Order #${d.orderNo}: ${state}`;\n}\n\nreturn {\n  json: {\n    ...d,\n    customerMsg,\n    adminMsg\n  }\n};"
+      },
+      "id": "fmt-payment",
+      "name": "Format Payment Change",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1920
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst websiteUrl = d.WEBSITE_URL;\n\nconst customerMsg = `🔁 *Return Request Received*\\n\\nWe've received your return request for order #${d.orderNo}.\\n📝 *Reason:* ${d.reason}\\n\\nOur team will review it and get back to you shortly.`;\n\nconst adminMsg = `🔁 *NEW RETURN REQUEST*\\n\\n📋 Return for Order #${d.orderNo}\\n👤 ${d.customerName}\\n📝 Reason: ${d.reason}\\n\\nReview at: ${websiteUrl}/admin/returns`;\n\nreturn {\n  json: {\n    ...d,\n    customerMsg,\n    adminMsg\n  }\n};"
+      },
+      "id": "fmt-return-created",
+      "name": "Format Return Created",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        2160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\n\nconst customerMsg = `🔁 *Return Update*\\n\\nYour return request for order #${d.orderNo} has been updated to: *${d.status}*\\n\\nIf you have questions, contact us:\\n📱 wa.me/60342977668`;\n\nconst adminMsg = `🔁 Return for Order #${d.orderNo} status: ${d.status}`;\n\nreturn {\n  json: {\n    ...d,\n    customerMsg,\n    adminMsg\n  }\n};"
+      },
+      "id": "fmt-return-status",
+      "name": "Format Return Status Change",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        2400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "options": {}
+      },
+      "id": "send-customer-notif-1",
+      "name": "Send Customer Notification (Order Created)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "options": {}
+      },
+      "id": "send-customer-notif-2",
+      "name": "Send Customer Notification (Status)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "options": {}
+      },
+      "id": "send-customer-notif-3",
+      "name": "Send Customer Notification (Tracking)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "options": {}
+      },
+      "id": "send-customer-notif-4",
+      "name": "Send Customer Notification (Payment)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        1920
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "options": {}
+      },
+      "id": "send-customer-notif-5",
+      "name": "Send Customer Notification (Return Created)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        2160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.customerMsg } }) }}",
+        "options": {}
+      },
+      "id": "send-customer-notif-6",
+      "name": "Send Customer Notification (Return Status)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        2400
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 10,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Daily 10AM MYT Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        2900
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ccfg-supabase-url",
+              "name": "SUPABASE_URL",
+              "value": "=YOUR_SUPABASE_URL",
+              "type": "string"
+            },
+            {
+              "id": "ccfg-supabase-key",
+              "name": "SUPABASE_KEY",
+              "value": "=YOUR_SUPABASE_SERVICE_ROLE_KEY",
+              "type": "string"
+            },
+            {
+              "id": "ccfg-wa-phone-id",
+              "name": "WHATSAPP_PHONE_NUMBER_ID",
+              "value": "=YOUR_WHATSAPP_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "ccfg-wa-token",
+              "name": "WHATSAPP_ACCESS_TOKEN",
+              "value": "=YOUR_WHATSAPP_ACCESS_TOKEN",
+              "type": "string"
+            },
+            {
+              "id": "ccfg-website-url",
+              "name": "WEBSITE_URL",
+              "value": "=https://demoautolab.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "ccfg-admin-phone",
+              "name": "ADMIN_PHONE",
+              "value": "=60342977668",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cron-config",
+      "name": "Cron Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        420,
+        2900
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Cron Config').first().json.SUPABASE_URL }}/rest/v1/rpc/get_unpaid_orders_for_reminder",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Cron Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Cron Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {}
+      },
+      "id": "fetch-unpaid-orders",
+      "name": "Fetch Unpaid Orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        2900
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst config = $('Cron Config').first().json;\nconst now = new Date();\nconst results = [];\n\nfor (const item of items) {\n  const order = item.json;\n  \n  // Skip if no phone\n  let phone = order.customer_phone || order.phone || '';\n  phone = phone.replace(/^\\+/, '');\n  if (phone.startsWith('0')) {\n    phone = '60' + phone.substring(1);\n  }\n  if (!phone) continue;\n\n  const createdAt = new Date(order.created_at);\n  const hoursAgo = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);\n\n  let reminderTier = '';\n  let reminderMsg = '';\n  const customerName = order.customer_name || 'Customer';\n  const orderNo = order.order_no || order.order_number || '';\n  const total = Number(order.total || order.grand_total || 0).toFixed(2);\n\n  if (hoursAgo < 24) {\n    reminderTier = 'gentle';\n    reminderMsg = `👋 *Friendly Reminder*\\n\\nHi ${customerName}, your order #${orderNo} (RM${total}) is awaiting payment.\\n\\nComplete your payment to start processing! 🙏`;\n  } else if (hoursAgo < 48) {\n    reminderTier = 'nudge';\n    reminderMsg = `⏰ *Payment Reminder*\\n\\nHi ${customerName}, your order #${orderNo} (RM${total}) is still unpaid.\\n\\nPlease complete payment soon to avoid cancellation.\\n📱 Need help? wa.me/60342977668`;\n  } else if (hoursAgo < 72) {\n    reminderTier = 'urgent';\n    reminderMsg = `⚠️ *Action Required*\\n\\nHi ${customerName}, your order #${orderNo} (RM${total}) will be *auto-cancelled in 24 hours* if payment is not received.\\n\\nPlease pay now or contact us for assistance.\\n📱 wa.me/60342977668`;\n  } else {\n    // > 72h: skip, will be auto-cancelled\n    continue;\n  }\n\n  results.push({\n    json: {\n      customerPhone: phone,\n      customerName,\n      orderNo,\n      total,\n      reminderTier,\n      reminderMsg,\n      hoursAgo: Math.round(hoursAgo),\n      WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,\n      WHATSAPP_ACCESS_TOKEN: config.WHATSAPP_ACCESS_TOKEN,\n      WEBSITE_URL: config.WEBSITE_URL,\n      ADMIN_PHONE: config.ADMIN_PHONE,\n      SUPABASE_URL: config.SUPABASE_URL,\n      SUPABASE_KEY: config.SUPABASE_KEY\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "classify-reminders",
+      "name": "Classify Reminder Tiers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2900
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.reminderMsg } }) }}",
+        "options": {}
+      },
+      "id": "send-reminder",
+      "name": "Send Payment Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        2900
+      ]
+    },
+    {
+      "parameters": {
+        "time": 2,
+        "unit": "seconds"
+      },
+      "id": "wait-reminder",
+      "name": "Wait 2s (Between Reminders)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        2900
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Cron Config').first().json.SUPABASE_URL }}/rest/v1/rpc/auto_cancel_unpaid_orders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Cron Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Cron Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {}
+      },
+      "id": "auto-cancel",
+      "name": "Auto Cancel Unpaid Orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        3200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst config = $('Cron Config').first().json;\nconst results = [];\n\nfor (const item of items) {\n  const order = item.json;\n  \n  // Skip if response is not an array of cancelled orders\n  if (!order.order_no && !order.order_number) continue;\n\n  let phone = order.customer_phone || order.phone || '';\n  phone = phone.replace(/^\\+/, '');\n  if (phone.startsWith('0')) {\n    phone = '60' + phone.substring(1);\n  }\n  if (!phone) continue;\n\n  const customerName = order.customer_name || 'Customer';\n  const orderNo = order.order_no || order.order_number || '';\n\n  const cancelMsg = `🚫 *Order Auto-Cancelled*\\n\\nHi ${customerName}, your order #${orderNo} has been cancelled due to non-payment after 72 hours.\\n\\nYou're welcome to place a new order anytime at ${config.WEBSITE_URL} 🙏`;\n\n  results.push({\n    json: {\n      customerPhone: phone,\n      customerName,\n      orderNo,\n      cancelMsg,\n      WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,\n      WHATSAPP_ACCESS_TOKEN: config.WHATSAPP_ACCESS_TOKEN,\n      ADMIN_PHONE: config.ADMIN_PHONE\n    }\n  });\n}\n\nreturn results.length > 0 ? results : [{ json: { skip: true } }];"
+      },
+      "id": "format-cancelled",
+      "name": "Format Cancellation Notices",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        3200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-has-cancelled",
+      "name": "Has Cancelled Orders?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        3200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.customerPhone, type: 'text', text: { preview_url: true, body: $json.cancelMsg } }) }}",
+        "options": {}
+      },
+      "id": "send-cancel-notice",
+      "name": "Send Cancellation Notice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        3100
+      ]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Lookup Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Customer": {
+      "main": [
+        [
+          {
+            "node": "Prepare Customer Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Customer Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_products": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_product_components": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_car_brands": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_car_models": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_customer_orders": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_order_details": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add_to_cart": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "view_cart": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "remove_from_cart": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "clear_cart": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Notification Webhook": {
+      "main": [
+        [
+          {
+            "node": "Notification Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notification Config": {
+      "main": [
+        [
+          {
+            "node": "Parse Notification Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Notification Payload": {
+      "main": [
+        [
+          {
+            "node": "Route by Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Event Type": {
+      "main": [
+        [
+          {
+            "node": "Format Order Created",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Order Status Change",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Tracking Added",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Payment Change",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Return Created",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Return Status Change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Order Created": {
+      "main": [
+        [
+          {
+            "node": "Send Customer Notification (Order Created)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Customer Notification (Order Created)": {
+      "main": [
+        []
+      ]
+    },
+    "Format Order Status Change": {
+      "main": [
+        [
+          {
+            "node": "Send Customer Notification (Status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Customer Notification (Status)": {
+      "main": [
+        []
+      ]
+    },
+    "Format Tracking Added": {
+      "main": [
+        [
+          {
+            "node": "Send Customer Notification (Tracking)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Customer Notification (Tracking)": {
+      "main": [
+        []
+      ]
+    },
+    "Format Payment Change": {
+      "main": [
+        [
+          {
+            "node": "Send Customer Notification (Payment)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Customer Notification (Payment)": {
+      "main": [
+        []
+      ]
+    },
+    "Format Return Created": {
+      "main": [
+        [
+          {
+            "node": "Send Customer Notification (Return Created)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Customer Notification (Return Created)": {
+      "main": [
+        []
+      ]
+    },
+    "Format Return Status Change": {
+      "main": [
+        [
+          {
+            "node": "Send Customer Notification (Return Status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Customer Notification (Return Status)": {
+      "main": [
+        []
+      ]
+    },
+    "Daily 10AM MYT Cron": {
+      "main": [
+        [
+          {
+            "node": "Cron Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron Config": {
+      "main": [
+        [
+          {
+            "node": "Fetch Unpaid Orders",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Auto Cancel Unpaid Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Unpaid Orders": {
+      "main": [
+        [
+          {
+            "node": "Classify Reminder Tiers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Reminder Tiers": {
+      "main": [
+        [
+          {
+            "node": "Send Payment Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Payment Reminder": {
+      "main": [
+        [
+          {
+            "node": "Wait 2s (Between Reminders)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Cancel Unpaid Orders": {
+      "main": [
+        [
+          {
+            "node": "Format Cancellation Notices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Cancellation Notices": {
+      "main": [
+        [
+          {
+            "node": "Has Cancelled Orders?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Cancelled Orders?": {
+      "main": [
+        [
+          {
+            "node": "Send Cancellation Notice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Cancellation Notice": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kuala_Lumpur"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "WhatsApp"
+    },
+    {
+      "name": "AI Agent"
+    },
+    {
+      "name": "AutoLab"
+    },
+    {
+      "name": "Notifications"
+    },
+    {
+      "name": "Reminders"
+    }
+  ],
+  "pinData": {}
+}
