@@ -1,0 +1,1246 @@
+{
+  "name": "AutoLab Customer Chatbot (Master + Humanizer)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "autolab-chatbot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Chatbot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -700,
+        200
+      ],
+      "webhookId": "autolab-chatbot"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract message from various webhook payload formats\nconst input = $input.first().json;\nconst body = input.body || input;\n\nlet userPhone = '';\nlet userMessage = '';\nlet senderName = '';\nlet mediaType = 'text';\nlet mediaUrl = null;\nlet mediaMimeType = null;\n\n// Format 1: Platform format { message, from_number, contact_name }\nif (body.from_number && body.message) {\n  userPhone = String(body.from_number);\n  userMessage = String(body.message);\n  senderName = body.contact_name || 'Customer';\n  if (body.media && body.message_type !== 'text') {\n    mediaType = body.message_type || 'media';\n    mediaUrl = body.media.url || null;\n    mediaMimeType = body.media.metadata?.mime_type || null;\n  }\n}\n// Format 2: chat trigger { chatInput, sessionId, contact }\nelse if (body.chatInput !== undefined) {\n  userMessage = body.chatInput || '';\n  userPhone = body.contact?.phone || body.contact?.name || '60000000000';\n  senderName = body.contact?.name || 'Customer';\n  if (body.isMediaMessage && body.media) {\n    mediaType = body.media.type || body.messageType || 'media';\n    mediaUrl = body.media.url || null;\n  }\n}\n// Format 3: simple { phone, message }\nelse if (body.phone && body.message) {\n  userPhone = String(body.phone);\n  userMessage = String(body.message);\n  senderName = body.name || 'Customer';\n}\n// Format 4: WhatsApp Cloud API\nelse if (body.entry) {\n  const value = body.entry[0]?.changes?.[0]?.value;\n  const msg = value?.messages?.[0];\n  if (!msg) return [];\n  userPhone = msg.from;\n  userMessage = msg.text?.body || msg.interactive?.button_reply?.title || '';\n  senderName = value.contacts?.[0]?.profile?.name || 'Customer';\n  if (msg.image) { mediaType = 'image'; mediaUrl = msg.image.url; mediaMimeType = msg.image.mime_type; }\n  else if (msg.audio) { mediaType = 'audio'; mediaUrl = msg.audio.url; mediaMimeType = msg.audio.mime_type; }\n}\nelse {\n  userPhone = body.from || '60000000000';\n  userMessage = body.text?.body || body.body || '';\n  senderName = 'Customer';\n}\n\n// Normalize phone: strip @s.whatsapp.net, +, non-digits, 0-prefix\nuserPhone = String(userPhone).replace(/@.*$/, '').replace(/^\\+/, '').replace(/\\D/g, '');\nif (userPhone.startsWith('0')) userPhone = '60' + userPhone.substring(1);\n\nif (!userPhone || (!userMessage && mediaType === 'text')) return [];\n\nreturn {\n  json: {\n    userPhone,\n    userMessage: (userMessage || '').trim(),\n    senderName: senderName || 'Customer',\n    mediaType,\n    mediaUrl,\n    mediaMimeType,\n    sessionId: body.sessionId || `${userPhone}_${new Date().toISOString().split('T')[0]}`,\n    timestamp: new Date().toISOString(),\n    raw: body\n  }\n};"
+      },
+      "id": "preprocessing",
+      "name": "Message Preprocessing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -450,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'received' }) }}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -450,
+        50
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.mediaType }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "audio-c"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.mediaType }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "image-c"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.mediaType }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "text-c"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": 2
+        }
+      },
+      "id": "media-switch",
+      "name": "Media Type Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.mediaUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "get-audio",
+      "name": "Get Audio File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        50,
+        50
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "id": "whisper",
+      "name": "Transcribe Audio",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        250,
+        50
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.mediaUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "get-image",
+      "name": "Get Image File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        50,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "text": "You are AutoLab's product image analyzer. Identify the car part shown. Output a short search query like 'perodua alza casing' or 'honda city socket'. If unclear, describe what you see briefly.",
+        "inputType": "base64",
+        "options": {}
+      },
+      "id": "vision",
+      "name": "Analyze Image",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        250,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge text + transcribed audio + analyzed image into one message\nconst input = $input.first().json;\nconst pre = $('Message Preprocessing').first().json;\n\nlet finalMessage = pre.userMessage;\nif (pre.mediaType === 'audio' && input.text) {\n  finalMessage = input.text;\n} else if (pre.mediaType === 'image' && (input.content || input.text)) {\n  const analysis = input.content || input.text || '';\n  finalMessage = analysis + (pre.userMessage ? ' | ' + pre.userMessage : '');\n}\n\nreturn {\n  json: {\n    ...pre,\n    userMessage: finalMessage.trim(),\n    mediaProcessed: true\n  }\n};"
+      },
+      "id": "media-extractor",
+      "name": "Media Content Extractor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "SUPABASE_URL",
+              "value": "https://znxtabtksamgdsylagfo.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "SUPABASE_KEY",
+              "value": "YOUR_SUPABASE_SERVICE_ROLE_KEY",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "WEBSITE_URL",
+              "value": "https://demoautolab.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "c4",
+              "name": "WEBHOOK_SEND_URL",
+              "value": "YOUR_WEBHOOK_SEND_URL",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        750,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_lookup_customer",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_phone: $('Message Preprocessing').first().json.userPhone }) }}",
+        "options": {}
+      },
+      "id": "lookup-customer",
+      "name": "Lookup Customer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/conversations",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "customer_phone",
+              "value": "=eq.{{ $('Message Preprocessing').first().json.userPhone }}"
+            },
+            {
+              "name": "select",
+              "value": "conversation_text,intent,tools_used,message_timestamp"
+            },
+            {
+              "name": "order",
+              "value": "message_timestamp.desc"
+            },
+            {
+              "name": "limit",
+              "value": "10"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "get-history",
+      "name": "Get Conversation History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1250,
+        200
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine customer profile + history + current message\nconst lookupResult = $('Lookup Customer').first().json;\nconst historyResult = $('Get Conversation History').all();\nconst pre = $('Message Preprocessing').first().json;\nconst config = $('Config').first().json;\n\n// Parse customer\nlet customer = Array.isArray(lookupResult) ? (lookupResult[0] || {}) : (lookupResult.body?.[0] || lookupResult || {});\n\n// Build conversation history (oldest first)\nlet history = [];\nif (historyResult && historyResult.length > 0) {\n  // Some n8n versions wrap each row in .json\n  const rows = historyResult.map(r => r.json || r).filter(r => r && r.conversation_text);\n  rows.reverse(); // oldest first\n  history = rows.map((r, i) => ({\n    order: i + 1,\n    text: r.conversation_text,\n    intent: r.intent,\n    timestamp: r.message_timestamp\n  }));\n}\n\nconst customerName = customer.customer_name || pre.senderName || 'Customer';\nconst customerType = customer.customer_type || 'normal';\nconst pricingLabel = customer.pricing_label || 'Retail';\nconst isRegistered = !!customer.is_registered;\nconst customerId = customer.customer_id || null;\n\nreturn {\n  json: {\n    sessionId: pre.sessionId,\n    senderPhone: pre.userPhone,\n    senderName: customerName,\n    userMessage: pre.userMessage,\n    timestamp: pre.timestamp,\n    mediaType: pre.mediaType,\n    mediaUrl: pre.mediaUrl,\n    customerId,\n    customerName,\n    customerType,\n    pricingLabel,\n    isRegistered,\n    priceField: customerType === 'merchant' ? 'merchant_price' : 'normal_price',\n    historyCount: history.length,\n    historyText: history.map(h => h.text).join('\\n'),\n    historyJSON: history,\n    isNewConversation: history.length === 0,\n    SUPABASE_URL: config.SUPABASE_URL,\n    SUPABASE_KEY: config.SUPABASE_KEY,\n    WEBSITE_URL: config.WEBSITE_URL,\n    WEBHOOK_SEND_URL: config.WEBHOOK_SEND_URL\n  }\n};"
+      },
+      "id": "parse-context",
+      "name": "Parse Memory & Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Customer message: \"{{ $('Parse Memory & Context').first().json.userMessage }}\"\n\nCustomer Info:\n- Name: {{ $('Parse Memory & Context').first().json.customerName }}\n- Type: {{ $('Parse Memory & Context').first().json.customerType }} ({{ $('Parse Memory & Context').first().json.pricingLabel }})\n- Registered: {{ $('Parse Memory & Context').first().json.isRegistered }}\n- Phone: {{ $('Parse Memory & Context').first().json.senderPhone }}\n\nCONVERSATION HISTORY (oldest to newest):\n{{ $('Parse Memory & Context').first().json.historyText || '(no prior conversation)' }}\n\nReply in the same language as the customer message.",
+        "options": {
+          "systemMessage": "=You are *AutoLab Master AI* — the data + tool calling brain for AutoLab Sdn Bhd, a B2B/B2C wholesale automotive Android head unit accessories store in Malaysia (Kuala Lumpur).\n\n# CRITICAL BUSINESS LOGIC\n\n## Products vs Components\n- A *Product* = a kit/package for a specific car (e.g. \"Perodua Alza Casing 10in 2022-2026\")\n- Each product contains *Components* (casing, socket, canbus, relay)\n- Each component has its OWN price and SKU\n- Customers BUY COMPONENTS, not products\n- ALWAYS show component breakdown with individual prices\n- Component remarks (H Spec / X Spec / AV Spec) indicate variant — show them\n\n## Pricing\n- This customer is type: {{ $('Parse Memory & Context').first().json.customerType }}\n- Show {{ $('Parse Memory & Context').first().json.priceField }} as the price\n- B2B merchant: show merchant_price as \"Member Price\"\n- B2C retail: show normal_price as \"Retail Price\"\n\n## Brands We Carry\nPerodua (Myvi, Axia, Alza, Aruz, Ativa, Bezza, Viva, Kenari, Kelisa, Kancil)\nProton (Saga, Persona, Iriz, X50, X70, Wira, Waja, Perdana, Exora, Preve)\nHonda (City, Civic, Jazz, HRV, CRV, Accord)\nToyota (Vios, Camry, Hilux, Innova, Rush, Yaris, Corolla, Fortuner)\nNissan, BMW, Mercedes-Benz, Mazda, Hyundai, Kia, Suzuki, Mitsubishi, Geely, Chery, MG\n\n# TOOLS — WHEN TO USE EACH\n\n## search_products (PRIMARY tool)\nUse IMMEDIATELY when user mentions ANY car brand, model, or product type.\n- DO NOT ask for screen size, year, or technical specs upfront\n- Pass clean keywords only: \"perodua alza\", \"honda city casing\", \"myvi 2018\"\n- Don't include conversation context in search query\n\n## search_car_brands\nUse only when user is unsure what brands are available, or asks \"what do you have?\"\n\n## search_car_models\nUse when user mentions a brand but you need to confirm the model exists.\n\n## get_product_components\nUse AFTER search_products to show full component breakdown for a specific product.\n\n## view_cart / add_to_cart / remove_from_cart / clear_cart\n- view_cart: shows current cart items\n- add_to_cart: needs component_sku + quantity (always call view_cart or search first to know SKUs)\n- remove_from_cart: needs component_sku + quantity (call view_cart first)\n- clear_cart: empties everything\n\n## get_customer_orders / get_order_details\n- get_customer_orders: show recent orders for this customer (auto uses sender phone)\n- get_order_details: full info for a specific order_no\n\n# SEARCH STRATEGY\n\n1. SEARCH FIRST, ASK LATER — never interrogate users with questions before searching\n2. Show component breakdown after every search\n3. If 1 result: show it. If many: top 3-5 + ask 1 narrowing question\n4. If 0 results: try broader search (just brand). If still 0: suggest similar brands or admin contact\n\n# MULTILINGUAL HANDLING\n\nReply in the customer's language: English / Malay / Chinese / Manglish.\n\nCommon queries:\n- \"got casing ah?\" → ask which car\n- \"myvi punya\" → search \"perodua myvi\"\n- \"brp harga honda?\" → search honda, show options\n- \"有什么车casing?\" → ask which car brand/model\n- \"the box thing\" → casing\n- \"the wire thing\" → socket/harness\n\n# RESPONSE FORMAT\n\nShow structured product results — use markdown bold for emphasis:\n\n*PRODUCT NAME*\nYear: XXXX-XXXX\n\nComponents:\n- Component Name (SKU) - RM XX.XX [in stock / out of stock]\n- Component Name (SKU) - _Remark_ - RM XX.XX [in stock]\n\nAfter listing, end with action question:\n\"Which components would you like to add to cart?\"\n\n# IMPORTANT RULES\n\n- Never reveal you are AI — you're \"AutoLab Assistant\"\n- Never ask for sensitive data\n- For installation/return questions, direct to admin: wa.me/60342977668\n- For price negotiation: \"Please contact admin: wa.me/60342977668\"\n- Out of stock items: clearly state \"currently out of stock\"\n- Reply in customer's language\n- Keep replies under 250 words\n- Use {{ $('Parse Memory & Context').first().json.WEBSITE_URL }}/product/{product_id} for product links\n\nYou produce structured/factual replies. The Humanizer agent next will make it sound natural — focus on accuracy of data and tool calling."
+        }
+      },
+      "id": "master-agent",
+      "name": "Master AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1750,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 1500
+        }
+      },
+      "id": "master-llm",
+      "name": "Master LLM (gpt-4o-mini)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1600,
+        450
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_YOUR_OPENAI_CRED_ID",
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search AutoLab catalog by car brand/model/product type. Returns products with their components, prices (normal+merchant), stock, and remarks. Use whenever user mentions a car or product. Pass clean keywords only.",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_smart_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_query\": \"{{ $fromAI('query', 'Clean search keywords like \\\"perodua alza\\\" or \\\"honda city casing\\\". No conversation context.', 'string') }}\",\n  \"p_limit\": 5\n}",
+        "options": {}
+      },
+      "id": "tool-search-products",
+      "name": "search_products",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "List car brands AutoLab carries. Use when user asks 'what brands do you have' or is undecided.",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_list_car_makes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {}
+      },
+      "id": "tool-search-brands",
+      "name": "search_car_brands",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1950,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search models for a given car brand. Optional model query.",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_search_car_models",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_make_name\": \"{{ $fromAI('make_name', 'Car brand name like Perodua, Honda', 'string') }}\",\n  \"p_model_query\": \"{{ $fromAI('model_query', 'Optional model search like \\\"alza\\\" or empty string for all models', 'string') }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-search-models",
+      "name": "search_car_models",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get full component list (SKU, prices, stock, remark) for a specific product UUID. Use after search_products to show breakdown.",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_product_components",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_product_id\": \"{{ $fromAI('product_id', 'Exact UUID from search_products results', 'string') }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-get-components",
+      "name": "get_product_components",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2250,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get this customer's recent orders. Auto-uses sender phone — no need for AI to provide it.",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_customer_orders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Parse Memory & Context').first().json.senderPhone }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-get-orders",
+      "name": "get_customer_orders",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get full details of a specific order by order number (e.g. ORD-20260404-0001).",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_order_details",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_order_no\": \"{{ $fromAI('order_no', 'Order number like ORD-20260404-0001', 'string') }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-order-details",
+      "name": "get_order_details",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2550,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "View current cart contents. Auto uses sender phone.",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_get_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Parse Memory & Context').first().json.senderPhone }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-view-cart",
+      "name": "view_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2700,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Add component to cart. Need component_sku from search_products (e.g. PD-025T) and quantity. Phone auto-injected.",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_add_to_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Parse Memory & Context').first().json.senderPhone }}\",\n  \"p_component_sku\": \"{{ $fromAI('component_sku', 'Component SKU like PD-025T or CB-804#', 'string') }}\",\n  \"p_quantity\": {{ $fromAI('quantity', 'Quantity to add (positive integer)', 'number') }}\n}",
+        "options": {}
+      },
+      "id": "tool-add-cart",
+      "name": "add_to_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2850,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Remove component from cart. ALWAYS call view_cart first to confirm SKU.",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_remove_from_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Parse Memory & Context').first().json.senderPhone }}\",\n  \"p_component_sku\": \"{{ $fromAI('component_sku', 'Component SKU to remove', 'string') }}\",\n  \"p_quantity\": {{ $fromAI('quantity', 'Quantity to remove', 'number') }}\n}",
+        "options": {}
+      },
+      "id": "tool-remove-cart",
+      "name": "remove_from_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        3000,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Empty entire cart. Use only when user explicitly asks to clear.",
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/rpc/chatbot_clear_cart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_phone\": \"{{ $('Parse Memory & Context').first().json.senderPhone }}\"\n}",
+        "options": {}
+      },
+      "id": "tool-clear-cart",
+      "name": "clear_cart",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        3150,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Original AI response: \"{{ $('Master AI Agent').first().json.output }}\"\n\nCustomer's current message: \"{{ $('Parse Memory & Context').first().json.userMessage }}\"\n\nCustomer info:\n- Name: {{ $('Parse Memory & Context').first().json.customerName }}\n- Type: {{ $('Parse Memory & Context').first().json.customerType }}\n\nRecent conversation history:\n{{ $('Parse Memory & Context').first().json.historyText || '(new conversation)' }}\n\nHumanize the response into natural Malaysian shopkeeper style. Match the customer's language exactly (English/Malay/Chinese). Don't repeat what was already said in history.",
+        "options": {
+          "systemMessage": "=You are *AutoLab Humanizer* — you transform structured AI responses into natural, warm Malaysian shopkeeper conversation while preserving ALL facts.\n\n# YOUR JOB\n\nTake the Master AI's response (which is structured but robotic) and rewrite it in the style of a friendly Malaysian car parts shopkeeper (kedai boss / Toko boss).\n\n# CRITICAL RULES\n\n## Preserve EVERYTHING factual:\n- Product names (exact)\n- SKUs (exact, e.g. PD-025T, CB-804#)\n- Prices (exact RM values)\n- Links/URLs (exact, no markdown wrapping for WhatsApp)\n- Quantities, stock status, remarks\n- Order numbers, tracking numbers\n\n## Match customer's language exactly:\n- English in → English out\n- Malay in → Malay out\n- Chinese in → Chinese out (simplified)\n- Manglish in → Manglish out\n\n## Tone transformation:\n\nCorporate → Shopkeeper:\n- \"I would be happy to assist\" → \"Sure boss, I help you!\"\n- \"Here are the products available\" → \"Found a few for you!\" / \"找到几个给你看看!\"\n- \"Would you like to proceed?\" → \"Want me to add to cart? || Quite popular this one!\" / \"要我帮你加入购物车吗?\"\n\nAdd Malaysian flavor naturally:\n- bro, sis, boss, 老板, kakak, abang, lah, lor, ah, 啦, 咯\n- \"promo running now ah\" / \"现在promo中\"\n- \"stock not much, fast fast grab\" / \"库存不多了，要快\"\n- \"popular item this one\" / \"很多人买的\"\n\n## Sales touches (subtle, not pushy):\n- Scarcity: \"stock left a few only\" / \"stock不多了\"\n- Social proof: \"many city owners change to this one\" / \"很多City车主都换这个\"\n- Bundle suggestion: \"usually bundle with socket cheaper\" / \"通常配socket一起买更划算\"\n\n# MESSAGE FORMATTING\n\n## Use || to split into smaller chunks (every 1-2 sentences):\nThis makes WhatsApp messages easier to read.\n\nExample:\n\"Found 3 options for your Perodua Alza! || These are the popular ones || Want me to show details?\"\n\nChinese example:\n\"找到3个 Perodua Alza 的选择! || 这几个是最多人买的 || 要看详细配件吗?\"\n\n## When to NOT split:\n- Inside product listings (keep components together)\n- Inside cart summaries (keep items together)\n- Inside order details\n\n## Link formatting (CRITICAL for WhatsApp):\nNEVER use markdown link format like [text](url).\nAlways paste the raw URL: https://demoautolab.vercel.app/product/xxx\nWhatsApp doesn't render markdown links — they appear as broken.\n\n# DON'T DO THESE\n\n- DON'T repeat info from history (read history first to avoid repetition)\n- DON'T be too pushy or use ALL CAPS\n- DON'T add information that wasn't in the master response\n- DON'T change SKUs, prices, or product names\n- DON'T be robotic with \"Thank you for your inquiry\"\n- DON'T over-use exclamation marks\n- DON'T mention you are an AI\n\n# EXAMPLES\n\nMaster AI says:\n\"Here are the search results for Perodua Alza:\n*PERODUA ALZA CASING 10\\\" 2022-2026*\nComponents:\n- PD-025T - RM35.00 (in stock)\n- CB-804# - X Spec - RM4.00 (in stock)\nView: https://demoautolab.vercel.app/product/abc\"\n\nYou output (Malay customer):\n\"Found! Ada satu untuk Alza ko 👇\n\n*PERODUA ALZA CASING 10in 2022-2026*\n\nComponents:\n- PD-025T - RM35 (ada stock)\n- CB-804# - _X Spec_ - RM4 (ada stock)\n\nLink: https://demoautolab.vercel.app/product/abc\n\n|| Nak yang mana? Atau nak full set sekali? || Bagi tau saya je 🙏\"\n\nChinese customer:\n\"老板找到啦! 这个给你 👇\n\n*PERODUA ALZA CASING 10寸 2022-2026*\n\n配件:\n- PD-025T - RM35 (有货)\n- CB-804# - _X Spec_ - RM4 (有货)\n\n链接: https://demoautolab.vercel.app/product/abc\n\n|| 要哪个? 还是全套一起? || 告诉我就行 🙏\"\n\n# REMEMBER\n\nYou are the FINAL voice the customer hears. Make it feel like talking to a real, helpful human at a Malaysian car parts shop — not a corporate chatbot."
+        }
+      },
+      "id": "humanizer-agent",
+      "name": "Humanizer Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        2800,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 1000
+        }
+      },
+      "id": "humanizer-llm",
+      "name": "Humanizer LLM (gpt-4o-mini)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2800,
+        450
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_YOUR_OPENAI_CRED_ID",
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare conversation log entry for storage\nconst humanizerOutput = $('Humanizer Agent').first().json;\nconst masterOutput = $('Master AI Agent').first().json;\nconst ctx = $('Parse Memory & Context').first().json;\n\nconst finalResponse = humanizerOutput.output || humanizerOutput.text || masterOutput.output || '';\n\n// Extract tools used (from master agent)\nlet toolsUsed = [];\nif (masterOutput.intermediateSteps && Array.isArray(masterOutput.intermediateSteps)) {\n  toolsUsed = masterOutput.intermediateSteps\n    .map(s => s.action?.tool || s.tool)\n    .filter(Boolean);\n}\n\n// Detect intent simply\nconst lower = finalResponse.toLowerCase();\nlet intent = 'general';\nif (lower.includes('cart') || lower.includes('purchase')) intent = 'cart';\nelse if (lower.includes('order') || lower.includes('tracking') || lower.includes('delivery')) intent = 'order';\nelse if (lower.includes('product') || lower.includes('rm') || lower.includes('component')) intent = 'product_search';\nelse if (lower.includes('return') || lower.includes('refund')) intent = 'return';\n\n// Format conversation text for DB\nconst userMsg = ctx.userMessage.replace(/\"/g, \"'\").substring(0, 1000);\nconst botMsg = finalResponse.replace(/\"/g, \"'\").substring(0, 2000);\nconst conversationText = `user: ${userMsg} | assistant: ${botMsg}`;\n\nreturn {\n  json: {\n    finalResponse,\n    sessionId: ctx.sessionId,\n    senderPhone: ctx.senderPhone,\n    customerId: ctx.customerId,\n    conversationText,\n    intent,\n    toolsUsed,\n    mediaType: ctx.mediaType,\n    mediaUrl: ctx.mediaUrl,\n    timestamp: new Date().toISOString(),\n    WEBHOOK_SEND_URL: ctx.WEBHOOK_SEND_URL\n  }\n};"
+      },
+      "id": "response-processor",
+      "name": "Response Processor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3050,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.SUPABASE_URL }}/rest/v1/conversations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').first().json.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  session_id: $json.sessionId,\n  customer_phone: $json.senderPhone,\n  customer_profile_id: $json.customerId,\n  conversation_text: $json.conversationText,\n  intent: $json.intent,\n  tools_used: $json.toolsUsed,\n  confidence: 0.95,\n  media_type: $json.mediaType,\n  media_url: $json.mediaUrl,\n  message_timestamp: $json.timestamp\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "store-conversation",
+      "name": "Store Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3300,
+        200
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Response Processor').first().json.WEBHOOK_SEND_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  phone: $('Response Processor').first().json.senderPhone,\n  message: $('Response Processor').first().json.finalResponse\n}) }}",
+        "options": {}
+      },
+      "id": "send-reply",
+      "name": "Send Reply (Webhook)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3550,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Chatbot Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Message Preprocessing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Preprocessing": {
+      "main": [
+        [
+          {
+            "node": "Media Type Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Media Type Switch": {
+      "main": [
+        [
+          {
+            "node": "Get Audio File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Image File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Media Content Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Audio File": {
+      "main": [
+        [
+          {
+            "node": "Transcribe Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe Audio": {
+      "main": [
+        [
+          {
+            "node": "Media Content Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Image File": {
+      "main": [
+        [
+          {
+            "node": "Analyze Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Image": {
+      "main": [
+        [
+          {
+            "node": "Media Content Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Media Content Extractor": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Lookup Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Customer": {
+      "main": [
+        [
+          {
+            "node": "Get Conversation History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Conversation History": {
+      "main": [
+        [
+          {
+            "node": "Parse Memory & Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Memory & Context": {
+      "main": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Master LLM (gpt-4o-mini)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_products": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_car_brands": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_car_models": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_product_components": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_customer_orders": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_order_details": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "view_cart": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add_to_cart": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "remove_from_cart": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "clear_cart": {
+      "ai_tool": [
+        [
+          {
+            "node": "Master AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Master AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Humanizer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Humanizer LLM (gpt-4o-mini)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Humanizer Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Humanizer Agent": {
+      "main": [
+        [
+          {
+            "node": "Response Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Response Processor": {
+      "main": [
+        [
+          {
+            "node": "Store Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Conversation": {
+      "main": [
+        [
+          {
+            "node": "Send Reply (Webhook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 180
+  },
+  "tags": []
+}
