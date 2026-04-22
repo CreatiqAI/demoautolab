@@ -373,7 +373,7 @@ const MerchantRegister = () => {
         .from('customer_profiles' as any)
         .select('id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       // If no profile exists, create one
       if (profileFetchError || !customerProfile) {
