@@ -94,7 +94,7 @@ const ProductDetails = () => {
         .from('product_installation_guides' as any)
         .select('*')
         .eq('product_id', id)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         setInstallationGuide(data as unknown as ProductInstallationGuide);

@@ -714,7 +714,7 @@ export default function ProductsPro() {
         .from('product_installation_guides' as any)
         .select('*')
         .eq('product_id', product.id)
-        .single();
+        .maybeSingle();
 
 
       const components = (productComponents as any)?.map((pc: any) => ({
@@ -1375,8 +1375,8 @@ export default function ProductsPro() {
                                         const isVideoFile = file.type.startsWith('video/');
                                         try {
                                           if (isVideoFile) {
-                                            if (file.size > 100 * 1024 * 1024) {
-                                              toast({ title: 'Video too large', description: `${file.name} exceeds 100MB`, variant: 'destructive' });
+                                            if (file.size > 2 * 1024 * 1024 * 1024) {
+                                              toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
                                               continue;
                                             }
                                             const fileExt = file.name.split('.').pop() || 'mp4';
@@ -1508,8 +1508,8 @@ export default function ProductsPro() {
                                         const isVideoFile = file.type.startsWith('video/');
                                         try {
                                           if (isVideoFile) {
-                                            if (file.size > 100 * 1024 * 1024) {
-                                              toast({ title: 'Video too large', description: `${file.name} exceeds 100MB`, variant: 'destructive' });
+                                            if (file.size > 2 * 1024 * 1024 * 1024) {
+                                              toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
                                               continue;
                                             }
                                             const fileExt = file.name.split('.').pop() || 'mp4';
@@ -1641,8 +1641,8 @@ export default function ProductsPro() {
                                         const isVideoFile = file.type.startsWith('video/');
                                         try {
                                           if (isVideoFile) {
-                                            if (file.size > 100 * 1024 * 1024) {
-                                              toast({ title: 'Video too large', description: `${file.name} exceeds 100MB`, variant: 'destructive' });
+                                            if (file.size > 2 * 1024 * 1024 * 1024) {
+                                              toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
                                               continue;
                                             }
                                             const fileExt = file.name.split('.').pop() || 'mp4';
@@ -1703,8 +1703,8 @@ export default function ProductsPro() {
                                 const isVideoFile = file.type.startsWith('video/');
                                 try {
                                   if (isVideoFile) {
-                                    if (file.size > 100 * 1024 * 1024) {
-                                      toast({ title: 'Video too large', description: `${file.name} exceeds 100MB`, variant: 'destructive' });
+                                    if (file.size > 2 * 1024 * 1024 * 1024) {
+                                      toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
                                       continue;
                                     }
                                     const fileExt = file.name.split('.').pop() || 'mp4';
