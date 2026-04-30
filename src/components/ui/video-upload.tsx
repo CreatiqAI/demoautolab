@@ -20,7 +20,7 @@ interface VideoUploadProps {
 }
 
 const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_VIDEO_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 
 function isEmbeddableUrl(url: string): boolean {
   return /youtube\.com\/watch|youtu\.be\/|vimeo\.com\//i.test(url);
