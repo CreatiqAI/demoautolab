@@ -12,11 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye, RotateCcw, AlertTriangle, Copy } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye, RotateCcw, AlertTriangle, Copy, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
-import { useUploadQueue, PRODUCT_MEDIA_UPLOADED_EVENT, type ProductMediaUploadedDetail } from '@/hooks/useUploadQueue';
+import { useUploadQueue, PRODUCT_MEDIA_UPLOADED_EVENT, PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, type ProductMediaUploadedDetail } from '@/hooks/useUploadQueue';
 
 interface ComponentSearchResult {
   id: string;
@@ -64,7 +64,16 @@ interface ProductFormData {
   slug: string;
   active: boolean;
   featured: boolean;
-  images: Array<{ url: string; is_primary: boolean; alt_text?: string; media_type: 'image' | 'video' }>;
+  images: Array<{
+    url: string;
+    is_primary: boolean;
+    alt_text?: string;
+    media_type: 'image' | 'video';
+    _uploadId?: string;
+    _uploading?: boolean;
+    _uploadFileName?: string;
+    _uploadFileSize?: number;
+  }>;
   selectedComponents: SelectedComponent[];
   installation: InstallationFormData;
 }
@@ -128,7 +137,7 @@ export default function ProductsPro() {
   const [allComponents, setAllComponents] = useState<ComponentSearchResult[]>([]);
   const [activeTab, setActiveTab] = useState('basic');
   const { toast } = useToast();
-  const { enqueueVideoUpload } = useUploadQueue();
+  const { enqueueVideoUpload, cancelUpload } = useUploadQueue();
 
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
@@ -162,35 +171,58 @@ export default function ProductsPro() {
     fetchCategories();
   }, []);
 
-  // Sync local formData with background-uploaded media for the currently-edited product.
-  // Background uploads write to product_images_new directly; this listener appends the new
-  // media to the open modal so the user sees it without needing to reopen.
+  // Sync placeholder slots with background upload events. When a background upload finishes,
+  // find the matching placeholder by upload ID and replace it with the real URL. When an
+  // upload is cancelled or fails, remove the placeholder.
   useEffect(() => {
-    const handler = (e: Event) => {
+    const completedHandler = (e: Event) => {
       const detail = (e as CustomEvent<ProductMediaUploadedDetail>).detail;
       if (!editingProduct?.id || detail.productId !== editingProduct.id) return;
       setFormData(prev => {
-        if (prev.images.some(img => img.url === detail.media.url)) return prev;
-        return {
-          ...prev,
-          images: [
-            ...prev.images,
-            {
-              url: detail.media.url,
-              is_primary: false,
-              alt_text: `${prev.name} - Video`,
-              media_type: 'video' as const,
-            },
-          ],
+        const idx = prev.images.findIndex(img => img._uploadId === detail.media.uploadId);
+        if (idx === -1) {
+          if (prev.images.some(img => img.url === detail.media.url)) return prev;
+          return {
+            ...prev,
+            images: [
+              ...prev.images,
+              {
+                url: detail.media.url,
+                is_primary: false,
+                alt_text: `${prev.name} - Video`,
+                media_type: 'video' as const,
+              },
+            ],
+          };
+        }
+        const next = [...prev.images];
+        next[idx] = {
+          url: detail.media.url,
+          is_primary: next[idx].is_primary,
+          alt_text: `${prev.name} - Video`,
+          media_type: 'video' as const,
         };
+        return { ...prev, images: next };
       });
     };
-    window.addEventListener(PRODUCT_MEDIA_UPLOADED_EVENT, handler);
-    return () => window.removeEventListener(PRODUCT_MEDIA_UPLOADED_EVENT, handler);
+    const removedHandler = (e: Event) => {
+      const detail = (e as CustomEvent<{ uploadId: string }>).detail;
+      setFormData(prev => ({
+        ...prev,
+        images: prev.images.filter(img => img._uploadId !== detail.uploadId),
+      }));
+    };
+    window.addEventListener(PRODUCT_MEDIA_UPLOADED_EVENT, completedHandler);
+    window.addEventListener(PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, removedHandler);
+    return () => {
+      window.removeEventListener(PRODUCT_MEDIA_UPLOADED_EVENT, completedHandler);
+      window.removeEventListener(PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, removedHandler);
+    };
   }, [editingProduct?.id]);
 
   // Upload a video file. For existing products, kicks off a background upload that survives
-  // navigation; for new products (no id yet), falls back to a synchronous upload so the URL
+  // navigation, with a placeholder slot rendered immediately so the admin sees the file is
+  // in progress. For new products (no id yet), falls back to a synchronous upload so the URL
   // is available before the user clicks Save.
   const processVideoFile = async (file: File): Promise<void> => {
     if (file.size > 2 * 1024 * 1024 * 1024) {
@@ -198,11 +230,27 @@ export default function ProductsPro() {
       return;
     }
     if (editingProduct?.id) {
-      enqueueVideoUpload({
+      const uploadId = enqueueVideoUpload({
         file,
         productId: editingProduct.id,
         productName: formData.name || 'Untitled product',
       });
+      setFormData(prev => ({
+        ...prev,
+        images: [
+          ...prev.images,
+          {
+            url: '',
+            is_primary: false,
+            alt_text: `${prev.name} - Video`,
+            media_type: 'video' as const,
+            _uploading: true,
+            _uploadId: uploadId,
+            _uploadFileName: file.name,
+            _uploadFileSize: file.size,
+          },
+        ],
+      }));
       return;
     }
     toast({ title: 'Uploading video...', description: `${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — large videos may take several minutes, please keep this tab open` });
@@ -565,13 +613,25 @@ export default function ProductsPro() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       if (formData.selectedComponents.length === 0) {
         toast({
           title: "Error",
           description: "Please add at least one component to the product",
           variant: "destructive"
+        });
+        return;
+      }
+
+      // Block save while videos are still uploading. Saving mid-upload would
+      // race with the queue's own DB insert and risk losing the video.
+      const inFlight = formData.images.filter(img => img._uploading);
+      if (inFlight.length > 0) {
+        toast({
+          title: 'Upload still in progress',
+          description: `${inFlight.length} video${inFlight.length === 1 ? '' : 's'} still uploading. Wait for completion or cancel before saving.`,
+          variant: 'destructive',
         });
         return;
       }
@@ -624,14 +684,16 @@ export default function ProductsPro() {
           .eq('product_id', product.id);
       }
 
-      const allMedia = formData.images.map((image, index) => ({
-        product_id: product.id,
-        url: image.url,
-        alt_text: image.alt_text,
-        is_primary: image.is_primary,
-        sort_order: index,
-        media_type: image.media_type || 'image'
-      }));
+      const allMedia = formData.images
+        .filter(image => image.url && !image._uploading)
+        .map((image, index) => ({
+          product_id: product.id,
+          url: image.url,
+          alt_text: image.alt_text,
+          is_primary: image.is_primary,
+          sort_order: index,
+          media_type: image.media_type || 'image'
+        }));
 
       if (allMedia.length > 0) {
         const { error: imageError } = await supabase
@@ -1336,7 +1398,7 @@ export default function ProductsPro() {
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-medium text-gray-700">Product Media</h3>
-                        <span className="text-xs text-gray-400">{formData.images.filter(img => img.url).length}/15 slots used</span>
+                        <span className="text-xs text-gray-400">{formData.images.length}/15 slots used</span>
                       </div>
                       {/* Row 1: 5 slots */}
                       <div className="grid grid-cols-5 gap-2 mb-2">
@@ -1362,7 +1424,25 @@ export default function ProductsPro() {
                                 setMediaDragOverIndex(null);
                               }}
                             >
-                              {media?.url ? (
+                              {media?._uploading ? (
+                                <div className="aspect-square rounded-lg border-2 border-blue-300 bg-blue-50 flex flex-col items-center justify-center gap-1 p-2 relative">
+                                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                                  <span className="text-[9px] font-medium text-blue-700 truncate w-full text-center px-1" title={media._uploadFileName}>{media._uploadFileName}</span>
+                                  <span className="text-[8px] text-blue-600">{((media._uploadFileSize || 0) / 1024 / 1024).toFixed(0)}MB · Uploading...</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (media._uploadId) cancelUpload(media._uploadId);
+                                      setFormData(prev => ({ ...prev, images: prev.images.filter(img => img._uploadId !== media._uploadId) }));
+                                    }}
+                                    className="absolute top-1 right-1 p-0.5 bg-red-500 rounded-full text-white hover:bg-red-600"
+                                    title="Cancel upload"
+                                  >
+                                    <X className="h-2.5 w-2.5" />
+                                  </button>
+                                </div>
+                              ) : media?.url ? (
                                 <div
                                   className={`relative group aspect-square rounded-lg border overflow-hidden bg-gray-50 cursor-grab active:cursor-grabbing ${mediaDragIndex === index ? 'opacity-40' : ''} ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400' : ''}`}
                                   draggable
@@ -1449,7 +1529,18 @@ export default function ProductsPro() {
                                           toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
                                         }
                                       }
-                                      if (filesToUpload.length > 0) toast({ title: 'Upload complete', description: `${filesToUpload.length} file(s) uploaded` });
+                                      {
+                                        const isEditingExisting = !!editingProduct?.id;
+                                        const videos = filesToUpload.filter(f => f.type.startsWith('video/')).length;
+                                        const images = filesToUpload.length - videos;
+                                        const parts: string[] = [];
+                                        if (images > 0) parts.push(`${images} image${images === 1 ? '' : 's'} uploaded`);
+                                        if (videos > 0) {
+                                          if (isEditingExisting) parts.push(`${videos} video${videos === 1 ? '' : 's'} uploading in background`);
+                                          else parts.push(`${videos} video${videos === 1 ? '' : 's'} uploaded`);
+                                        }
+                                        if (parts.length > 0) toast({ title: 'Files added', description: parts.join(', ') });
+                                      }
                                       e.target.value = '';
                                     }}
                                   />
@@ -1484,7 +1575,25 @@ export default function ProductsPro() {
                                 setMediaDragOverIndex(null);
                               }}
                             >
-                              {media?.url ? (
+                              {media?._uploading ? (
+                                <div className="aspect-square rounded-lg border-2 border-blue-300 bg-blue-50 flex flex-col items-center justify-center gap-1 p-2 relative">
+                                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                                  <span className="text-[9px] font-medium text-blue-700 truncate w-full text-center px-1" title={media._uploadFileName}>{media._uploadFileName}</span>
+                                  <span className="text-[8px] text-blue-600">{((media._uploadFileSize || 0) / 1024 / 1024).toFixed(0)}MB · Uploading...</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (media._uploadId) cancelUpload(media._uploadId);
+                                      setFormData(prev => ({ ...prev, images: prev.images.filter(img => img._uploadId !== media._uploadId) }));
+                                    }}
+                                    className="absolute top-1 right-1 p-0.5 bg-red-500 rounded-full text-white hover:bg-red-600"
+                                    title="Cancel upload"
+                                  >
+                                    <X className="h-2.5 w-2.5" />
+                                  </button>
+                                </div>
+                              ) : media?.url ? (
                                 <div
                                   className={`relative group aspect-square rounded-lg border overflow-hidden bg-gray-50 cursor-grab active:cursor-grabbing ${mediaDragIndex === index ? 'opacity-40' : ''} ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400' : ''}`}
                                   draggable
@@ -1570,7 +1679,18 @@ export default function ProductsPro() {
                                           toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
                                         }
                                       }
-                                      if (filesToUpload.length > 0) toast({ title: 'Upload complete', description: `${filesToUpload.length} file(s) uploaded` });
+                                      {
+                                        const isEditingExisting = !!editingProduct?.id;
+                                        const videos = filesToUpload.filter(f => f.type.startsWith('video/')).length;
+                                        const images = filesToUpload.length - videos;
+                                        const parts: string[] = [];
+                                        if (images > 0) parts.push(`${images} image${images === 1 ? '' : 's'} uploaded`);
+                                        if (videos > 0) {
+                                          if (isEditingExisting) parts.push(`${videos} video${videos === 1 ? '' : 's'} uploading in background`);
+                                          else parts.push(`${videos} video${videos === 1 ? '' : 's'} uploaded`);
+                                        }
+                                        if (parts.length > 0) toast({ title: 'Files added', description: parts.join(', ') });
+                                      }
                                       e.target.value = '';
                                     }}
                                   />
@@ -1605,7 +1725,25 @@ export default function ProductsPro() {
                                 setMediaDragOverIndex(null);
                               }}
                             >
-                              {media?.url ? (
+                              {media?._uploading ? (
+                                <div className="aspect-square rounded-lg border-2 border-blue-300 bg-blue-50 flex flex-col items-center justify-center gap-1 p-2 relative">
+                                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                                  <span className="text-[9px] font-medium text-blue-700 truncate w-full text-center px-1" title={media._uploadFileName}>{media._uploadFileName}</span>
+                                  <span className="text-[8px] text-blue-600">{((media._uploadFileSize || 0) / 1024 / 1024).toFixed(0)}MB · Uploading...</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (media._uploadId) cancelUpload(media._uploadId);
+                                      setFormData(prev => ({ ...prev, images: prev.images.filter(img => img._uploadId !== media._uploadId) }));
+                                    }}
+                                    className="absolute top-1 right-1 p-0.5 bg-red-500 rounded-full text-white hover:bg-red-600"
+                                    title="Cancel upload"
+                                  >
+                                    <X className="h-2.5 w-2.5" />
+                                  </button>
+                                </div>
+                              ) : media?.url ? (
                                 <div
                                   className={`relative group aspect-square rounded-lg border overflow-hidden bg-gray-50 cursor-grab active:cursor-grabbing ${mediaDragIndex === index ? 'opacity-40' : ''} ${mediaDragOverIndex === index ? 'ring-2 ring-lime-400' : ''}`}
                                   draggable
@@ -1691,7 +1829,18 @@ export default function ProductsPro() {
                                           toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
                                         }
                                       }
-                                      if (filesToUpload.length > 0) toast({ title: 'Upload complete', description: `${filesToUpload.length} file(s) uploaded` });
+                                      {
+                                        const isEditingExisting = !!editingProduct?.id;
+                                        const videos = filesToUpload.filter(f => f.type.startsWith('video/')).length;
+                                        const images = filesToUpload.length - videos;
+                                        const parts: string[] = [];
+                                        if (images > 0) parts.push(`${images} image${images === 1 ? '' : 's'} uploaded`);
+                                        if (videos > 0) {
+                                          if (isEditingExisting) parts.push(`${videos} video${videos === 1 ? '' : 's'} uploading in background`);
+                                          else parts.push(`${videos} video${videos === 1 ? '' : 's'} uploaded`);
+                                        }
+                                        if (parts.length > 0) toast({ title: 'Files added', description: parts.join(', ') });
+                                      }
                                       e.target.value = '';
                                     }}
                                   />
@@ -1741,7 +1890,18 @@ export default function ProductsPro() {
                                   toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
                                 }
                               }
-                              if (filesToUpload.length > 0) toast({ title: 'Upload complete', description: `${filesToUpload.length} file(s) uploaded` });
+                              {
+                                const isEditingExisting = !!editingProduct?.id;
+                                const videos = filesToUpload.filter(f => f.type.startsWith('video/')).length;
+                                const images = filesToUpload.length - videos;
+                                const parts: string[] = [];
+                                if (images > 0) parts.push(`${images} image${images === 1 ? '' : 's'} uploaded`);
+                                if (videos > 0) {
+                                  if (isEditingExisting) parts.push(`${videos} video${videos === 1 ? '' : 's'} uploading in background`);
+                                  else parts.push(`${videos} video${videos === 1 ? '' : 's'} uploaded`);
+                                }
+                                if (parts.length > 0) toast({ title: 'Files added', description: parts.join(', ') });
+                              }
                               e.target.value = '';
                             }}
                           />

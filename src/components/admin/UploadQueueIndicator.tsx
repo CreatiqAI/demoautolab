@@ -44,7 +44,8 @@ export default function UploadQueueIndicator() {
                     u.status === 'failed' && 'bg-red-50',
                     u.status === 'complete' && 'bg-green-50',
                     u.status === 'cancelled' && 'bg-gray-50',
-                    u.status === 'cancelling' && 'bg-amber-50'
+                    u.status === 'cancelling' && 'bg-amber-50',
+                    u.status === 'interrupted' && 'bg-amber-50'
                   )}
                 >
                   {u.status === 'uploading' && (
@@ -62,6 +63,9 @@ export default function UploadQueueIndicator() {
                   {u.status === 'failed' && (
                     <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
                   )}
+                  {u.status === 'interrupted' && (
+                    <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" title={u.fileName}>
                       {u.fileName}
@@ -73,6 +77,7 @@ export default function UploadQueueIndicator() {
                       {u.status === 'cancelled' && ' · Cancelled'}
                       {u.status === 'complete' && ' · Uploaded'}
                       {u.status === 'failed' && u.error && ` · ${u.error}`}
+                      {u.status === 'interrupted' && ' · Interrupted by page refresh'}
                     </p>
                   </div>
                   {u.status === 'uploading' && (

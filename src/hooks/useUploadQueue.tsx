@@ -1,8 +1,8 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
-export type UploadStatus = 'uploading' | 'cancelling' | 'cancelled' | 'complete' | 'failed';
+export type UploadStatus = 'uploading' | 'cancelling' | 'cancelled' | 'complete' | 'failed' | 'interrupted';
 
 export interface UploadItem {
   id: string;
@@ -21,6 +21,7 @@ export interface CompletedMedia {
   fileName: string;
   fileSize: number;
   mimeType: string;
+  uploadId: string;
 }
 
 interface EnqueueParams {
@@ -40,14 +41,41 @@ interface UploadQueueContextValue {
 const UploadQueueContext = createContext<UploadQueueContextValue | null>(null);
 
 export const PRODUCT_MEDIA_UPLOADED_EVENT = 'product-media-uploaded';
+export const PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT = 'product-media-upload-removed';
 
 export interface ProductMediaUploadedDetail {
   productId: string;
   media: CompletedMedia;
 }
 
+export interface ProductMediaUploadRemovedDetail {
+  productId: string;
+  uploadId: string;
+}
+
+const QUEUE_STORAGE_KEY = 'autolab.uploadQueue.v1';
+
+// Persist queue snapshot so an in-progress queue survives page refresh.
+// Note: actual file bytes can't survive refresh (the SDK upload aborts), so any
+// 'uploading' items present at boot are reclassified as 'interrupted' to tell
+// the admin they need to re-select the file.
+function loadInitialQueue(): UploadItem[] {
+  try {
+    const raw = localStorage.getItem(QUEUE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: UploadItem[] = JSON.parse(raw);
+    return parsed.map((u) =>
+      u.status === 'uploading' || u.status === 'cancelling'
+        ? { ...u, status: 'interrupted', error: 'Page was refreshed before upload finished — please re-select the file' }
+        : u
+    );
+  } catch {
+    return [];
+  }
+}
+
 export function UploadQueueProvider({ children }: { children: ReactNode }) {
-  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [uploads, setUploads] = useState<UploadItem[]>(loadInitialQueue);
   const { toast } = useToast();
 
   // The Supabase JS SDK doesn't expose AbortSignal on .upload(), so we can't
@@ -56,6 +84,16 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
   // skip the DB insert. The user sees an instant "Cancelled" state; the only
   // cost is the bytes already in flight.
   const cancelledIds = useRef<Set<string>>(new Set());
+
+  // Persist queue snapshot whenever it changes so a refresh shows the recovered
+  // state (even if interrupted) instead of a silent disappearance.
+  useEffect(() => {
+    try {
+      localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(uploads));
+    } catch {
+      // localStorage may be full or disabled; non-fatal
+    }
+  }, [uploads]);
 
   const enqueueVideoUpload = useCallback<UploadQueueContextValue['enqueueVideoUpload']>(
     ({ file, productId, productName, onComplete }) => {
@@ -75,6 +113,14 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
         const fileExt = file.name.split('.').pop() || 'mp4';
         const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
 
+        const emitRemoved = () => {
+          window.dispatchEvent(
+            new CustomEvent<ProductMediaUploadRemovedDetail>(PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, {
+              detail: { productId, uploadId: id },
+            })
+          );
+        };
+
         try {
           const { error: uploadError } = await supabase.storage
             .from('product-videos')
@@ -87,6 +133,7 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
             setUploads((prev) =>
               prev.map((u) => (u.id === id ? { ...u, status: 'cancelled' } : u))
             );
+            emitRemoved();
             setTimeout(() => {
               setUploads((prev) => prev.filter((u) => u.id !== id));
             }, 3000);
@@ -122,6 +169,7 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
             fileName: file.name,
             fileSize: file.size,
             mimeType: file.type,
+            uploadId: id,
           };
 
           setUploads((prev) =>
@@ -145,15 +193,14 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
             setUploads((prev) => prev.filter((u) => u.id !== id));
           }, 5000);
         } catch (err: any) {
-          // If cancelled, treat the error path the same as the cancelled path —
-          // clean up the storage file (might exist if upload partially succeeded)
-          // and mark as cancelled rather than failed.
+          // Cancellation racing the error path: still treat as cancelled.
           if (cancelledIds.current.has(id)) {
             cancelledIds.current.delete(id);
             await supabase.storage.from('product-videos').remove([filePath]).catch(() => {});
             setUploads((prev) =>
               prev.map((u) => (u.id === id ? { ...u, status: 'cancelled' } : u))
             );
+            emitRemoved();
             setTimeout(() => {
               setUploads((prev) => prev.filter((u) => u.id !== id));
             }, 3000);
@@ -166,6 +213,7 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
               u.id === id ? { ...u, status: 'failed', error: message } : u
             )
           );
+          emitRemoved();
           toast({
             title: 'Video upload failed',
             description: `${file.name}: ${message}`,
@@ -187,7 +235,19 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const dismissUpload = useCallback((id: string) => {
-    setUploads((prev) => prev.filter((u) => u.id !== id));
+    setUploads((prev) => {
+      // If dismissing an interrupted/failed item, also notify any open modal so
+      // its placeholder slot (if still present) gets cleaned up.
+      const item = prev.find((u) => u.id === id);
+      if (item && (item.status === 'interrupted' || item.status === 'failed' || item.status === 'cancelled')) {
+        window.dispatchEvent(
+          new CustomEvent<ProductMediaUploadRemovedDetail>(PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, {
+            detail: { productId: item.productId, uploadId: item.id },
+          })
+        );
+      }
+      return prev.filter((u) => u.id !== id);
+    });
   }, []);
 
   return (
