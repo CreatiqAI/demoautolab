@@ -16,6 +16,7 @@ import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, User
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
+import { useUploadQueue, PRODUCT_MEDIA_UPLOADED_EVENT, type ProductMediaUploadedDetail } from '@/hooks/useUploadQueue';
 
 interface ComponentSearchResult {
   id: string;
@@ -127,6 +128,7 @@ export default function ProductsPro() {
   const [allComponents, setAllComponents] = useState<ComponentSearchResult[]>([]);
   const [activeTab, setActiveTab] = useState('basic');
   const { toast } = useToast();
+  const { enqueueVideoUpload } = useUploadQueue();
 
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
@@ -159,6 +161,61 @@ export default function ProductsPro() {
     fetchAllComponents();
     fetchCategories();
   }, []);
+
+  // Sync local formData with background-uploaded media for the currently-edited product.
+  // Background uploads write to product_images_new directly; this listener appends the new
+  // media to the open modal so the user sees it without needing to reopen.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<ProductMediaUploadedDetail>).detail;
+      if (!editingProduct?.id || detail.productId !== editingProduct.id) return;
+      setFormData(prev => {
+        if (prev.images.some(img => img.url === detail.media.url)) return prev;
+        return {
+          ...prev,
+          images: [
+            ...prev.images,
+            {
+              url: detail.media.url,
+              is_primary: false,
+              alt_text: `${prev.name} - Video`,
+              media_type: 'video' as const,
+            },
+          ],
+        };
+      });
+    };
+    window.addEventListener(PRODUCT_MEDIA_UPLOADED_EVENT, handler);
+    return () => window.removeEventListener(PRODUCT_MEDIA_UPLOADED_EVENT, handler);
+  }, [editingProduct?.id]);
+
+  // Upload a video file. For existing products, kicks off a background upload that survives
+  // navigation; for new products (no id yet), falls back to a synchronous upload so the URL
+  // is available before the user clicks Save.
+  const processVideoFile = async (file: File): Promise<void> => {
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
+      return;
+    }
+    if (editingProduct?.id) {
+      enqueueVideoUpload({
+        file,
+        productId: editingProduct.id,
+        productName: formData.name || 'Untitled product',
+      });
+      return;
+    }
+    toast({ title: 'Uploading video...', description: `${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — large videos may take several minutes, please keep this tab open` });
+    const fileExt = file.name.split('.').pop() || 'mp4';
+    const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+    const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
+    if (error) throw error;
+    const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
+    setFormData(prev => ({
+      ...prev,
+      images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }],
+    }));
+  };
 
   // Filter products based on search and filters
   useEffect(() => {
@@ -1375,20 +1432,7 @@ export default function ProductsPro() {
                                         const isVideoFile = file.type.startsWith('video/');
                                         try {
                                           if (isVideoFile) {
-                                            if (file.size > 2 * 1024 * 1024 * 1024) {
-                                              toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
-                                              continue;
-                                            }
-                                            toast({ title: 'Uploading video...', description: `${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — large videos may take several minutes, please keep this tab open` });
-                                            const fileExt = file.name.split('.').pop() || 'mp4';
-                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
-                                            if (error) throw error;
-                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
-                                            setFormData(prev => ({
-                                              ...prev,
-                                              images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }]
-                                            }));
+                                            await processVideoFile(file);
                                           } else {
                                             const imageCompression = (await import('browser-image-compression')).default;
                                             const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
@@ -1509,20 +1553,7 @@ export default function ProductsPro() {
                                         const isVideoFile = file.type.startsWith('video/');
                                         try {
                                           if (isVideoFile) {
-                                            if (file.size > 2 * 1024 * 1024 * 1024) {
-                                              toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
-                                              continue;
-                                            }
-                                            toast({ title: 'Uploading video...', description: `${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — large videos may take several minutes, please keep this tab open` });
-                                            const fileExt = file.name.split('.').pop() || 'mp4';
-                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
-                                            if (error) throw error;
-                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
-                                            setFormData(prev => ({
-                                              ...prev,
-                                              images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }]
-                                            }));
+                                            await processVideoFile(file);
                                           } else {
                                             const imageCompression = (await import('browser-image-compression')).default;
                                             const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
@@ -1643,20 +1674,7 @@ export default function ProductsPro() {
                                         const isVideoFile = file.type.startsWith('video/');
                                         try {
                                           if (isVideoFile) {
-                                            if (file.size > 2 * 1024 * 1024 * 1024) {
-                                              toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
-                                              continue;
-                                            }
-                                            toast({ title: 'Uploading video...', description: `${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — large videos may take several minutes, please keep this tab open` });
-                                            const fileExt = file.name.split('.').pop() || 'mp4';
-                                            const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-                                            const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
-                                            if (error) throw error;
-                                            const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
-                                            setFormData(prev => ({
-                                              ...prev,
-                                              images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }]
-                                            }));
+                                            await processVideoFile(file);
                                           } else {
                                             const imageCompression = (await import('browser-image-compression')).default;
                                             const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
@@ -1706,19 +1724,7 @@ export default function ProductsPro() {
                                 const isVideoFile = file.type.startsWith('video/');
                                 try {
                                   if (isVideoFile) {
-                                    if (file.size > 2 * 1024 * 1024 * 1024) {
-                                      toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
-                                      continue;
-                                    }
-                                    const fileExt = file.name.split('.').pop() || 'mp4';
-                                    const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-                                    const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
-                                    if (error) throw error;
-                                    const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
-                                    setFormData(prev => ({
-                                      ...prev,
-                                      images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }]
-                                    }));
+                                    await processVideoFile(file);
                                   } else {
                                     const imageCompression = (await import('browser-image-compression')).default;
                                     const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' });
