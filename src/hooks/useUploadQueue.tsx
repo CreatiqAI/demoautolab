@@ -1,8 +1,8 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
-export type UploadStatus = 'uploading' | 'complete' | 'failed';
+export type UploadStatus = 'uploading' | 'cancelling' | 'cancelled' | 'complete' | 'failed';
 
 export interface UploadItem {
   id: string;
@@ -34,6 +34,7 @@ interface UploadQueueContextValue {
   uploads: UploadItem[];
   enqueueVideoUpload: (params: EnqueueParams) => string;
   dismissUpload: (id: string) => void;
+  cancelUpload: (id: string) => void;
 }
 
 const UploadQueueContext = createContext<UploadQueueContextValue | null>(null);
@@ -48,6 +49,13 @@ export interface ProductMediaUploadedDetail {
 export function UploadQueueProvider({ children }: { children: ReactNode }) {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const { toast } = useToast();
+
+  // The Supabase JS SDK doesn't expose AbortSignal on .upload(), so we can't
+  // truly abort an in-flight upload. Cancellation is "soft": we set this flag,
+  // let the upload finish server-side, then immediately delete the file and
+  // skip the DB insert. The user sees an instant "Cancelled" state; the only
+  // cost is the bytes already in flight.
+  const cancelledIds = useRef<Set<string>>(new Set());
 
   const enqueueVideoUpload = useCallback<UploadQueueContextValue['enqueueVideoUpload']>(
     ({ file, productId, productName, onComplete }) => {
@@ -64,13 +72,27 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
       setUploads((prev) => [...prev, item]);
 
       void (async () => {
-        try {
-          const fileExt = file.name.split('.').pop() || 'mp4';
-          const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+        const fileExt = file.name.split('.').pop() || 'mp4';
+        const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
 
+        try {
           const { error: uploadError } = await supabase.storage
             .from('product-videos')
             .upload(filePath, file, { contentType: file.type });
+
+          // If user cancelled while bytes were in flight, clean up and bail.
+          if (cancelledIds.current.has(id)) {
+            cancelledIds.current.delete(id);
+            await supabase.storage.from('product-videos').remove([filePath]).catch(() => {});
+            setUploads((prev) =>
+              prev.map((u) => (u.id === id ? { ...u, status: 'cancelled' } : u))
+            );
+            setTimeout(() => {
+              setUploads((prev) => prev.filter((u) => u.id !== id));
+            }, 3000);
+            return;
+          }
+
           if (uploadError) throw uploadError;
 
           const { data: { publicUrl } } = supabase.storage
@@ -123,6 +145,21 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
             setUploads((prev) => prev.filter((u) => u.id !== id));
           }, 5000);
         } catch (err: any) {
+          // If cancelled, treat the error path the same as the cancelled path —
+          // clean up the storage file (might exist if upload partially succeeded)
+          // and mark as cancelled rather than failed.
+          if (cancelledIds.current.has(id)) {
+            cancelledIds.current.delete(id);
+            await supabase.storage.from('product-videos').remove([filePath]).catch(() => {});
+            setUploads((prev) =>
+              prev.map((u) => (u.id === id ? { ...u, status: 'cancelled' } : u))
+            );
+            setTimeout(() => {
+              setUploads((prev) => prev.filter((u) => u.id !== id));
+            }, 3000);
+            return;
+          }
+
           const message = err?.message || 'Upload failed';
           setUploads((prev) =>
             prev.map((u) =>
@@ -142,12 +179,21 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
     [toast]
   );
 
+  const cancelUpload = useCallback((id: string) => {
+    cancelledIds.current.add(id);
+    setUploads((prev) =>
+      prev.map((u) => (u.id === id && u.status === 'uploading' ? { ...u, status: 'cancelling' } : u))
+    );
+  }, []);
+
   const dismissUpload = useCallback((id: string) => {
     setUploads((prev) => prev.filter((u) => u.id !== id));
   }, []);
 
   return (
-    <UploadQueueContext.Provider value={{ uploads, enqueueVideoUpload, dismissUpload }}>
+    <UploadQueueContext.Provider
+      value={{ uploads, enqueueVideoUpload, dismissUpload, cancelUpload }}
+    >
       {children}
     </UploadQueueContext.Provider>
   );
