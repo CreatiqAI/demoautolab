@@ -1379,6 +1379,7 @@ export default function ProductsPro() {
                                               toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
                                               continue;
                                             }
+                                            toast({ title: 'Uploading video...', description: `${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — large videos may take several minutes, please keep this tab open` });
                                             const fileExt = file.name.split('.').pop() || 'mp4';
                                             const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
                                             const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
@@ -1512,6 +1513,7 @@ export default function ProductsPro() {
                                               toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
                                               continue;
                                             }
+                                            toast({ title: 'Uploading video...', description: `${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — large videos may take several minutes, please keep this tab open` });
                                             const fileExt = file.name.split('.').pop() || 'mp4';
                                             const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
                                             const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
@@ -1645,6 +1647,7 @@ export default function ProductsPro() {
                                               toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
                                               continue;
                                             }
+                                            toast({ title: 'Uploading video...', description: `${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — large videos may take several minutes, please keep this tab open` });
                                             const fileExt = file.name.split('.').pop() || 'mp4';
                                             const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
                                             const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
@@ -2351,32 +2354,52 @@ export default function ProductsPro() {
                   <h3 className="font-medium mb-2">Product Images</h3>
                   <p className="text-sm text-muted-foreground mb-4">Click any image to view in full size</p>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {previewProduct.images.map((image: any, index: number) => (
-                      <div
-                        key={index}
-                        className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer group hover:shadow-lg transition-all duration-200"
-                        onClick={() => {
-                          const imageInfo = {url: image.url, title: `Product Image ${index + 1}`};
-                          setViewingImage(image.url);
-                          setViewingImageInfo(imageInfo);
-                        }}
-                        title="Click to enlarge"
-                      >
-                        <img
-                          src={image.url}
-                          alt={image.alt_text || `Product image ${index + 1}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            e.currentTarget.src = '/placeholder-image.png';
+                    {previewProduct.images.map((image: any, index: number) => {
+                      const isVideo = image.media_type === 'video';
+                      return (
+                        <div
+                          key={index}
+                          className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden group hover:shadow-lg transition-all duration-200"
+                          onClick={isVideo ? undefined : () => {
+                            const imageInfo = {url: image.url, title: `Product Image ${index + 1}`};
+                            setViewingImage(image.url);
+                            setViewingImageInfo(imageInfo);
                           }}
-                        />
-                        {image.is_primary && (
-                          <Badge className="absolute top-2 left-2" variant="default">
-                            Primary
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
+                          style={isVideo ? undefined : { cursor: 'pointer' }}
+                          title={isVideo ? undefined : "Click to enlarge"}
+                        >
+                          {isVideo ? (
+                            <video
+                              src={image.url}
+                              className="w-full h-full object-contain bg-black"
+                              controls
+                              muted
+                              playsInline
+                              preload="metadata"
+                            />
+                          ) : (
+                            <img
+                              src={image.url}
+                              alt={image.alt_text || `Product image ${index + 1}`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                e.currentTarget.src = '/placeholder-image.png';
+                              }}
+                            />
+                          )}
+                          {image.is_primary && (
+                            <Badge className="absolute top-2 left-2 z-10" variant="default">
+                              Primary
+                            </Badge>
+                          )}
+                          {isVideo && (
+                            <Badge className="absolute top-2 right-2 z-10" variant="secondary">
+                              Video
+                            </Badge>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

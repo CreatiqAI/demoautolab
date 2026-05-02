@@ -403,15 +403,19 @@ const ProductDetails = () => {
                       embedUrl ? (
                         <iframe
                           src={embedUrl}
-                          className="w-full aspect-video"
+                          className="w-full h-full"
                           allowFullScreen
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         />
                       ) : (
                         <video
                           src={currentMedia?.url}
-                          className="w-full aspect-video object-contain"
+                          className="w-full h-full object-contain"
                           controls
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
                           preload="metadata"
                         />
                       )
