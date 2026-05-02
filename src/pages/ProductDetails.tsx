@@ -455,11 +455,29 @@ const ProductDetails = () => {
                           : 'border-transparent hover:border-gray-300'
                       )}
                     >
-                      {image.media_type === 'video' ? (
-                        <div className="w-full h-full bg-gray-900 flex items-center justify-center">
-                          <PlayCircle className="h-6 w-6 text-white" />
-                        </div>
-                      ) : (
+                      {image.media_type === 'video' ? (() => {
+                        const isEmbed = /youtube\.com\/watch|youtu\.be\/|vimeo\.com\//i.test(image.url);
+                        const ytMatch = image.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s?]+)/);
+                        const ytThumb = ytMatch ? `https://img.youtube.com/vi/${ytMatch[1]}/mqdefault.jpg` : null;
+                        return (
+                          <div className="relative w-full h-full bg-gray-900">
+                            {ytThumb ? (
+                              <img src={ytThumb} alt={image.alt_text || `Video ${index + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                            ) : isEmbed ? null : (
+                              <video
+                                src={`${image.url}#t=0.1`}
+                                className="w-full h-full object-cover"
+                                preload="metadata"
+                                muted
+                                playsInline
+                              />
+                            )}
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                              <PlayCircle className="h-6 w-6 text-white drop-shadow-md" />
+                            </div>
+                          </div>
+                        );
+                      })() : (
                         <img
                           src={image.url}
                           alt={image.alt_text || `View ${index + 1}`}
