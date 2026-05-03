@@ -6,7 +6,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase, Package, FileText, Image, Link2, ExternalLink, UserCheck, Car, Trash2, Ban, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Eye, Search, Phone, Mail, Calendar, MapPin, User, Store, ShoppingCart, CheckCircle, XCircle, Clock, Building2, Briefcase, Package, FileText, Image, Link2, ExternalLink, UserCheck, Car, Trash2, Ban, RotateCcw, AlertTriangle, Sparkles, Plus, Loader2 } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { CustomerTypeManager } from '@/components/admin/CustomerTypeManager';
@@ -33,6 +43,8 @@ interface CustomerProfile {
   car_model_name: string | null;
   subscription_start_date: string | null;
   subscription_end_date: string | null;
+  is_panel_customer: boolean | null;
+  last_sign_in_at: string | null;
 }
 
 interface SocialMediaLink {
@@ -81,6 +93,16 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [customerTypeFilter, setCustomerTypeFilter] = useState<'all' | 'b2b' | 'b2c'>('all');
+  // Sheet drawer (replaces the centered View Details Dialog)
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<'overview' | 'orders'>('overview');
+  const [drawerOrders, setDrawerOrders] = useState<any[]>([]);
+  const [drawerOrdersLoading, setDrawerOrdersLoading] = useState(false);
+  // Order history filter: 'all' or 'YYYY' or 'YYYY-MM'
+  const [orderHistoryPeriod, setOrderHistoryPeriod] = useState<string>('all');
+  // Subscription editor for B2B
+  const [subEndDateInput, setSubEndDateInput] = useState<string>('');
+  const [subSaving, setSubSaving] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<MerchantApplication | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -399,6 +421,109 @@ export default function Customers() {
     await fetchCustomerOrderStats(customer.id);
   };
 
+  const openDrawer = async (customer: CustomerProfile) => {
+    setSelectedCustomer(customer);
+    setDrawerTab('overview');
+    setIsDrawerOpen(true);
+    setOrderHistoryPeriod('all');
+    setDrawerOrders([]);
+    setSubEndDateInput(customer.subscription_end_date ? customer.subscription_end_date.slice(0, 10) : '');
+    void fetchCustomerOrderStats(customer.id);
+    void fetchDrawerOrders(customer.id);
+    if (customer.customer_type === 'merchant') {
+      const { data: app } = await supabase
+        .from('merchant_registrations' as any)
+        .select('*')
+        .eq('customer_id', customer.id)
+        .order('created_at', { ascending: false })
+        .maybeSingle();
+      setMerchantDetails(app as any);
+    } else {
+      setMerchantDetails(null);
+    }
+  };
+
+  const fetchDrawerOrders = async (customerId: string) => {
+    setDrawerOrdersLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('orders' as any)
+        .select('id, order_no, total, status, created_at, delivery_method')
+        .eq('customer_profile_id', customerId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setDrawerOrders((data as any[] | null) ?? []);
+    } catch {
+      setDrawerOrders([]);
+    } finally {
+      setDrawerOrdersLoading(false);
+    }
+  };
+
+  // Update one customer in local list state without refetching
+  const patchCustomer = (id: string, patch: Partial<CustomerProfile>) => {
+    setCustomers(prev => prev.map(c => (c.id === id ? { ...c, ...patch } as CustomerProfile : c)));
+    setSelectedCustomer(prev => (prev && prev.id === id ? { ...prev, ...patch } as CustomerProfile : prev));
+  };
+
+  const extendSubscription = async (customer: CustomerProfile, years: number) => {
+    setSubSaving(true);
+    try {
+      const base = customer.subscription_end_date && new Date(customer.subscription_end_date) > new Date()
+        ? new Date(customer.subscription_end_date)
+        : new Date();
+      const newEnd = new Date(base);
+      newEnd.setFullYear(newEnd.getFullYear() + years);
+      const startToSet = customer.subscription_start_date ?? new Date().toISOString();
+      const { error } = await supabase
+        .from('customer_profiles' as any)
+        .update({ subscription_end_date: newEnd.toISOString(), subscription_start_date: startToSet } as any)
+        .eq('id', customer.id);
+      if (error) throw error;
+      patchCustomer(customer.id, { subscription_end_date: newEnd.toISOString(), subscription_start_date: startToSet });
+      setSubEndDateInput(newEnd.toISOString().slice(0, 10));
+      toast({ title: 'Subscription extended', description: `New expiry: ${newEnd.toLocaleDateString('en-MY')}` });
+    } catch (err: any) {
+      toast({ title: 'Failed to extend', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setSubSaving(false);
+    }
+  };
+
+  const setSubscriptionEnd = async (customer: CustomerProfile, dateInput: string) => {
+    if (!dateInput) return;
+    setSubSaving(true);
+    try {
+      const newEnd = new Date(`${dateInput}T23:59:59`).toISOString();
+      const startToSet = customer.subscription_start_date ?? new Date().toISOString();
+      const { error } = await supabase
+        .from('customer_profiles' as any)
+        .update({ subscription_end_date: newEnd, subscription_start_date: startToSet } as any)
+        .eq('id', customer.id);
+      if (error) throw error;
+      patchCustomer(customer.id, { subscription_end_date: newEnd, subscription_start_date: startToSet });
+      toast({ title: 'Subscription updated' });
+    } catch (err: any) {
+      toast({ title: 'Failed to update', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setSubSaving(false);
+    }
+  };
+
+  const togglePanel = async (customer: CustomerProfile, value: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('customer_profiles' as any)
+        .update({ is_panel_customer: value } as any)
+        .eq('id', customer.id);
+      if (error) throw error;
+      patchCustomer(customer.id, { is_panel_customer: value });
+      toast({ title: value ? 'Promoted to Panel' : 'Removed from Panel' });
+    } catch (err: any) {
+      toast({ title: 'Failed', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    }
+  };
+
   const fetchCustomerOrderStats = async (customerId: string) => {
     try {
       const { data, error } = await supabase
@@ -605,24 +730,284 @@ export default function Customers() {
         <p className="text-muted-foreground">Manage your customer base and their information</p>
       </div>
 
-      <Tabs defaultValue="customers" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="customers" className="flex items-center gap-2">
+      <Tabs defaultValue="b2c" className="space-y-6">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          <TabsTrigger value="b2c" className="flex items-center gap-2">
             <User className="h-4 w-4" />
-            Customers
+            B2C Customers
+            <Badge variant="secondary" className="ml-1">
+              {customers.filter(c => c.customer_type !== 'merchant').length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="b2b" className="flex items-center gap-2">
+            <Store className="h-4 w-4" />
+            B2B Merchants
+            <Badge variant="secondary" className="ml-1">
+              {customers.filter(c => c.customer_type === 'merchant').length}
+            </Badge>
           </TabsTrigger>
           <TabsTrigger value="applications" className="flex items-center gap-2 relative">
-            <Store className="h-4 w-4" />
-            Merchant Applications
+            <FileText className="h-4 w-4" />
+            Applications
             {applications.filter(app => app.status === 'PENDING').length > 0 && (
-              <Badge variant="destructive" className="ml-2 px-2 py-0.5 text-xs">
+              <Badge variant="destructive" className="ml-1 px-2 py-0.5 text-xs">
                 {applications.filter(app => app.status === 'PENDING').length}
               </Badge>
             )}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="customers">
+        {/* B2C CUSTOMERS */}
+        <TabsContent value="b2c">
+          <Card>
+            <CardHeader>
+              <CardTitle>B2C Customers</CardTitle>
+              <CardDescription>
+                End-users who place orders. Click a row to open full details.
+              </CardDescription>
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search customers..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Last login</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(() => {
+                        const list = filteredCustomers.filter(c => c.customer_type !== 'merchant');
+                        if (list.length === 0) {
+                          return (
+                            <TableRow>
+                              <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                {searchTerm ? 'No customers match your search.' : 'No B2C customers yet.'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+                        return list.map((customer) => (
+                          <TableRow
+                            key={customer.id}
+                            className={`cursor-pointer hover:bg-muted/40 ${!customer.is_active ? 'bg-red-50/40' : ''}`}
+                            onClick={() => openDrawer(customer)}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-full bg-blue-100">
+                                  <User className="h-4 w-4 text-blue-600" />
+                                </div>
+                                <div>
+                                  <div className="font-medium">{customer.full_name}</div>
+                                  <div className="text-xs text-muted-foreground">ID: {customer.id.slice(0, 8)}…</div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1 text-sm">
+                                {customer.email && <div className="flex items-center gap-1"><Mail className="h-3 w-3" />{customer.email}</div>}
+                                {customer.phone && <div className="flex items-center gap-1"><Phone className="h-3 w-3" />{customer.phone}</div>}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {customer.last_sign_in_at ? formatDate(customer.last_sign_in_at) : <span className="text-muted-foreground">Never</span>}
+                            </TableCell>
+                            <TableCell>
+                              {customer.is_active ? (
+                                <Badge className="bg-green-100 text-green-700 border-green-300"><CheckCircle className="h-3 w-3 mr-1" />Active</Badge>
+                              ) : (
+                                <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-300"><Ban className="h-3 w-3 mr-1" />Suspended</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex justify-end gap-1">
+                                {customer.is_active ? (
+                                  <Button variant="ghost" size="sm" onClick={() => { setCustomerToAction(customer); setIsSuspendDialogOpen(true); }} title="Suspend" className="text-orange-600 hover:bg-orange-50">
+                                    <Ban className="h-4 w-4" />
+                                  </Button>
+                                ) : (
+                                  <Button variant="ghost" size="sm" onClick={() => handleReactivateCustomer(customer)} title="Reactivate" className="text-green-600 hover:bg-green-50">
+                                    <RotateCcw className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="sm" onClick={() => { setCustomerToAction(customer); setIsDeleteDialogOpen(true); }} title="Delete" className="text-red-600 hover:bg-red-50">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ));
+                      })()}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* B2B MERCHANTS */}
+        <TabsContent value="b2b">
+          <Card>
+            <CardHeader>
+              <CardTitle>B2B Merchants</CardTitle>
+              <CardDescription>
+                Approved business accounts on the RM99/year subscription. Click a row to manage subscription and view details.
+              </CardDescription>
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search merchants..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Merchant</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Subscription</TableHead>
+                        <TableHead>Last login</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(() => {
+                        const list = filteredCustomers.filter(c => c.customer_type === 'merchant');
+                        if (list.length === 0) {
+                          return (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                {searchTerm ? 'No merchants match your search.' : 'No B2B merchants yet.'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+                        return list.map((customer) => {
+                          const sub = getSubscriptionInfo(customer);
+                          const subPalette = !sub
+                            ? 'border-gray-200 text-gray-500 bg-gray-50'
+                            : sub.status === 'active'
+                              ? 'border-green-300 text-green-700 bg-green-50'
+                              : sub.status === 'expiring'
+                                ? 'border-amber-300 text-amber-700 bg-amber-50'
+                                : 'border-red-300 text-red-700 bg-red-50';
+                          const subLabel = !sub
+                            ? 'No subscription'
+                            : sub.status === 'expired'
+                              ? `Expired ${Math.abs(sub.daysRemaining)}d ago`
+                              : `${sub.daysRemaining}d left`;
+                          return (
+                            <TableRow
+                              key={customer.id}
+                              className={`cursor-pointer hover:bg-muted/40 ${!customer.is_active ? 'bg-red-50/40' : ''}`}
+                              onClick={() => openDrawer(customer)}
+                            >
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 rounded-full bg-purple-100">
+                                    <Store className="h-4 w-4 text-purple-600" />
+                                  </div>
+                                  <div>
+                                    <div className="font-medium flex items-center gap-1.5">
+                                      {customer.full_name}
+                                      {customer.is_panel_customer && (
+                                        <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-1.5 py-0">
+                                          <Sparkles className="h-2.5 w-2.5 mr-0.5" />PANEL
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">ID: {customer.id.slice(0, 8)}…</div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1 text-sm">
+                                  {customer.email && <div className="flex items-center gap-1"><Mail className="h-3 w-3" />{customer.email}</div>}
+                                  {customer.phone && <div className="flex items-center gap-1"><Phone className="h-3 w-3" />{customer.phone}</div>}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <Badge variant="outline" className={subPalette}>
+                                    <Calendar className="h-3 w-3 mr-1" />{subLabel}
+                                  </Badge>
+                                  {customer.subscription_start_date && (
+                                    <div className="text-[11px] text-muted-foreground leading-tight">
+                                      {formatDateShort(customer.subscription_start_date)} → {formatDateShort(customer.subscription_end_date)}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {customer.last_sign_in_at ? formatDate(customer.last_sign_in_at) : <span className="text-muted-foreground">Never</span>}
+                              </TableCell>
+                              <TableCell>
+                                {customer.is_active ? (
+                                  <Badge className="bg-green-100 text-green-700 border-green-300"><CheckCircle className="h-3 w-3 mr-1" />Active</Badge>
+                                ) : (
+                                  <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-300"><Ban className="h-3 w-3 mr-1" />Suspended</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex justify-end gap-1">
+                                  {customer.is_active ? (
+                                    <Button variant="ghost" size="sm" onClick={() => { setCustomerToAction(customer); setIsSuspendDialogOpen(true); }} title="Suspend" className="text-orange-600 hover:bg-orange-50">
+                                      <Ban className="h-4 w-4" />
+                                    </Button>
+                                  ) : (
+                                    <Button variant="ghost" size="sm" onClick={() => handleReactivateCustomer(customer)} title="Reactivate" className="text-green-600 hover:bg-green-50">
+                                      <RotateCcw className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  <Button variant="ghost" size="sm" onClick={() => { setCustomerToAction(customer); setIsDeleteDialogOpen(true); }} title="Delete" className="text-red-600 hover:bg-red-50">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        });
+                      })()}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* OLD CUSTOMERS TAB — kept hidden so existing dialog logic still mounts */}
+        <TabsContent value="customers-legacy" className="hidden">
           <Card>
             <CardHeader>
               <CardTitle>Customer Directory</CardTitle>
@@ -1808,6 +2193,264 @@ export default function Customers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Customer details — right Sheet drawer with Overview + Purchase History tabs */}
+      <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto">
+          {selectedCustomer && (
+            <>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2 flex-wrap">
+                  {selectedCustomer.full_name}
+                  {selectedCustomer.customer_type === 'merchant' ? (
+                    <Badge className="bg-purple-600 text-white"><Store className="h-3 w-3 mr-1" />B2B Merchant</Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50"><User className="h-3 w-3 mr-1" />B2C Customer</Badge>
+                  )}
+                  {selectedCustomer.is_panel_customer && (
+                    <Badge className="bg-amber-500 text-white"><Sparkles className="h-3 w-3 mr-1" />PANEL</Badge>
+                  )}
+                  {selectedCustomer.is_active ? (
+                    <Badge className="bg-green-100 text-green-700 border-green-300">Active</Badge>
+                  ) : (
+                    <Badge variant="destructive">Suspended</Badge>
+                  )}
+                </SheetTitle>
+                <SheetDescription>
+                  ID: <code className="text-xs">{selectedCustomer.id}</code> · Last login {selectedCustomer.last_sign_in_at ? formatDate(selectedCustomer.last_sign_in_at) : 'Never'}
+                </SheetDescription>
+              </SheetHeader>
+
+              <Tabs value={drawerTab} onValueChange={(v) => setDrawerTab(v as any)} className="mt-4">
+                <TabsList>
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
+                  <TabsTrigger value="orders">
+                    Purchase History
+                    <Badge variant="secondary" className="ml-2">{drawerOrders.length}</Badge>
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* OVERVIEW TAB */}
+                <TabsContent value="overview" className="space-y-5 pt-4">
+                  {/* Contact */}
+                  <div className="rounded-lg border p-4 space-y-2">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase">Contact</div>
+                    {selectedCustomer.email && <div className="flex items-center gap-2 text-sm"><Mail className="h-4 w-4 text-muted-foreground" />{selectedCustomer.email}</div>}
+                    {selectedCustomer.phone && <div className="flex items-center gap-2 text-sm"><Phone className="h-4 w-4 text-muted-foreground" />{selectedCustomer.phone}</div>}
+                  </div>
+
+                  {/* Order summary */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border p-4">
+                      <div className="text-xs text-muted-foreground">Total orders</div>
+                      <div className="text-2xl font-semibold">{orderStats.totalOrders}</div>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <div className="text-xs text-muted-foreground">Lifetime value</div>
+                      <div className="text-2xl font-semibold">RM {orderStats.totalSpent.toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  {/* Subscription editor — B2B only */}
+                  {selectedCustomer.customer_type === 'merchant' && (
+                    <div className="rounded-lg border p-4 space-y-3 bg-purple-50/30">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />Subscription (RM99/year)
+                        </div>
+                        {(() => {
+                          const sub = getSubscriptionInfo(selectedCustomer);
+                          if (!sub) return null;
+                          const palette = sub.status === 'active'
+                            ? 'border-green-300 text-green-700 bg-green-50'
+                            : sub.status === 'expiring'
+                              ? 'border-amber-300 text-amber-700 bg-amber-50'
+                              : 'border-red-300 text-red-700 bg-red-50';
+                          const label = sub.status === 'expired'
+                            ? `Expired ${Math.abs(sub.daysRemaining)}d ago`
+                            : `${sub.daysRemaining}d left`;
+                          return <Badge variant="outline" className={palette}>{label}</Badge>;
+                        })()}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Started {formatDateShort(selectedCustomer.subscription_start_date) ?? '—'} · Ends {formatDateShort(selectedCustomer.subscription_end_date) ?? '—'}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button variant="outline" size="sm" onClick={() => extendSubscription(selectedCustomer, 1)} disabled={subSaving}>
+                          <Plus className="h-3 w-3 mr-1" />Extend by 1 year
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => extendSubscription(selectedCustomer, 2)} disabled={subSaving}>
+                          <Plus className="h-3 w-3 mr-1" />Extend by 2 years
+                        </Button>
+                      </div>
+                      <div className="flex items-end gap-2">
+                        <div className="flex-1">
+                          <Label className="text-xs">Set end date manually</Label>
+                          <Input
+                            type="date"
+                            value={subEndDateInput}
+                            onChange={(e) => setSubEndDateInput(e.target.value)}
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => setSubscriptionEnd(selectedCustomer, subEndDateInput)}
+                          disabled={subSaving || !subEndDateInput}
+                        >
+                          {subSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                        </Button>
+                      </div>
+
+                      {/* Panel toggle */}
+                      <div className="flex items-center justify-between border-t pt-3 mt-2">
+                        <div>
+                          <div className="text-sm font-medium flex items-center gap-1.5">
+                            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                            Panel Customer
+                          </div>
+                          <div className="text-xs text-muted-foreground">Promote this merchant to panel-tier status.</div>
+                        </div>
+                        <Switch
+                          checked={!!selectedCustomer.is_panel_customer}
+                          onCheckedChange={(v) => togglePanel(selectedCustomer, v)}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Merchant business info */}
+                  {selectedCustomer.customer_type === 'merchant' && merchantDetails && (
+                    <div className="rounded-lg border p-4 space-y-2">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase">Business</div>
+                      <div className="text-sm"><span className="text-muted-foreground">Company:</span> {merchantDetails.company_name}</div>
+                      {merchantDetails.business_type && <div className="text-sm"><span className="text-muted-foreground">Type:</span> {merchantDetails.business_type}</div>}
+                      {merchantDetails.business_registration_no && <div className="text-sm"><span className="text-muted-foreground">SSM:</span> {merchantDetails.business_registration_no}</div>}
+                      {merchantDetails.address && <div className="text-sm"><span className="text-muted-foreground">Address:</span> {merchantDetails.address}</div>}
+                    </div>
+                  )}
+
+                  {/* Vehicle */}
+                  {(selectedCustomer.car_make_name || selectedCustomer.car_model_name) && (
+                    <div className="rounded-lg border p-4 space-y-1">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase">Vehicle</div>
+                      <div className="flex items-center gap-2 text-sm"><Car className="h-4 w-4 text-muted-foreground" />{selectedCustomer.car_make_name} {selectedCustomer.car_model_name}</div>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 pt-2 border-t">
+                    {selectedCustomer.is_active ? (
+                      <Button variant="outline" className="text-orange-600" onClick={() => { setCustomerToAction(selectedCustomer); setIsSuspendDialogOpen(true); }}>
+                        <Ban className="h-4 w-4 mr-2" />Suspend account
+                      </Button>
+                    ) : (
+                      <Button variant="outline" className="text-green-600" onClick={() => handleReactivateCustomer(selectedCustomer)}>
+                        <RotateCcw className="h-4 w-4 mr-2" />Reactivate
+                      </Button>
+                    )}
+                    <Button variant="outline" className="text-red-600" onClick={() => { setCustomerToAction(selectedCustomer); setIsDeleteDialogOpen(true); }}>
+                      <Trash2 className="h-4 w-4 mr-2" />Delete
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                {/* PURCHASE HISTORY TAB */}
+                <TabsContent value="orders" className="space-y-3 pt-4">
+                  {(() => {
+                    const months = new Set<string>();
+                    const years = new Set<string>();
+                    for (const o of drawerOrders) {
+                      months.add(o.created_at.slice(0, 7));
+                      years.add(o.created_at.slice(0, 4));
+                    }
+                    const monthOptions = Array.from(months).sort((a, b) => (a < b ? 1 : -1));
+                    const yearOptions = Array.from(years).sort((a, b) => (a < b ? 1 : -1));
+                    const filtered = drawerOrders.filter(o => {
+                      if (orderHistoryPeriod === 'all') return true;
+                      if (orderHistoryPeriod.length === 4) return o.created_at.slice(0, 4) === orderHistoryPeriod;
+                      return o.created_at.slice(0, 7) === orderHistoryPeriod;
+                    });
+                    const periodTotal = filtered.reduce((s, o) => s + (Number(o.total) || 0), 0);
+                    return (
+                      <>
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <Select value={orderHistoryPeriod} onValueChange={setOrderHistoryPeriod}>
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All time</SelectItem>
+                              {yearOptions.length > 0 && (
+                                <>
+                                  <div className="px-2 py-1 text-[10px] uppercase font-semibold text-muted-foreground">Year</div>
+                                  {yearOptions.map(y => (
+                                    <SelectItem key={y} value={y}>{y}</SelectItem>
+                                  ))}
+                                </>
+                              )}
+                              {monthOptions.length > 0 && (
+                                <>
+                                  <div className="px-2 py-1 text-[10px] uppercase font-semibold text-muted-foreground">Month</div>
+                                  {monthOptions.map(m => (
+                                    <SelectItem key={m} value={m}>
+                                      {new Date(`${m}-01T00:00:00`).toLocaleDateString('en-MY', { year: 'numeric', month: 'long' })}
+                                    </SelectItem>
+                                  ))}
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <div className="text-sm text-muted-foreground">
+                            <span className="font-semibold text-foreground">{filtered.length}</span> orders ·
+                            <span className="font-semibold text-foreground ml-1">RM {periodTotal.toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        {drawerOrdersLoading ? (
+                          <div className="flex items-center justify-center py-8 text-muted-foreground">
+                            <Loader2 className="h-5 w-5 animate-spin mr-2" />Loading orders...
+                          </div>
+                        ) : filtered.length === 0 ? (
+                          <div className="text-center py-8 text-muted-foreground text-sm">
+                            No orders in this period.
+                          </div>
+                        ) : (
+                          <div className="border rounded-lg overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Order</TableHead>
+                                  <TableHead>Date</TableHead>
+                                  <TableHead>Status</TableHead>
+                                  <TableHead>Delivery</TableHead>
+                                  <TableHead className="text-right">Total</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {filtered.map(o => (
+                                  <TableRow key={o.id}>
+                                    <TableCell className="font-mono text-xs">{o.order_no}</TableCell>
+                                    <TableCell className="text-sm">{formatDate(o.created_at)}</TableCell>
+                                    <TableCell>
+                                      <Badge variant={o.status === 'CANCELLED' ? 'destructive' : 'secondary'} className="text-xs">{o.status}</Badge>
+                                    </TableCell>
+                                    <TableCell className="capitalize text-sm">{o.delivery_method}</TableCell>
+                                    <TableCell className="text-right font-medium">RM {Number(o.total).toFixed(2)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </TabsContent>
+              </Tabs>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
