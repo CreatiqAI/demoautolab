@@ -124,6 +124,17 @@ export default function Customers() {
   // Panel subscription end-date editor (mirrors the B2B subscription editor)
   const [panelEndInput, setPanelEndInput] = useState<string>('');
   const [panelSubSaving, setPanelSubSaving] = useState(false);
+
+  // Payment history (audit trail for B2B + Panel renewals)
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+
+  // Renewal dialog state
+  const [renewOpen, setRenewOpen] = useState(false);
+  const [renewType, setRenewType] = useState<'b2b' | 'panel'>('b2b');
+  const [renewPeriod, setRenewPeriod] = useState<'1m' | '3m' | '6m' | '1y' | '2y'>('1y');
+  const [renewFile, setRenewFile] = useState<File | null>(null);
+  const [renewNotes, setRenewNotes] = useState<string>('');
+  const [renewing, setRenewing] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<MerchantApplication | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -155,6 +166,15 @@ export default function Customers() {
 
   const partnershipFor = (merchantId: string) =>
     partnerships.find(p => p.merchant_id === merchantId && p.subscription_status === 'ACTIVE') ?? null;
+
+  const fetchPaymentHistory = async (customerId: string) => {
+    const { data } = await supabase
+      .from('customer_subscription_payments' as any)
+      .select('*')
+      .eq('customer_id', customerId)
+      .order('created_at', { ascending: false });
+    setPaymentHistory((data as any[] | null) ?? []);
+  };
 
   const fetchCustomers = async () => {
     try {
@@ -465,6 +485,7 @@ export default function Customers() {
     setPanelEndInput(partnership?.subscription_end_date ? partnership.subscription_end_date.slice(0, 10) : '');
     void fetchCustomerOrderStats(customer.id);
     void fetchDrawerOrders(customer.id);
+    void fetchPaymentHistory(customer.id);
     if (customer.customer_type === 'merchant') {
       const { data: app } = await supabase
         .from('merchant_registrations' as any)
@@ -657,6 +678,115 @@ export default function Customers() {
       toast({ title: 'Failed to cancel', description: err?.message ?? 'Unknown error', variant: 'destructive' });
     } finally {
       setCancellingPanel(false);
+    }
+  };
+
+  const openRenewDialog = (type: 'b2b' | 'panel') => {
+    setRenewType(type);
+    setRenewPeriod(type === 'b2b' ? '1y' : '1m');
+    setRenewFile(null);
+    setRenewNotes('');
+    setRenewOpen(true);
+  };
+
+  // Returns the rate per month for the selected subscription type.
+  const monthlyRate = (type: 'b2b' | 'panel') => (type === 'b2b' ? 99 / 12 : 350);
+
+  const periodMonths = (p: typeof renewPeriod) =>
+    p === '1m' ? 1 : p === '3m' ? 3 : p === '6m' ? 6 : p === '1y' ? 12 : 24;
+
+  const submitRenewal = async () => {
+    if (!selectedCustomer) return;
+    if (!renewFile) {
+      toast({ title: 'Payment slip required', description: 'Upload the slip to record this renewal.', variant: 'destructive' });
+      return;
+    }
+    setRenewing(true);
+    try {
+      const months = periodMonths(renewPeriod);
+      const amount = monthlyRate(renewType) * months;
+
+      // 1. Upload slip
+      const fileExt = renewFile.name.split('.').pop() || 'pdf';
+      const filePath = `${renewType === 'panel' ? 'panel' : 'b2b'}-renewals/${selectedCustomer.id}_${Date.now()}.${fileExt}`;
+      const { error: upErr } = await supabase.storage
+        .from('merchant-documents')
+        .upload(filePath, renewFile, { contentType: renewFile.type, upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from('merchant-documents').getPublicUrl(filePath);
+
+      // 2. Compute new period: extend from current end (or from now if expired/missing)
+      let baseEnd: Date;
+      if (renewType === 'b2b') {
+        baseEnd = selectedCustomer.subscription_end_date && new Date(selectedCustomer.subscription_end_date) > new Date()
+          ? new Date(selectedCustomer.subscription_end_date)
+          : new Date();
+      } else {
+        const partnership = partnershipFor(selectedCustomer.id);
+        baseEnd = partnership?.subscription_end_date && new Date(partnership.subscription_end_date) > new Date()
+          ? new Date(partnership.subscription_end_date)
+          : new Date();
+      }
+      const newPeriodStart = baseEnd;
+      const newPeriodEnd = new Date(newPeriodStart);
+      newPeriodEnd.setMonth(newPeriodEnd.getMonth() + months);
+
+      // 3. Insert audit row
+      const { error: insertErr } = await supabase
+        .from('customer_subscription_payments' as any)
+        .insert({
+          customer_id: selectedCustomer.id,
+          subscription_type: renewType,
+          period_start: newPeriodStart.toISOString(),
+          period_end: newPeriodEnd.toISOString(),
+          amount: amount.toFixed(2),
+          payment_slip_url: publicUrl,
+          notes: renewNotes || null,
+        } as any);
+      if (insertErr) throw insertErr;
+
+      // 4. Apply the new end date to the source-of-truth table
+      if (renewType === 'b2b') {
+        const startToSet = selectedCustomer.subscription_start_date ?? new Date().toISOString();
+        const { error: cpErr } = await supabase
+          .from('customer_profiles' as any)
+          .update({
+            subscription_end_date: newPeriodEnd.toISOString(),
+            subscription_start_date: startToSet,
+          } as any)
+          .eq('id', selectedCustomer.id);
+        if (cpErr) throw cpErr;
+        patchCustomer(selectedCustomer.id, {
+          subscription_end_date: newPeriodEnd.toISOString(),
+          subscription_start_date: startToSet,
+        });
+      } else {
+        const partnership = partnershipFor(selectedCustomer.id);
+        if (partnership) {
+          const { error: ppErr } = await supabase
+            .from('premium_partnerships' as any)
+            .update({
+              subscription_end_date: newPeriodEnd.toISOString(),
+              next_billing_date: newPeriodEnd.toISOString(),
+            } as any)
+            .eq('id', partnership.id);
+          if (ppErr) throw ppErr;
+          await fetchPartnerships();
+          setPanelEndInput(newPeriodEnd.toISOString().slice(0, 10));
+        }
+      }
+
+      await fetchPaymentHistory(selectedCustomer.id);
+      toast({
+        title: 'Renewal recorded',
+        description: `${renewType === 'panel' ? 'Panel' : 'B2B'} subscription extended to ${newPeriodEnd.toLocaleDateString('en-MY')} (RM ${amount.toFixed(2)})`,
+        variant: 'success',
+      });
+      setRenewOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Renewal failed', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setRenewing(false);
     }
   };
 
@@ -2685,6 +2815,85 @@ export default function Customers() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Renew subscription dialog (B2B or Panel) */}
+      <Dialog open={renewOpen} onOpenChange={setRenewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {renewType === 'panel' ? (
+                <><Sparkles className="h-5 w-5 text-amber-500" />Renew Panel Subscription</>
+              ) : (
+                <><Calendar className="h-5 w-5" />Renew B2B Subscription</>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Each renewal creates an audit row in the payment history with the slip you upload.
+              The new period extends from the current end date (or from today if expired).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Period</Label>
+              <Select value={renewPeriod} onValueChange={(v) => setRenewPeriod(v as any)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {renewType === 'panel' ? (
+                    <>
+                      <SelectItem value="1m">1 month — RM 350.00</SelectItem>
+                      <SelectItem value="3m">3 months — RM 1,050.00</SelectItem>
+                      <SelectItem value="6m">6 months — RM 2,100.00</SelectItem>
+                      <SelectItem value="1y">1 year — RM 4,200.00</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="1y">1 year — RM 99.00</SelectItem>
+                      <SelectItem value="2y">2 years — RM 198.00</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="renew-slip">Payment slip <span className="text-red-500">*</span></Label>
+              <Input
+                id="renew-slip"
+                type="file"
+                accept=".pdf,image/*"
+                onChange={(e) => setRenewFile(e.target.files?.[0] ?? null)}
+              />
+              {renewFile && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {renewFile.name} ({(renewFile.size / 1024 / 1024).toFixed(2)}MB)
+                </div>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="renew-notes">Notes (optional)</Label>
+              <Textarea
+                id="renew-notes"
+                rows={2}
+                value={renewNotes}
+                onChange={(e) => setRenewNotes(e.target.value)}
+                placeholder="e.g. Bank transfer ref ABC123, paid by phone"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenewOpen(false)} disabled={renewing}>Cancel</Button>
+            <Button
+              onClick={submitRenewal}
+              disabled={renewing || !renewFile}
+              className={renewType === 'panel' ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+            >
+              {renewing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+              Confirm Renewal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Promote to Panel dialog */}
       <Dialog open={promoteOpen} onOpenChange={setPromoteOpen}>
         <DialogContent>
@@ -2853,32 +3062,45 @@ export default function Customers() {
                       <div className="text-xs text-muted-foreground">
                         Started {formatDateShort(selectedCustomer.subscription_start_date) ?? '—'} · Ends {formatDateShort(selectedCustomer.subscription_end_date) ?? '—'}
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button variant="outline" size="sm" onClick={() => extendSubscription(selectedCustomer, 1)} disabled={subSaving}>
-                          <Plus className="h-3 w-3 mr-1" />Extend by 1 year
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => extendSubscription(selectedCustomer, 2)} disabled={subSaving}>
-                          <Plus className="h-3 w-3 mr-1" />Extend by 2 years
-                        </Button>
-                      </div>
-                      <div className="flex items-end gap-2">
-                        <div className="flex-1">
-                          <Label className="text-xs">Set end date manually</Label>
-                          <Input
-                            type="date"
-                            value={subEndDateInput}
-                            onChange={(e) => setSubEndDateInput(e.target.value)}
-                          />
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={() => setSubscriptionEnd(selectedCustomer, subEndDateInput)}
-                          disabled={subSaving || !subEndDateInput}
-                        >
-                          {subSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
-                        </Button>
-                      </div>
-
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={() => openRenewDialog('b2b')}
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1.5" />Renew Subscription (with payment slip)
+                      </Button>
+                      {/* Payment history (B2B) */}
+                      {(() => {
+                        const b2bPayments = paymentHistory.filter(p => p.subscription_type === 'b2b');
+                        if (b2bPayments.length === 0) return null;
+                        return (
+                          <div className="border-t pt-3 mt-2 space-y-1.5">
+                            <div className="text-xs font-semibold text-muted-foreground uppercase">Payment history</div>
+                            {b2bPayments.map(p => (
+                              <div key={p.id} className="flex items-center justify-between gap-2 text-xs py-1 px-2 rounded hover:bg-white">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium">RM {Number(p.amount).toFixed(2)}</div>
+                                  <div className="text-muted-foreground truncate">
+                                    {formatDateShort(p.period_start)} → {formatDateShort(p.period_end)} · paid {formatDateShort(p.created_at)}
+                                  </div>
+                                </div>
+                                {p.payment_slip_url?.startsWith('http') ? (
+                                  <a
+                                    href={p.payment_slip_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-blue-700 hover:underline flex-shrink-0"
+                                  >
+                                    <FileText className="h-3 w-3" />Slip
+                                  </a>
+                                ) : (
+                                  <span className="text-muted-foreground italic flex-shrink-0">no slip</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -2945,31 +3167,45 @@ export default function Customers() {
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button variant="outline" size="sm" onClick={() => extendPanel(1)} disabled={panelSubSaving}>
-                            <Plus className="h-3 w-3 mr-1" />Extend +1 month
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => extendPanel(12)} disabled={panelSubSaving}>
-                            <Plus className="h-3 w-3 mr-1" />Extend +1 year
-                          </Button>
-                        </div>
-                        <div className="flex items-end gap-2">
-                          <div className="flex-1">
-                            <Label className="text-xs">Set end date manually</Label>
-                            <Input
-                              type="date"
-                              value={panelEndInput}
-                              onChange={(e) => setPanelEndInput(e.target.value)}
-                            />
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={() => setPanelEnd(panelEndInput)}
-                            disabled={panelSubSaving || !panelEndInput}
-                          >
-                            {panelSubSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
-                          </Button>
-                        </div>
+                        <Button
+                          size="sm"
+                          className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+                          onClick={() => openRenewDialog('panel')}
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1.5" />Renew Panel (with payment slip)
+                        </Button>
+                        {/* Payment history (Panel) */}
+                        {(() => {
+                          const panelPayments = paymentHistory.filter(p => p.subscription_type === 'panel');
+                          if (panelPayments.length === 0) return null;
+                          return (
+                            <div className="border-t border-amber-200 pt-3 mt-2 space-y-1.5">
+                              <div className="text-xs font-semibold text-muted-foreground uppercase">Payment history</div>
+                              {panelPayments.map(p => (
+                                <div key={p.id} className="flex items-center justify-between gap-2 text-xs py-1 px-2 rounded hover:bg-white">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium">RM {Number(p.amount).toFixed(2)}</div>
+                                    <div className="text-muted-foreground truncate">
+                                      {formatDateShort(p.period_start)} → {formatDateShort(p.period_end)} · paid {formatDateShort(p.created_at)}
+                                    </div>
+                                  </div>
+                                  {p.payment_slip_url?.startsWith('http') ? (
+                                    <a
+                                      href={p.payment_slip_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-blue-700 hover:underline flex-shrink-0"
+                                    >
+                                      <FileText className="h-3 w-3" />Slip
+                                    </a>
+                                  ) : (
+                                    <span className="text-muted-foreground italic flex-shrink-0">no slip</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                         <Button
                           variant="outline"
                           size="sm"
