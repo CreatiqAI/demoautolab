@@ -20,7 +20,6 @@ import {
   Bell,
   Archive,
   Tag,
-  Crown,
   Star,
   Award,
   ShoppingCart,
@@ -88,7 +87,6 @@ const navigation: NavigationElement[] = [
     icon: Users,
     items: [
       { name: 'Customers', href: '/admin/customers', icon: Users },
-      { name: 'Panel Partners', href: '/admin/premium-partners', icon: Crown },
       { name: 'Salesmen', href: '/admin/salesmen', icon: Briefcase },
     ]
   },

@@ -533,7 +533,7 @@ export default function Dashboard() {
 
               <Card
                 className="cursor-pointer hover:shadow-lg transition-shadow border-yellow-200 bg-yellow-50"
-                onClick={() => navigate('/admin/premium-partners')}
+                onClick={() => navigate('/admin/customers')}
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Merchant Apps</CardTitle>
