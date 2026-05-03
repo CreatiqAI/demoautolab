@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
 import { useUploadQueue, PRODUCT_MEDIA_UPLOADED_EVENT, PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, type ProductMediaUploadedDetail } from '@/hooks/useUploadQueue';
+import { deleteStorageFiles, findOrphanStorageFiles, deleteOrphans } from '@/lib/storageCleanup';
 
 interface ComponentSearchResult {
   id: string;
@@ -136,6 +137,17 @@ export default function ProductsPro() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [allComponents, setAllComponents] = useState<ComponentSearchResult[]>([]);
   const [activeTab, setActiveTab] = useState('basic');
+
+  // Orphan-storage cleanup tool state
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [cleanupScanning, setCleanupScanning] = useState(false);
+  const [cleanupDeleting, setCleanupDeleting] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<{
+    orphans: { bucket: string; path: string }[];
+    totalScanned: number;
+    referencedCount: number;
+  } | null>(null);
+
   const { toast } = useToast();
   const { enqueueVideoUpload, cancelUpload } = useUploadQueue();
 
@@ -428,15 +440,67 @@ export default function ProductsPro() {
     }
   };
 
+  const handleScanOrphans = async () => {
+    setCleanupScanning(true);
+    setCleanupResult(null);
+    try {
+      const result = await findOrphanStorageFiles();
+      setCleanupResult(result);
+      toast({
+        title: 'Scan complete',
+        description: `Scanned ${result.totalScanned} files · ${result.orphans.length} orphan${result.orphans.length === 1 ? '' : 's'} found`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Scan failed',
+        description: err?.message || 'Unable to list storage',
+        variant: 'destructive',
+      });
+    } finally {
+      setCleanupScanning(false);
+    }
+  };
+
+  const handleDeleteOrphans = async () => {
+    if (!cleanupResult || cleanupResult.orphans.length === 0) return;
+    if (!confirm(`Delete ${cleanupResult.orphans.length} orphaned file(s) from storage? This cannot be undone.`)) return;
+    setCleanupDeleting(true);
+    try {
+      const { deleted, failed } = await deleteOrphans(cleanupResult.orphans as any);
+      toast({
+        title: 'Cleanup complete',
+        description: `Deleted ${deleted} file${deleted === 1 ? '' : 's'}${failed > 0 ? ` · ${failed} failed` : ''}`,
+        variant: failed > 0 ? 'destructive' : 'default',
+      });
+      setCleanupResult(null);
+    } catch (err: any) {
+      toast({ title: 'Cleanup failed', description: err?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setCleanupDeleting(false);
+    }
+  };
+
   const handlePermanentDeleteProduct = async (product: any) => {
     if (!confirm(`PERMANENTLY delete "${product.name}"? This cannot be undone.`)) return;
     try {
+      // Snapshot media URLs before the cascade delete so we can clean up storage.
+      const { data: mediaRows } = await supabase
+        .from('product_images_new' as any)
+        .select('url')
+        .eq('product_id', product.id);
+      const mediaUrls = (mediaRows as any[] | null)?.map(r => r.url).filter(Boolean) ?? [];
+
       const { error } = await supabase
         .from('products_new' as any)
         .delete()
         .eq('id', product.id);
 
       if (error) throw error;
+
+      if (mediaUrls.length > 0) {
+        void deleteStorageFiles(mediaUrls);
+      }
+
       setDeletedProducts(prev => prev.filter(p => p.id !== product.id));
       toast({ title: "Permanently Deleted", description: `${product.name} has been permanently removed` });
     } catch (error: any) {
@@ -675,9 +739,16 @@ export default function ProductsPro() {
         product = newProduct;
       }
 
-      // 2. Handle product images
+      // 2. Handle product images. For edit mode, snapshot existing URLs first
+      // so we can delete any files that won't be referenced after save.
+      let originalUrls: string[] = [];
       if (editingProduct) {
-        // Clear existing images for edit mode
+        const { data: existing } = await supabase
+          .from('product_images_new' as any)
+          .select('url')
+          .eq('product_id', product.id);
+        originalUrls = (existing as any[] | null)?.map(r => r.url).filter(Boolean) ?? [];
+
         await supabase
           .from('product_images_new' as any)
           .delete()
@@ -701,6 +772,16 @@ export default function ProductsPro() {
           .insert(allMedia);
 
         if (imageError) throw imageError;
+      }
+
+      // After successful DB save, clean up any storage files that are no longer
+      // referenced. Best-effort: storage failures don't roll back the save.
+      if (editingProduct && originalUrls.length > 0) {
+        const keptUrls = new Set(allMedia.map(m => m.url));
+        const orphanedUrls = originalUrls.filter(u => !keptUrls.has(u));
+        if (orphanedUrls.length > 0) {
+          void deleteStorageFiles(orphanedUrls);
+        }
       }
 
       // 3. Handle product components
@@ -971,6 +1052,72 @@ export default function ProductsPro() {
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
+          <Dialog open={cleanupOpen} onOpenChange={(open) => { setCleanupOpen(open); if (!open) setCleanupResult(null); }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" title="Find and delete orphaned media files in storage">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Storage Cleanup
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Storage Cleanup</DialogTitle>
+                <DialogDescription>
+                  Scan Supabase Storage for files in <code>product-videos/uploads</code> and <code>product-images/uploads</code> that are no longer referenced by any product, then delete them to reclaim storage space.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                {!cleanupResult ? (
+                  <div className="text-sm text-muted-foreground">
+                    This may take a minute on large storage. Safe to run anytime — only files not referenced by <code>product_images_new</code> are deleted.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-gray-50 rounded p-3">
+                        <div className="text-2xl font-semibold">{cleanupResult.totalScanned}</div>
+                        <div className="text-xs text-muted-foreground">Files in storage</div>
+                      </div>
+                      <div className="bg-green-50 rounded p-3">
+                        <div className="text-2xl font-semibold text-green-700">{cleanupResult.referencedCount}</div>
+                        <div className="text-xs text-muted-foreground">In use</div>
+                      </div>
+                      <div className={cleanupResult.orphans.length > 0 ? 'bg-amber-50 rounded p-3' : 'bg-gray-50 rounded p-3'}>
+                        <div className={`text-2xl font-semibold ${cleanupResult.orphans.length > 0 ? 'text-amber-700' : ''}`}>{cleanupResult.orphans.length}</div>
+                        <div className="text-xs text-muted-foreground">Orphans</div>
+                      </div>
+                    </div>
+                    {cleanupResult.orphans.length > 0 && (
+                      <div className="max-h-40 overflow-y-auto border rounded text-xs">
+                        {cleanupResult.orphans.slice(0, 50).map((o, i) => (
+                          <div key={i} className="px-2 py-1 border-b last:border-b-0 truncate font-mono text-gray-600">
+                            {o.bucket}/{o.path}
+                          </div>
+                        ))}
+                        {cleanupResult.orphans.length > 50 && (
+                          <div className="px-2 py-1 text-gray-500 italic">...and {cleanupResult.orphans.length - 50} more</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setCleanupOpen(false)} disabled={cleanupScanning || cleanupDeleting}>Close</Button>
+                  {!cleanupResult ? (
+                    <Button onClick={handleScanOrphans} disabled={cleanupScanning}>
+                      {cleanupScanning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Scanning...</> : 'Scan for orphans'}
+                    </Button>
+                  ) : cleanupResult.orphans.length > 0 ? (
+                    <Button variant="destructive" onClick={handleDeleteOrphans} disabled={cleanupDeleting}>
+                      {cleanupDeleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting...</> : `Delete ${cleanupResult.orphans.length} orphan${cleanupResult.orphans.length === 1 ? '' : 's'}`}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={() => setCleanupResult(null)}>Scan again</Button>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
