@@ -110,6 +110,20 @@ export default function Customers() {
   const [demoteOpen, setDemoteOpen] = useState(false);
   const [demoteReason, setDemoteReason] = useState('');
   const [demoting, setDemoting] = useState(false);
+  // Panel subscriptions (premium_partnerships rows). Looked up by merchant_id.
+  const [partnerships, setPartnerships] = useState<any[]>([]);
+  // Promote-to-Panel dialog state
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [promoteFile, setPromoteFile] = useState<File | null>(null);
+  const [promoteStartDate, setPromoteStartDate] = useState<string>('');
+  const [promoteNotes, setPromoteNotes] = useState<string>('');
+  const [promoting, setPromoting] = useState(false);
+  // Cancel-panel confirmation
+  const [cancelPanelOpen, setCancelPanelOpen] = useState(false);
+  const [cancellingPanel, setCancellingPanel] = useState(false);
+  // Panel subscription end-date editor (mirrors the B2B subscription editor)
+  const [panelEndInput, setPanelEndInput] = useState<string>('');
+  const [panelSubSaving, setPanelSubSaving] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<MerchantApplication | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -128,7 +142,19 @@ export default function Customers() {
   useEffect(() => {
     fetchCustomers();
     fetchMerchantApplications();
+    fetchPartnerships();
   }, []);
+
+  const fetchPartnerships = async () => {
+    const { data } = await supabase
+      .from('premium_partnerships' as any)
+      .select('*')
+      .order('created_at', { ascending: false });
+    setPartnerships((data as any[] | null) ?? []);
+  };
+
+  const partnershipFor = (merchantId: string) =>
+    partnerships.find(p => p.merchant_id === merchantId && p.subscription_status === 'ACTIVE') ?? null;
 
   const fetchCustomers = async () => {
     try {
@@ -435,6 +461,8 @@ export default function Customers() {
     setOrderHistoryPeriod('all');
     setDrawerOrders([]);
     setSubEndDateInput(customer.subscription_end_date ? customer.subscription_end_date.slice(0, 10) : '');
+    const partnership = partnerships.find(p => p.merchant_id === customer.id && p.subscription_status === 'ACTIVE');
+    setPanelEndInput(partnership?.subscription_end_date ? partnership.subscription_end_date.slice(0, 10) : '');
     void fetchCustomerOrderStats(customer.id);
     void fetchDrawerOrders(customer.id);
     if (customer.customer_type === 'merchant') {
@@ -514,6 +542,174 @@ export default function Customers() {
       toast({ title: 'Failed to update', description: err?.message ?? 'Unknown error', variant: 'destructive' });
     } finally {
       setSubSaving(false);
+    }
+  };
+
+  const promoteToPanel = async () => {
+    if (!selectedCustomer) return;
+    if (!promoteFile) {
+      toast({ title: 'Payment slip required', description: 'Upload the RM350 payment slip to promote to Panel.', variant: 'destructive' });
+      return;
+    }
+    setPromoting(true);
+    try {
+      // Upload payment slip to merchant-documents bucket
+      const fileExt = promoteFile.name.split('.').pop() || 'pdf';
+      const filePath = `panel-payment-slips/${selectedCustomer.id}_${Date.now()}.${fileExt}`;
+      const { error: uploadErr } = await supabase.storage
+        .from('merchant-documents')
+        .upload(filePath, promoteFile, { contentType: promoteFile.type, upsert: true });
+      if (uploadErr) throw uploadErr;
+      const { data: { publicUrl } } = supabase.storage.from('merchant-documents').getPublicUrl(filePath);
+
+      const startISO = promoteStartDate
+        ? new Date(`${promoteStartDate}T00:00:00`).toISOString()
+        : new Date().toISOString();
+      // Panel subscription is monthly (RM350/month) — end = start + 1 month
+      const endDate = new Date(startISO);
+      endDate.setMonth(endDate.getMonth() + 1);
+
+      // Insert (or update existing INACTIVE) premium_partnerships row.
+      const existing = partnerships.find(p => p.merchant_id === selectedCustomer.id);
+      const payload = {
+        merchant_id: selectedCustomer.id,
+        business_name: merchantDetails?.company_name || selectedCustomer.full_name || 'Untitled',
+        business_registration_no: merchantDetails?.business_registration_no || null,
+        business_type: merchantDetails?.business_type || null,
+        contact_person: selectedCustomer.full_name,
+        contact_phone: selectedCustomer.phone,
+        contact_email: selectedCustomer.email,
+        address: merchantDetails?.address || null,
+        subscription_status: 'ACTIVE',
+        subscription_plan: 'panel',
+        billing_cycle: 'month',
+        admin_approved: true,
+        approved_at: new Date().toISOString(),
+        is_admin_invited: true,
+        subscription_start_date: startISO,
+        subscription_end_date: endDate.toISOString(),
+        next_billing_date: endDate.toISOString(),
+        payment_slip_url: publicUrl,
+      } as any;
+      let resultError: any = null;
+      if (existing) {
+        const { error } = await supabase
+          .from('premium_partnerships' as any)
+          .update(payload)
+          .eq('id', existing.id);
+        resultError = error;
+      } else {
+        const { error } = await supabase
+          .from('premium_partnerships' as any)
+          .insert(payload);
+        resultError = error;
+      }
+      if (resultError) throw resultError;
+
+      const { error: cpErr } = await supabase
+        .from('customer_profiles' as any)
+        .update({ is_panel_customer: true } as any)
+        .eq('id', selectedCustomer.id);
+      if (cpErr) throw cpErr;
+
+      patchCustomer(selectedCustomer.id, { is_panel_customer: true });
+      await fetchPartnerships();
+      toast({
+        title: 'Promoted to Panel',
+        description: `${selectedCustomer.full_name} now has a panel subscription until ${endDate.toLocaleDateString('en-MY')}.`,
+        variant: 'success',
+      });
+      setPromoteOpen(false);
+      setPromoteFile(null);
+      setPromoteStartDate('');
+      setPromoteNotes('');
+    } catch (err: any) {
+      toast({ title: 'Promotion failed', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setPromoting(false);
+    }
+  };
+
+  const cancelPanelSubscription = async () => {
+    if (!selectedCustomer) return;
+    const partnership = partnershipFor(selectedCustomer.id);
+    if (!partnership) {
+      setCancelPanelOpen(false);
+      return;
+    }
+    setCancellingPanel(true);
+    try {
+      const { error: ppErr } = await supabase
+        .from('premium_partnerships' as any)
+        .update({ subscription_status: 'INACTIVE' } as any)
+        .eq('id', partnership.id);
+      if (ppErr) throw ppErr;
+      const { error: cpErr } = await supabase
+        .from('customer_profiles' as any)
+        .update({ is_panel_customer: false } as any)
+        .eq('id', selectedCustomer.id);
+      if (cpErr) throw cpErr;
+      patchCustomer(selectedCustomer.id, { is_panel_customer: false });
+      await fetchPartnerships();
+      toast({ title: 'Panel subscription cancelled', description: 'Customer remains a B2B merchant.', variant: 'success' });
+      setCancelPanelOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Failed to cancel', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setCancellingPanel(false);
+    }
+  };
+
+  const extendPanel = async (months: number) => {
+    if (!selectedCustomer) return;
+    const partnership = partnershipFor(selectedCustomer.id);
+    if (!partnership) return;
+    setPanelSubSaving(true);
+    try {
+      const base = partnership.subscription_end_date && new Date(partnership.subscription_end_date) > new Date()
+        ? new Date(partnership.subscription_end_date)
+        : new Date();
+      const newEnd = new Date(base);
+      newEnd.setMonth(newEnd.getMonth() + months);
+      const { error } = await supabase
+        .from('premium_partnerships' as any)
+        .update({
+          subscription_end_date: newEnd.toISOString(),
+          next_billing_date: newEnd.toISOString(),
+        } as any)
+        .eq('id', partnership.id);
+      if (error) throw error;
+      await fetchPartnerships();
+      setPanelEndInput(newEnd.toISOString().slice(0, 10));
+      toast({ title: 'Panel extended', description: `New expiry: ${newEnd.toLocaleDateString('en-MY')}`, variant: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Failed to extend', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setPanelSubSaving(false);
+    }
+  };
+
+  const setPanelEnd = async (dateInput: string) => {
+    if (!selectedCustomer || !dateInput) return;
+    const partnership = partnershipFor(selectedCustomer.id);
+    if (!partnership) return;
+    setPanelSubSaving(true);
+    try {
+      const newEnd = new Date(`${dateInput}T23:59:59`).toISOString();
+      const { error } = await supabase
+        .from('premium_partnerships' as any)
+        .update({
+          subscription_end_date: newEnd,
+          next_billing_date: newEnd,
+        } as any)
+        .eq('id', partnership.id);
+      if (error) throw error;
+      await fetchPartnerships();
+      toast({ title: 'Panel subscription updated', variant: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Failed to update', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setPanelSubSaving(false);
     }
   };
 
@@ -834,8 +1030,15 @@ export default function Customers() {
         <p className="text-muted-foreground">Manage your customer base and their information</p>
       </div>
 
-      <Tabs defaultValue="b2c" className="space-y-6">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+      <Tabs defaultValue="b2b" className="space-y-6">
+        <TabsList className="grid w-full max-w-3xl grid-cols-4">
+          <TabsTrigger value="b2b" className="flex items-center gap-2">
+            <Store className="h-4 w-4" />
+            B2B Merchants
+            <Badge variant="secondary" className="ml-1">
+              {customers.filter(c => c.customer_type === 'merchant').length}
+            </Badge>
+          </TabsTrigger>
           <TabsTrigger value="b2c" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             B2C Customers
@@ -843,11 +1046,11 @@ export default function Customers() {
               {customers.filter(c => c.customer_type !== 'merchant').length}
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="b2b" className="flex items-center gap-2">
-            <Store className="h-4 w-4" />
-            B2B Merchants
+          <TabsTrigger value="panel" className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            Panel
             <Badge variant="secondary" className="ml-1">
-              {customers.filter(c => c.customer_type === 'merchant').length}
+              {customers.filter(c => c.is_panel_customer).length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="applications" className="flex items-center gap-2 relative">
@@ -1097,6 +1300,155 @@ export default function Customers() {
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        });
+                      })()}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* PANEL CUSTOMERS — premium-tier merchants on RM350/month */}
+        <TabsContent value="panel">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-500" />
+                Panel Customers
+              </CardTitle>
+              <CardDescription>
+                Premium-tier merchants on RM350/month subscription. Promote a B2B merchant from their drawer.
+              </CardDescription>
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search panel customers..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Subscription</TableHead>
+                        <TableHead>Payment slip</TableHead>
+                        <TableHead>Last login</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(() => {
+                        const list = filteredCustomers.filter(c => c.is_panel_customer);
+                        if (list.length === 0) {
+                          return (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                {searchTerm ? 'No panel customers match your search.' : 'No panel customers yet. Promote a B2B merchant from their drawer.'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+                        return list.map((customer) => {
+                          const partnership = partnershipFor(customer.id);
+                          const endDate = partnership?.subscription_end_date;
+                          const startDate = partnership?.subscription_start_date;
+                          let daysLeft: number | null = null;
+                          if (endDate) {
+                            daysLeft = Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                          }
+                          const palette = daysLeft === null
+                            ? 'border-gray-200 text-gray-500 bg-gray-50'
+                            : daysLeft < 0
+                              ? 'border-red-300 text-red-700 bg-red-50'
+                              : daysLeft <= 7
+                                ? 'border-amber-300 text-amber-700 bg-amber-50'
+                                : 'border-green-300 text-green-700 bg-green-50';
+                          const label = daysLeft === null
+                            ? 'No subscription'
+                            : daysLeft < 0
+                              ? `Expired ${Math.abs(daysLeft)}d ago`
+                              : `${daysLeft}d left`;
+                          return (
+                            <TableRow
+                              key={customer.id}
+                              className={`cursor-pointer hover:bg-muted/40 ${!customer.is_active ? 'bg-red-50/40' : ''}`}
+                              onClick={() => openDrawer(customer)}
+                            >
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 rounded-full bg-amber-100">
+                                    <Sparkles className="h-4 w-4 text-amber-600" />
+                                  </div>
+                                  <div>
+                                    <div className="font-medium flex items-center gap-1.5">
+                                      {customer.full_name}
+                                      <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-1.5 py-0">PANEL</Badge>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">ID: {customer.id.slice(0, 8)}…</div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1 text-sm">
+                                  {customer.email && <div className="flex items-center gap-1"><Mail className="h-3 w-3" />{customer.email}</div>}
+                                  {customer.phone && <div className="flex items-center gap-1"><Phone className="h-3 w-3" />{customer.phone}</div>}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <Badge variant="outline" className={palette}>
+                                    <Calendar className="h-3 w-3 mr-1" />{label}
+                                  </Badge>
+                                  {startDate && (
+                                    <div className="text-[11px] text-muted-foreground leading-tight">
+                                      {formatDateShort(startDate)} → {formatDateShort(endDate)}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                {partnership?.payment_slip_url ? (
+                                  <a
+                                    href={partnership.payment_slip_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-blue-600 hover:underline text-sm"
+                                  >
+                                    <FileText className="h-3 w-3" />View
+                                  </a>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {customer.last_sign_in_at ? formatDate(customer.last_sign_in_at) : <span className="text-muted-foreground">Never</span>}
+                              </TableCell>
+                              <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => { setSelectedCustomer(customer); setCancelPanelOpen(true); }}
+                                  title="Cancel panel subscription"
+                                  className="text-red-600 hover:bg-red-50"
+                                >
+                                  <Ban className="h-4 w-4" />
+                                </Button>
                               </TableCell>
                             </TableRow>
                           );
@@ -2333,6 +2685,93 @@ export default function Customers() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Promote to Panel dialog */}
+      <Dialog open={promoteOpen} onOpenChange={setPromoteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-500" />
+              Promote to Panel Customer
+            </DialogTitle>
+            <DialogDescription>
+              Promoting <strong>{selectedCustomer?.full_name}</strong> to panel-tier requires a verified payment slip.
+              Subscription is <strong>RM350/month</strong> and renews monthly. The first period auto-sets to 1 month from the start date.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="panel-slip">Payment slip <span className="text-red-500">*</span></Label>
+              <Input
+                id="panel-slip"
+                type="file"
+                accept=".pdf,image/*"
+                onChange={(e) => setPromoteFile(e.target.files?.[0] ?? null)}
+              />
+              {promoteFile && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {promoteFile.name} ({(promoteFile.size / 1024 / 1024).toFixed(2)}MB)
+                </div>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="panel-start">Subscription start date</Label>
+              <Input
+                id="panel-start"
+                type="date"
+                value={promoteStartDate}
+                onChange={(e) => setPromoteStartDate(e.target.value)}
+              />
+              <div className="text-xs text-muted-foreground mt-1">Defaults to today. End date is calculated as start + 1 month.</div>
+            </div>
+            <div>
+              <Label htmlFor="panel-notes">Internal notes (optional)</Label>
+              <Textarea
+                id="panel-notes"
+                rows={2}
+                value={promoteNotes}
+                onChange={(e) => setPromoteNotes(e.target.value)}
+                placeholder="e.g. Paid via bank transfer, ref #..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPromoteOpen(false)} disabled={promoting}>Cancel</Button>
+            <Button
+              onClick={promoteToPanel}
+              disabled={promoting || !promoteFile}
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              {promoting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              Confirm & Promote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Panel confirmation */}
+      <AlertDialog open={cancelPanelOpen} onOpenChange={setCancelPanelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel panel subscription?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{selectedCustomer?.full_name}</strong> will lose panel-tier status but keep their B2B merchant account.
+              The premium_partnerships record is kept (marked INACTIVE) for audit.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancellingPanel}>Keep subscription</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); cancelPanelSubscription(); }}
+              disabled={cancellingPanel}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {cancellingPanel ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Ban className="h-4 w-4 mr-2" />}
+              Cancel subscription
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Customer details — right Sheet drawer with Overview + Purchase History tabs */}
       <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
         <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto">
@@ -2440,22 +2879,108 @@ export default function Customers() {
                         </Button>
                       </div>
 
-                      {/* Panel toggle */}
-                      <div className="flex items-center justify-between border-t pt-3 mt-2">
-                        <div>
-                          <div className="text-sm font-medium flex items-center gap-1.5">
-                            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                            Panel Customer
-                          </div>
-                          <div className="text-xs text-muted-foreground">Promote this merchant to panel-tier status.</div>
-                        </div>
-                        <Switch
-                          checked={!!selectedCustomer.is_panel_customer}
-                          onCheckedChange={(v) => togglePanel(selectedCustomer, v)}
-                        />
-                      </div>
                     </div>
                   )}
+
+                  {/* Panel section — depends on whether customer is already panel */}
+                  {selectedCustomer.customer_type === 'merchant' && (() => {
+                    const partnership = partnershipFor(selectedCustomer.id);
+                    if (!selectedCustomer.is_panel_customer || !partnership) {
+                      return (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 space-y-2">
+                          <div className="text-sm font-semibold flex items-center gap-1.5">
+                            <Sparkles className="h-4 w-4 text-amber-500" />Panel Customer
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Promote this merchant to panel-tier (RM350/month). Requires a verified payment slip.
+                          </div>
+                          <Button
+                            size="sm"
+                            className="bg-amber-500 hover:bg-amber-600 text-white"
+                            onClick={() => {
+                              setPromoteFile(null);
+                              setPromoteStartDate(new Date().toISOString().slice(0, 10));
+                              setPromoteNotes('');
+                              setPromoteOpen(true);
+                            }}
+                          >
+                            <Sparkles className="h-3.5 w-3.5 mr-1.5" />Promote to Panel
+                          </Button>
+                        </div>
+                      );
+                    }
+                    // Already panel — show management UI
+                    const endDate = partnership.subscription_end_date;
+                    const daysLeft = endDate ? Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+                    const palette = daysLeft === null
+                      ? 'border-gray-200 text-gray-500 bg-gray-50'
+                      : daysLeft < 0
+                        ? 'border-red-300 text-red-700 bg-red-50'
+                        : daysLeft <= 7
+                          ? 'border-amber-300 text-amber-700 bg-amber-50'
+                          : 'border-green-300 text-green-700 bg-green-50';
+                    return (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50/40 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold flex items-center gap-1.5">
+                            <Sparkles className="h-4 w-4 text-amber-500" />Panel Subscription (RM350/month)
+                          </div>
+                          {daysLeft !== null && (
+                            <Badge variant="outline" className={palette}>
+                              {daysLeft < 0 ? `Expired ${Math.abs(daysLeft)}d ago` : `${daysLeft}d left`}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Started {formatDateShort(partnership.subscription_start_date) ?? '—'} · Ends {formatDateShort(endDate) ?? '—'}
+                        </div>
+                        {partnership.payment_slip_url && (
+                          <a
+                            href={partnership.payment_slip_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sm text-blue-700 hover:underline"
+                          >
+                            <FileText className="h-3.5 w-3.5" />View payment slip
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button variant="outline" size="sm" onClick={() => extendPanel(1)} disabled={panelSubSaving}>
+                            <Plus className="h-3 w-3 mr-1" />Extend +1 month
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => extendPanel(12)} disabled={panelSubSaving}>
+                            <Plus className="h-3 w-3 mr-1" />Extend +1 year
+                          </Button>
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <div className="flex-1">
+                            <Label className="text-xs">Set end date manually</Label>
+                            <Input
+                              type="date"
+                              value={panelEndInput}
+                              onChange={(e) => setPanelEndInput(e.target.value)}
+                            />
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => setPanelEnd(panelEndInput)}
+                            disabled={panelSubSaving || !panelEndInput}
+                          >
+                            {panelSubSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                          </Button>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => setCancelPanelOpen(true)}
+                        >
+                          <Ban className="h-3.5 w-3.5 mr-1.5" />Cancel Panel Subscription
+                        </Button>
+                      </div>
+                    );
+                  })()}
 
                   {/* Merchant business info */}
                   {selectedCustomer.customer_type === 'merchant' && merchantDetails && (
