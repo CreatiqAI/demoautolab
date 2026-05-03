@@ -10,9 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import AddressAutocompleteSimple from '@/components/AddressAutocompleteSimple';
 import {
   Store,
   CreditCard,
@@ -33,6 +35,7 @@ import {
   Settings,
   AlertTriangle,
   Loader2,
+  Globe,
 } from 'lucide-react';
 
 type TabType = 'dashboard' | 'profile' | 'subscription';
@@ -57,6 +60,7 @@ interface PartnershipData {
   total_views: number;
   is_featured: boolean;
   admin_approved: boolean;
+  is_publicly_listed: boolean;
   logo_url: string | null;
   cover_image_url: string | null;
   shop_photos: string[];
@@ -375,6 +379,7 @@ function ProfileTab({ partnership, onUpdate }: { partnership: PartnershipData | 
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [shopPhotos, setShopPhotos] = useState<string[]>(partnership?.shop_photos ?? []);
+  const [isPubliclyListed, setIsPubliclyListed] = useState<boolean>(partnership?.is_publicly_listed ?? false);
   const [formData, setFormData] = useState({
     business_name: partnership?.business_name ?? '',
     business_type: partnership?.business_type ?? '',
@@ -387,6 +392,30 @@ function ProfileTab({ partnership, onUpdate }: { partnership: PartnershipData | 
     postcode: partnership?.postcode ?? '',
     services_offered: partnership?.services_offered ?? [],
   });
+
+  // The component initialises from `partnership` once on mount. When the
+  // parent finishes its async fetch and a new partnership object lands
+  // (or after a save triggers onUpdate -> refetch), we need to sync the
+  // local form state. Without this, the form shows the empty/initial
+  // values forever — which is exactly the "preset data, not saved" bug
+  // the user reported on refresh.
+  useEffect(() => {
+    if (!partnership) return;
+    setShopPhotos(partnership.shop_photos ?? []);
+    setIsPubliclyListed(partnership.is_publicly_listed ?? false);
+    setFormData({
+      business_name: partnership.business_name ?? '',
+      business_type: partnership.business_type ?? '',
+      description: partnership.description ?? '',
+      contact_phone: partnership.contact_phone ?? '',
+      contact_email: partnership.contact_email ?? '',
+      address: partnership.address ?? '',
+      city: partnership.city ?? '',
+      state: partnership.state ?? '',
+      postcode: partnership.postcode ?? '',
+      services_offered: partnership.services_offered ?? [],
+    });
+  }, [partnership?.id, partnership?.business_name, partnership?.business_type, partnership?.description, partnership?.contact_phone, partnership?.contact_email, partnership?.address, partnership?.city, partnership?.state, partnership?.postcode, partnership?.shop_photos, partnership?.services_offered, partnership?.is_publicly_listed]);
 
   const photoCount = shopPhotos.length;
   const minMet = photoCount >= MIN_PHOTOS;
@@ -418,6 +447,7 @@ function ProfileTab({ partnership, onUpdate }: { partnership: PartnershipData | 
           ...formData,
           shop_photos: shopPhotos,
           cover_image_url: shopPhotos[0] ?? null,
+          is_publicly_listed: isPubliclyListed,
         })
         .eq('id', partnership.id);
       if (error) throw error;
@@ -544,15 +574,12 @@ function ProfileTab({ partnership, onUpdate }: { partnership: PartnershipData | 
           <CardDescription>Where your shop is. Used in Find Shops listings and directions.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="address">Address</Label>
-            <Input
-              id="address"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              placeholder="No. 1, Jalan ..."
-            />
-          </div>
+          {/* Google Places autocomplete — same component used at checkout. */}
+          <AddressAutocompleteSimple
+            value={formData.address}
+            onChange={(address) => setFormData({ ...formData, address })}
+            placeholder="Type address like 'Nadayu28' or 'KLCC'..."
+          />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="city">City</Label>
@@ -585,6 +612,41 @@ function ProfileTab({ partnership, onUpdate }: { partnership: PartnershipData | 
                 placeholder="47301"
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section: Public Listing */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Globe className="h-4 w-4" />Public Listing
+          </CardTitle>
+          <CardDescription>
+            Control whether your shop appears on the public Find Shops page. Off by default.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start justify-between gap-4 p-4 rounded-md border bg-gray-50">
+            <div className="flex-1">
+              <div className="text-sm font-medium text-gray-900">
+                Show on Find Shops
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                When enabled, your business appears at <code className="px-1 rounded bg-white border">/find-shops</code> for customers to discover. Your panel subscription must be active.
+              </p>
+              {!isPubliclyListed && (
+                <p className="text-xs text-amber-700 mt-2 flex items-center gap-1.5">
+                  <AlertTriangle className="h-3 w-3" />
+                  Currently hidden from the public listing.
+                </p>
+              )}
+            </div>
+            <Switch
+              checked={isPubliclyListed}
+              onCheckedChange={setIsPubliclyListed}
+              aria-label="Show on Find Shops"
+            />
           </div>
         </CardContent>
       </Card>

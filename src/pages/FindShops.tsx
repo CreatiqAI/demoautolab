@@ -104,6 +104,7 @@ export default function FindShops() {
         .eq('subscription_plan', 'panel')
         .eq('subscription_status', 'ACTIVE')
         .eq('admin_approved', true)
+        .eq('is_publicly_listed', true)
         .gt('subscription_end_date', new Date().toISOString())
         .order('is_featured', { ascending: false })
         .order('total_views', { ascending: false });
