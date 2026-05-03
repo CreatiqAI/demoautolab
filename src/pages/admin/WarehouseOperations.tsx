@@ -58,6 +58,7 @@ interface WarehouseOrder {
   customer_email: string | null;
   delivery_method: string;
   delivery_address: any;
+  delivery_fee: number;
   estimated_delivery_date: string | null;
   processing_notes: string | null;
   internal_notes: string | null;
@@ -201,6 +202,7 @@ export default function WarehouseOperations() {
         customer_email: order.customer_email || null,
         delivery_method: order.delivery_method || 'Standard',
         delivery_address: order.delivery_address || null,
+        delivery_fee: order.delivery_fee ?? order.shipping_fee ?? 0,
         estimated_delivery_date: order.estimated_delivery_date || null,
         processing_notes: order.processing_notes || null,
         internal_notes: order.internal_notes || null,
@@ -1136,7 +1138,7 @@ export default function WarehouseOperations() {
                                         </div>
                                         <div>
                                           <p className="text-xs font-semibold text-gray-500 mb-2">DELIVERY</p>
-                                          <p className="text-sm font-medium capitalize">{order.delivery_method?.replace('-', ' ')} | {order.total > 0 ? 'FREE' : ''}</p>
+                                          <p className="text-sm font-medium capitalize">{order.delivery_method?.replace('-', ' ')} | {order.delivery_fee === 0 ? 'FREE' : formatCurrency(order.delivery_fee)}</p>
                                           {order.delivery_address?.address && (
                                             <p className="text-sm text-muted-foreground mt-1 bg-white border rounded px-2 py-1.5">{order.delivery_address.address}</p>
                                           )}

@@ -34,7 +34,9 @@ import {
   Users,
   DollarSign,
   TrendingUp,
-  RefreshCw
+  RefreshCw,
+  ListOrdered,
+  Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -51,6 +53,21 @@ interface Salesman {
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface ReferredMerchant {
+  registration_id: string;
+  customer_id: string;
+  company_name: string;
+  status: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  approved_at: string | null;
+  registered_at: string;
+  total_orders: number;
+  total_order_value: number;
+  earned_commission: number;
 }
 
 interface SalesmanFormData {
@@ -81,9 +98,12 @@ export default function Salesmen() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isReferralsDialogOpen, setIsReferralsDialogOpen] = useState(false);
   const [selectedSalesman, setSelectedSalesman] = useState<Salesman | null>(null);
   const [formData, setFormData] = useState<SalesmanFormData>(initialFormData);
   const [isSaving, setIsSaving] = useState(false);
+  const [referrals, setReferrals] = useState<ReferredMerchant[]>([]);
+  const [referralsLoading, setReferralsLoading] = useState(false);
   const { toast } = useToast();
 
   // Stats
@@ -293,6 +313,81 @@ export default function Salesmen() {
   const openDeleteDialog = (salesman: Salesman) => {
     setSelectedSalesman(salesman);
     setIsDeleteDialogOpen(true);
+  };
+
+  const openReferralsDialog = async (salesman: Salesman) => {
+    setSelectedSalesman(salesman);
+    setIsReferralsDialogOpen(true);
+    setReferrals([]);
+    setReferralsLoading(true);
+    try {
+      // 1. Pull merchant_registrations referred by this salesman
+      const { data: regs, error: regErr } = await supabase
+        .from('merchant_registrations' as any)
+        .select('id, customer_id, company_name, status, created_at, approved_at')
+        .eq('referred_by_salesman_id', salesman.id)
+        .order('created_at', { ascending: false });
+      if (regErr) throw regErr;
+      const registrations = (regs as any[] | null) ?? [];
+      if (registrations.length === 0) {
+        setReferrals([]);
+        return;
+      }
+
+      const customerIds = registrations.map(r => r.customer_id);
+
+      // 2. Fetch customer profile contact info
+      const { data: profiles } = await supabase
+        .from('customer_profiles' as any)
+        .select('id, full_name, email, phone')
+        .in('id', customerIds);
+      const profileById = new Map<string, any>(
+        ((profiles as any[] | null) ?? []).map(p => [p.id, p])
+      );
+
+      // 3. Fetch order totals for these customers (excluding cancelled)
+      const { data: orderRows } = await supabase
+        .from('orders' as any)
+        .select('customer_profile_id, total, status')
+        .in('customer_profile_id', customerIds)
+        .neq('status', 'CANCELLED');
+      const orderStats = new Map<string, { count: number; sum: number }>();
+      for (const o of (orderRows as any[] | null) ?? []) {
+        const stat = orderStats.get(o.customer_profile_id) ?? { count: 0, sum: 0 };
+        stat.count += 1;
+        stat.sum += Number(o.total) || 0;
+        orderStats.set(o.customer_profile_id, stat);
+      }
+
+      const rate = Number(salesman.commission_rate) || 0;
+      const merged: ReferredMerchant[] = registrations.map(r => {
+        const profile = profileById.get(r.customer_id);
+        const stat = orderStats.get(r.customer_id) ?? { count: 0, sum: 0 };
+        return {
+          registration_id: r.id,
+          customer_id: r.customer_id,
+          company_name: r.company_name,
+          status: r.status,
+          full_name: profile?.full_name ?? null,
+          email: profile?.email ?? null,
+          phone: profile?.phone ?? null,
+          approved_at: r.approved_at,
+          registered_at: r.created_at,
+          total_orders: stat.count,
+          total_order_value: stat.sum,
+          earned_commission: r.status === 'APPROVED' ? (stat.sum * rate) / 100 : 0,
+        };
+      });
+      setReferrals(merged);
+    } catch (err: any) {
+      toast({
+        title: 'Failed to load referrals',
+        description: err?.message || 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setReferralsLoading(false);
+    }
   };
 
   const filteredSalesmen = salesmen.filter(salesman => {
@@ -508,6 +603,10 @@ export default function Salesmen() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openReferralsDialog(salesman)}>
+                              <ListOrdered className="mr-2 h-4 w-4" />
+                              View Referrals
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEditDialog(salesman)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               Edit
@@ -791,6 +890,124 @@ export default function Salesmen() {
             </Button>
             <Button variant="destructive" onClick={handleDeleteSalesman} disabled={isSaving}>
               {isSaving ? 'Deleting...' : 'Delete Salesman'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Referrals dialog */}
+      <Dialog open={isReferralsDialogOpen} onOpenChange={setIsReferralsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Referrals — {selectedSalesman?.name}
+              {selectedSalesman && (
+                <Badge variant="secondary" className="ml-2 font-normal">
+                  {selectedSalesman.commission_rate}% commission
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Merchants who registered using <code className="px-1 rounded bg-gray-100">{selectedSalesman?.referral_code}</code>.
+              Earned commission is calculated as <strong>{selectedSalesman?.commission_rate}%</strong> of the merchant's non-cancelled order total (only for approved merchants).
+            </DialogDescription>
+          </DialogHeader>
+
+          {referralsLoading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Loading referrals...
+            </div>
+          ) : referrals.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              No merchants have registered with this code yet.
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="rounded-lg border p-3">
+                  <div className="text-xs text-muted-foreground">Total referrals</div>
+                  <div className="text-2xl font-semibold">{referrals.length}</div>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <div className="text-xs text-muted-foreground">Approved merchants</div>
+                  <div className="text-2xl font-semibold">
+                    {referrals.filter(r => r.status === 'APPROVED').length}
+                  </div>
+                </div>
+                <div className="rounded-lg border p-3 bg-emerald-50">
+                  <div className="text-xs text-muted-foreground">Earned commission</div>
+                  <div className="text-2xl font-semibold text-emerald-700">
+                    {formatCurrency(referrals.reduce((s, r) => s + r.earned_commission, 0))}
+                  </div>
+                </div>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Merchant</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Registered</TableHead>
+                    <TableHead className="text-right">Orders</TableHead>
+                    <TableHead className="text-right">Order value</TableHead>
+                    <TableHead className="text-right">Commission</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {referrals.map(r => (
+                    <TableRow key={r.registration_id}>
+                      <TableCell>
+                        <div className="font-medium">{r.company_name || r.full_name || '—'}</div>
+                        {r.full_name && r.full_name !== r.company_name && (
+                          <div className="text-xs text-muted-foreground">{r.full_name}</div>
+                        )}
+                        {r.email && (
+                          <div className="text-xs text-muted-foreground">{r.email}</div>
+                        )}
+                        {r.phone && (
+                          <div className="text-xs text-muted-foreground">{r.phone}</div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            r.status === 'APPROVED'
+                              ? 'default'
+                              : r.status === 'REJECTED'
+                                ? 'destructive'
+                                : 'secondary'
+                          }
+                        >
+                          {r.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(r.registered_at)}
+                      </TableCell>
+                      <TableCell className="text-right">{r.total_orders}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(r.total_order_value)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {r.status === 'APPROVED' ? (
+                          <span className="text-emerald-700">
+                            {formatCurrency(r.earned_commission)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReferralsDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
