@@ -104,13 +104,16 @@ export default function Salesmen() {
   const [isSaving, setIsSaving] = useState(false);
   const [referrals, setReferrals] = useState<ReferredMerchant[]>([]);
   const [referralsLoading, setReferralsLoading] = useState(false);
+  // Map of salesman_id -> live-calculated commission (commission_rate% of all
+  // non-cancelled order totals across that salesman's APPROVED referrals).
+  const [calculatedCommissions, setCalculatedCommissions] = useState<Record<string, number>>({});
   const { toast } = useToast();
 
   // Stats
   const totalSalesmen = salesmen.length;
   const activeSalesmen = salesmen.filter(s => s.is_active).length;
   const totalReferrals = salesmen.reduce((sum, s) => sum + (s.total_referrals || 0), 0);
-  const totalCommission = salesmen.reduce((sum, s) => sum + (s.total_commission || 0), 0);
+  const totalCommission = Object.values(calculatedCommissions).reduce((sum, v) => sum + v, 0);
 
   useEffect(() => {
     fetchSalesmen();
@@ -125,7 +128,12 @@ export default function Salesmen() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setSalesmen(data || []);
+      const list = (data as Salesman[] | null) ?? [];
+      setSalesmen(list);
+
+      // Compute live commission per salesman in a single batch (rather than
+      // showing the stale stored 0.00 from salesmen.total_commission).
+      void computeCommissions(list);
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -134,6 +142,58 @@ export default function Salesmen() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const computeCommissions = async (list: Salesman[]) => {
+    if (list.length === 0) {
+      setCalculatedCommissions({});
+      return;
+    }
+    try {
+      const salesmanIds = list.map(s => s.id);
+
+      // 1. APPROVED registrations referred by these salesmen
+      const { data: regs } = await supabase
+        .from('merchant_registrations' as any)
+        .select('customer_id, referred_by_salesman_id, status')
+        .in('referred_by_salesman_id', salesmanIds)
+        .eq('status', 'APPROVED');
+      const customerToSalesman = new Map<string, string>();
+      for (const r of (regs as any[] | null) ?? []) {
+        customerToSalesman.set(r.customer_id, r.referred_by_salesman_id);
+      }
+      if (customerToSalesman.size === 0) {
+        setCalculatedCommissions({});
+        return;
+      }
+
+      // 2. Non-cancelled order totals for those merchants
+      const { data: orderRows } = await supabase
+        .from('orders' as any)
+        .select('customer_profile_id, total, status')
+        .in('customer_profile_id', Array.from(customerToSalesman.keys()))
+        .neq('status', 'CANCELLED');
+
+      const salesmanOrderTotals = new Map<string, number>();
+      for (const o of (orderRows as any[] | null) ?? []) {
+        const salesmanId = customerToSalesman.get(o.customer_profile_id);
+        if (!salesmanId) continue;
+        salesmanOrderTotals.set(
+          salesmanId,
+          (salesmanOrderTotals.get(salesmanId) ?? 0) + (Number(o.total) || 0)
+        );
+      }
+
+      const result: Record<string, number> = {};
+      for (const s of list) {
+        const orderTotal = salesmanOrderTotals.get(s.id) ?? 0;
+        const rate = Number(s.commission_rate) || 0;
+        result[s.id] = (orderTotal * rate) / 100;
+      }
+      setCalculatedCommissions(result);
+    } catch {
+      // Non-fatal; the table will fall back to showing 0.00
     }
   };
 
@@ -580,7 +640,7 @@ export default function Salesmen() {
                         <div>
                           <div className="font-medium">{salesman.commission_rate}%</div>
                           <div className="text-sm text-muted-foreground">
-                            {formatCurrency(salesman.total_commission || 0)}
+                            {formatCurrency(calculatedCommissions[salesman.id] ?? 0)}
                           </div>
                         </div>
                       </TableCell>
