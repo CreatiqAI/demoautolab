@@ -4,12 +4,15 @@ import { useToast } from '@/hooks/use-toast';
 
 export type UploadStatus = 'uploading' | 'cancelling' | 'cancelled' | 'complete' | 'failed' | 'interrupted';
 
+export type UploadTarget = 'product-image' | 'installation-video';
+
 export interface UploadItem {
   id: string;
   fileName: string;
   fileSize: number;
   productId: string;
   productName: string;
+  target: UploadTarget;
   status: UploadStatus;
   error?: string;
   startedAt: number;
@@ -17,17 +20,25 @@ export interface UploadItem {
 
 export interface CompletedMedia {
   url: string;
-  productImageId: string;
+  productImageId?: string;
   fileName: string;
   fileSize: number;
   mimeType: string;
   uploadId: string;
 }
 
+export interface InstallationVideoMeta {
+  title: string;
+  duration: string;
+}
+
 interface EnqueueParams {
   file: File;
   productId: string;
   productName: string;
+  target?: UploadTarget;
+  /** Required when target === 'installation-video'. Captured at enqueue time. */
+  installationMeta?: InstallationVideoMeta;
   onComplete?: (media: CompletedMedia) => void;
 }
 
@@ -42,6 +53,8 @@ const UploadQueueContext = createContext<UploadQueueContextValue | null>(null);
 
 export const PRODUCT_MEDIA_UPLOADED_EVENT = 'product-media-uploaded';
 export const PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT = 'product-media-upload-removed';
+export const INSTALLATION_VIDEO_UPLOADED_EVENT = 'installation-video-uploaded';
+export const INSTALLATION_VIDEO_UPLOAD_REMOVED_EVENT = 'installation-video-upload-removed';
 
 export interface ProductMediaUploadedDetail {
   productId: string;
@@ -53,12 +66,21 @@ export interface ProductMediaUploadRemovedDetail {
   uploadId: string;
 }
 
+export interface InstallationVideoUploadedDetail {
+  productId: string;
+  uploadId: string;
+  url: string;
+  title: string;
+  duration: string;
+}
+
+export interface InstallationVideoUploadRemovedDetail {
+  productId: string;
+  uploadId: string;
+}
+
 const QUEUE_STORAGE_KEY = 'autolab.uploadQueue.v1';
 
-// Persist queue snapshot so an in-progress queue survives page refresh.
-// Note: actual file bytes can't survive refresh (the SDK upload aborts), so any
-// 'uploading' items present at boot are reclassified as 'interrupted' to tell
-// the admin they need to re-select the file.
 function loadInitialQueue(): UploadItem[] {
   try {
     const raw = localStorage.getItem(QUEUE_STORAGE_KEY);
@@ -78,15 +100,8 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
   const [uploads, setUploads] = useState<UploadItem[]>(loadInitialQueue);
   const { toast } = useToast();
 
-  // The Supabase JS SDK doesn't expose AbortSignal on .upload(), so we can't
-  // truly abort an in-flight upload. Cancellation is "soft": we set this flag,
-  // let the upload finish server-side, then immediately delete the file and
-  // skip the DB insert. The user sees an instant "Cancelled" state; the only
-  // cost is the bytes already in flight.
   const cancelledIds = useRef<Set<string>>(new Set());
 
-  // Persist queue snapshot whenever it changes so a refresh shows the recovered
-  // state (even if interrupted) instead of a silent disappearance.
   useEffect(() => {
     try {
       localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(uploads));
@@ -96,7 +111,7 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
   }, [uploads]);
 
   const enqueueVideoUpload = useCallback<UploadQueueContextValue['enqueueVideoUpload']>(
-    ({ file, productId, productName, onComplete }) => {
+    ({ file, productId, productName, target = 'product-image', installationMeta, onComplete }) => {
       const id = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const item: UploadItem = {
         id,
@@ -104,6 +119,7 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
         fileSize: file.size,
         productId,
         productName,
+        target,
         status: 'uploading',
         startedAt: Date.now(),
       };
@@ -111,11 +127,17 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
 
       void (async () => {
         const fileExt = file.name.split('.').pop() || 'mp4';
-        const filePath = `uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+        const folder = target === 'installation-video' ? 'installation-videos' : 'uploads';
+        const filePath = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+
+        const removedEventName =
+          target === 'installation-video'
+            ? INSTALLATION_VIDEO_UPLOAD_REMOVED_EVENT
+            : PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT;
 
         const emitRemoved = () => {
           window.dispatchEvent(
-            new CustomEvent<ProductMediaUploadRemovedDetail>(PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, {
+            new CustomEvent(removedEventName, {
               detail: { productId, uploadId: id },
             })
           );
@@ -126,7 +148,6 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
             .from('product-videos')
             .upload(filePath, file, { contentType: file.type });
 
-          // If user cancelled while bytes were in flight, clean up and bail.
           if (cancelledIds.current.has(id)) {
             cancelledIds.current.delete(id);
             await supabase.storage.from('product-videos').remove([filePath]).catch(() => {});
@@ -146,26 +167,51 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
             .from('product-videos')
             .getPublicUrl(filePath);
 
-          const { data: row, error: insertError } = await supabase
-            .from('product_images_new' as any)
-            .insert({
-              product_id: productId,
-              url: publicUrl,
-              alt_text: `${productName} - Video`,
-              is_primary: false,
-              sort_order: 9999,
-              media_type: 'video',
-              file_name: file.name,
-              file_size: file.size,
-              mime_type: file.type,
-            } as any)
-            .select('id')
-            .maybeSingle();
-          if (insertError) throw insertError;
+          let productImageId: string | undefined;
+
+          if (target === 'product-image') {
+            const { data: row, error: insertError } = await supabase
+              .from('product_images_new' as any)
+              .insert({
+                product_id: productId,
+                url: publicUrl,
+                alt_text: `${productName} - Video`,
+                is_primary: false,
+                sort_order: 9999,
+                media_type: 'video',
+                file_name: file.name,
+                file_size: file.size,
+                mime_type: file.type,
+              } as any)
+              .select('id')
+              .maybeSingle();
+            if (insertError) throw insertError;
+            productImageId = (row as any)?.id;
+          } else {
+            // installation-video: read current row, append entry to JSONB, upsert.
+            const meta = installationMeta ?? { title: '', duration: '' };
+            const { data: existing } = await supabase
+              .from('product_installation_guides' as any)
+              .select('installation_videos')
+              .eq('product_id', productId)
+              .maybeSingle();
+            const current: Array<{ url: string; title: string; duration: string }> =
+              ((existing as any)?.installation_videos as any[] | undefined) ?? [];
+            // Skip if this URL somehow already exists (shouldn't, since URLs are random)
+            const merged = current.some((v) => v.url === publicUrl)
+              ? current
+              : [...current, { url: publicUrl, title: meta.title, duration: meta.duration }];
+            const { error: upErr } = await supabase
+              .from('product_installation_guides' as any)
+              .upsert({ product_id: productId, installation_videos: merged } as any, {
+                onConflict: 'product_id',
+              });
+            if (upErr) throw upErr;
+          }
 
           const media: CompletedMedia = {
             url: publicUrl,
-            productImageId: (row as any)?.id,
+            productImageId,
             fileName: file.name,
             fileSize: file.size,
             mimeType: file.type,
@@ -178,14 +224,23 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
 
           onComplete?.(media);
 
-          window.dispatchEvent(
-            new CustomEvent<ProductMediaUploadedDetail>(PRODUCT_MEDIA_UPLOADED_EVENT, {
-              detail: { productId, media },
-            })
-          );
+          if (target === 'product-image') {
+            window.dispatchEvent(
+              new CustomEvent<ProductMediaUploadedDetail>(PRODUCT_MEDIA_UPLOADED_EVENT, {
+                detail: { productId, media },
+              })
+            );
+          } else {
+            const meta = installationMeta ?? { title: '', duration: '' };
+            window.dispatchEvent(
+              new CustomEvent<InstallationVideoUploadedDetail>(INSTALLATION_VIDEO_UPLOADED_EVENT, {
+                detail: { productId, uploadId: id, url: publicUrl, title: meta.title, duration: meta.duration },
+              })
+            );
+          }
 
           toast({
-            title: 'Video uploaded',
+            title: target === 'installation-video' ? 'Installation video uploaded' : 'Video uploaded',
             description: `${file.name} added to ${productName}`,
           });
 
@@ -193,7 +248,6 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
             setUploads((prev) => prev.filter((u) => u.id !== id));
           }, 5000);
         } catch (err: any) {
-          // Cancellation racing the error path: still treat as cancelled.
           if (cancelledIds.current.has(id)) {
             cancelledIds.current.delete(id);
             await supabase.storage.from('product-videos').remove([filePath]).catch(() => {});
@@ -236,12 +290,14 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
 
   const dismissUpload = useCallback((id: string) => {
     setUploads((prev) => {
-      // If dismissing an interrupted/failed item, also notify any open modal so
-      // its placeholder slot (if still present) gets cleaned up.
       const item = prev.find((u) => u.id === id);
       if (item && (item.status === 'interrupted' || item.status === 'failed' || item.status === 'cancelled')) {
+        const eventName =
+          item.target === 'installation-video'
+            ? INSTALLATION_VIDEO_UPLOAD_REMOVED_EVENT
+            : PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT;
         window.dispatchEvent(
-          new CustomEvent<ProductMediaUploadRemovedDetail>(PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, {
+          new CustomEvent(eventName, {
             detail: { productId: item.productId, uploadId: item.id },
           })
         );

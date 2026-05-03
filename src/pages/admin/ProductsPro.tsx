@@ -15,8 +15,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye, RotateCcw, AlertTriangle, Copy, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
-import VideoUpload, { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
-import { useUploadQueue, PRODUCT_MEDIA_UPLOADED_EVENT, PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, type ProductMediaUploadedDetail } from '@/hooks/useUploadQueue';
+import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
+import { useUploadQueue, PRODUCT_MEDIA_UPLOADED_EVENT, PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, INSTALLATION_VIDEO_UPLOADED_EVENT, INSTALLATION_VIDEO_UPLOAD_REMOVED_EVENT, type ProductMediaUploadedDetail, type InstallationVideoUploadedDetail } from '@/hooks/useUploadQueue';
 import { deleteStorageFiles, findOrphanStorageFiles, deleteOrphans } from '@/lib/storageCleanup';
 
 interface ComponentSearchResult {
@@ -41,6 +41,10 @@ interface InstallationVideoForm {
   url: string;
   title: string;
   duration: string;
+  _uploadId?: string;
+  _uploading?: boolean;
+  _uploadFileName?: string;
+  _uploadFileSize?: number;
 }
 
 interface InstallationFormData {
@@ -142,6 +146,7 @@ export default function ProductsPro() {
   // the diff-based save so background-uploaded videos that arrive after open
   // are NOT touched (they're in DB but not in this snapshot).
   const [originalMediaUrls, setOriginalMediaUrls] = useState<string[]>([]);
+  const [originalInstallationVideoUrls, setOriginalInstallationVideoUrls] = useState<string[]>([]);
 
   // Orphan-storage cleanup tool state
   const [cleanupOpen, setCleanupOpen] = useState(false);
@@ -229,11 +234,58 @@ export default function ProductsPro() {
         images: prev.images.filter(img => img._uploadId !== detail.uploadId),
       }));
     };
+    const installCompletedHandler = (e: Event) => {
+      const detail = (e as CustomEvent<InstallationVideoUploadedDetail>).detail;
+      if (!editingProduct?.id || detail.productId !== editingProduct.id) return;
+      setFormData(prev => {
+        const idx = prev.installation.installation_videos.findIndex(v => v._uploadId === detail.uploadId);
+        if (idx === -1) {
+          if (prev.installation.installation_videos.some(v => v.url === detail.url)) return prev;
+          return {
+            ...prev,
+            installation: {
+              ...prev.installation,
+              installation_videos: [
+                ...prev.installation.installation_videos,
+                { url: detail.url, title: detail.title, duration: detail.duration },
+              ],
+            },
+          };
+        }
+        const next = [...prev.installation.installation_videos];
+        next[idx] = {
+          url: detail.url,
+          title: next[idx].title,
+          duration: next[idx].duration,
+        };
+        return {
+          ...prev,
+          installation: { ...prev.installation, installation_videos: next },
+        };
+      });
+    };
+    const installRemovedHandler = (e: Event) => {
+      const detail = (e as CustomEvent<{ uploadId: string }>).detail;
+      setFormData(prev => ({
+        ...prev,
+        installation: {
+          ...prev.installation,
+          installation_videos: prev.installation.installation_videos.filter(
+            v => v._uploadId !== detail.uploadId
+          ),
+        },
+      }));
+    };
+
     window.addEventListener(PRODUCT_MEDIA_UPLOADED_EVENT, completedHandler);
     window.addEventListener(PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, removedHandler);
+    window.addEventListener(INSTALLATION_VIDEO_UPLOADED_EVENT, installCompletedHandler);
+    window.addEventListener(INSTALLATION_VIDEO_UPLOAD_REMOVED_EVENT, installRemovedHandler);
     return () => {
       window.removeEventListener(PRODUCT_MEDIA_UPLOADED_EVENT, completedHandler);
       window.removeEventListener(PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, removedHandler);
+      window.removeEventListener(INSTALLATION_VIDEO_UPLOADED_EVENT, installCompletedHandler);
+      window.removeEventListener(INSTALLATION_VIDEO_UPLOAD_REMOVED_EVENT, installRemovedHandler);
     };
   }, [editingProduct?.id]);
 
@@ -280,6 +332,52 @@ export default function ProductsPro() {
       ...prev,
       images: [...prev.images, { url: publicUrl, is_primary: false, alt_text: `${prev.name} - Video`, media_type: 'video' as const }],
     }));
+  };
+
+  // Upload an installation video. For existing products, uses the background queue
+  // and shows a placeholder card immediately. The queue auto-upserts the entry into
+  // product_installation_guides.installation_videos when the upload completes, so
+  // closing the modal mid-upload is safe — the entry will still appear after refresh.
+  const processInstallationVideoFile = async (file: File, index: number): Promise<void> => {
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      toast({ title: 'Video too large', description: `${file.name} exceeds 2GB`, variant: 'destructive' });
+      return;
+    }
+    const currentVideo = formData.installation.installation_videos[index] ?? { url: '', title: '', duration: '' };
+    if (editingProduct?.id) {
+      const uploadId = enqueueVideoUpload({
+        file,
+        productId: editingProduct.id,
+        productName: formData.name || 'Untitled product',
+        target: 'installation-video',
+        installationMeta: { title: currentVideo.title, duration: currentVideo.duration },
+      });
+      setFormData(prev => {
+        const videos = [...prev.installation.installation_videos];
+        videos[index] = {
+          ...videos[index],
+          url: '',
+          _uploading: true,
+          _uploadId: uploadId,
+          _uploadFileName: file.name,
+          _uploadFileSize: file.size,
+        };
+        return { ...prev, installation: { ...prev.installation, installation_videos: videos } };
+      });
+      return;
+    }
+    // New product (no id yet) — sync upload so URL is captured before save.
+    toast({ title: 'Uploading installation video...', description: `${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)` });
+    const fileExt = file.name.split('.').pop() || 'mp4';
+    const filePath = `installation-videos/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+    const { error } = await supabase.storage.from('product-videos').upload(filePath, file, { contentType: file.type });
+    if (error) throw error;
+    const { data: { publicUrl } } = supabase.storage.from('product-videos').getPublicUrl(filePath);
+    setFormData(prev => {
+      const videos = [...prev.installation.installation_videos];
+      videos[index] = { ...videos[index], url: publicUrl };
+      return { ...prev, installation: { ...prev.installation, installation_videos: videos } };
+    });
   };
 
   // Filter products based on search and filters
@@ -838,14 +936,36 @@ export default function ProductsPro() {
         }
       }
 
-      // 4. Handle product installation guide
+      // 4. Handle product installation guide. Same race-safe pattern as media:
+      // re-read the current installation_videos JSONB so any entries inserted
+      // by the queue while the modal was open are preserved (not overwritten
+      // by stale formData).
       if (formData.installation.has_installation_guide) {
+        const formVideos = formData.installation.installation_videos
+          .filter(v => v.url && !v._uploading)
+          .map(v => ({ url: v.url, title: v.title, duration: v.duration }));
+        const formUrls = new Set(formVideos.map(v => v.url));
+
+        let finalVideos = formVideos;
+        if (editingProduct) {
+          const { data: dbRow } = await supabase
+            .from('product_installation_guides' as any)
+            .select('installation_videos')
+            .eq('product_id', product.id)
+            .maybeSingle();
+          const dbVideos: Array<{ url: string; title?: string; duration?: string }> =
+            ((dbRow as any)?.installation_videos as any[] | undefined) ?? [];
+          const snapshotSet = new Set(originalInstallationVideoUrls);
+          const queueInserted = dbVideos.filter(v => !snapshotSet.has(v.url) && !formUrls.has(v.url));
+          finalVideos = [...formVideos, ...queueInserted];
+        }
+
         const installationData = {
           product_id: product.id,
           recommended_time: formData.installation.recommended_time || null,
           workman_power: formData.installation.workman_power || 1,
           installation_price: formData.installation.installation_price || null,
-          installation_videos: formData.installation.installation_videos.filter(v => v.url),
+          installation_videos: finalVideos,
           difficulty_level: formData.installation.difficulty_level || 'medium',
           notes: formData.installation.notes || null
         };
@@ -854,17 +974,35 @@ export default function ProductsPro() {
           .from('product_installation_guides' as any)
           .upsert(installationData, { onConflict: 'product_id' });
 
-        if (installError) {
+        if (installError) throw installError;
+
+        // Clean up storage for installation videos the user explicitly removed.
+        if (editingProduct && originalInstallationVideoUrls.length > 0) {
+          const removedUrls = originalInstallationVideoUrls.filter(u => !formUrls.has(u));
+          if (removedUrls.length > 0) void deleteStorageFiles(removedUrls);
         }
       } else {
-        // Remove installation guide if unchecked
+        // Remove installation guide if unchecked. Snapshot URLs first so we can
+        // clean up the storage files that go with them.
+        if (editingProduct) {
+          const { data: dbRow } = await supabase
+            .from('product_installation_guides' as any)
+            .select('installation_videos')
+            .eq('product_id', product.id)
+            .maybeSingle();
+          const dbVideos: Array<{ url: string }> = ((dbRow as any)?.installation_videos as any[] | undefined) ?? [];
+          const urlsToWipe = dbVideos.map(v => v.url).filter(Boolean);
+          if (urlsToWipe.length > 0) void deleteStorageFiles(urlsToWipe);
+        }
         await supabase
           .from('product_installation_guides' as any)
           .delete()
           .eq('product_id', product.id);
       }
 
-      const inFlightCount = formData.images.filter(img => img._uploading).length;
+      const inFlightImages = formData.images.filter(img => img._uploading).length;
+      const inFlightInstall = formData.installation.installation_videos.filter(v => v._uploading).length;
+      const inFlightCount = inFlightImages + inFlightInstall;
       toast({
         title: "Success",
         description: editingProduct
@@ -911,6 +1049,7 @@ export default function ProductsPro() {
     });
     setEditingProduct(null);
     setOriginalMediaUrls([]);
+    setOriginalInstallationVideoUrls([]);
     setActiveTab('basic');
     setSearchTerm('');
     setSearchResults([]);
@@ -1000,6 +1139,7 @@ export default function ProductsPro() {
       });
 
       setOriginalMediaUrls(formattedImages.map((img: any) => img.url).filter(Boolean));
+      setOriginalInstallationVideoUrls((installationFormData.installation_videos as any[]).map(v => v.url).filter(Boolean));
       setEditingProduct(product);
       setIsDialogOpen(true);
     } catch (error: any) {
@@ -2259,28 +2399,105 @@ export default function ProductsPro() {
                                       <Trash2 className="h-4 w-4 text-red-500" />
                                     </Button>
                                   </div>
-                                  <VideoUpload
-                                    value={video.url}
-                                    onChange={(url) => {
-                                      const videos = [...formData.installation.installation_videos];
-                                      videos[index] = { ...videos[index], url };
-                                      setFormData(prev => ({
-                                        ...prev,
-                                        installation: { ...prev.installation, installation_videos: videos }
-                                      }));
-                                    }}
-                                    onRemove={() => {
-                                      const videos = [...formData.installation.installation_videos];
-                                      videos[index] = { ...videos[index], url: '' };
-                                      setFormData(prev => ({
-                                        ...prev,
-                                        installation: { ...prev.installation, installation_videos: videos }
-                                      }));
-                                    }}
-                                    bucket="product-videos"
-                                    path="installation-videos"
-                                    placeholder="Upload installation video"
-                                  />
+                                  {video._uploading ? (
+                                    <div className="border-2 border-blue-300 bg-blue-50 rounded-lg p-4 flex items-center gap-3">
+                                      <Loader2 className="h-6 w-6 animate-spin text-blue-600 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate" title={video._uploadFileName}>{video._uploadFileName}</p>
+                                        <p className="text-xs text-blue-700">{((video._uploadFileSize || 0) / 1024 / 1024).toFixed(1)}MB · uploading in background — you can save and close this modal</p>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-red-600 hover:text-red-700 hover:bg-red-100"
+                                        onClick={() => {
+                                          if (video._uploadId) cancelUpload(video._uploadId);
+                                          const videos = formData.installation.installation_videos.filter(v => v._uploadId !== video._uploadId);
+                                          setFormData(prev => ({
+                                            ...prev,
+                                            installation: { ...prev.installation, installation_videos: videos }
+                                          }));
+                                        }}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  ) : video.url ? (
+                                    <div className="relative group">
+                                      <div className="aspect-video w-full max-w-xs rounded-lg border overflow-hidden bg-gray-900">
+                                        {isEmbeddableUrl(video.url) ? (
+                                          <iframe src={getEmbedUrl(video.url)!} className="w-full h-full" allowFullScreen />
+                                        ) : (
+                                          <video src={`${video.url}#t=0.1`} className="w-full h-full object-contain" controls preload="metadata" />
+                                        )}
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="destructive"
+                                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => {
+                                          const videos = [...formData.installation.installation_videos];
+                                          videos[index] = { ...videos[index], url: '' };
+                                          setFormData(prev => ({
+                                            ...prev,
+                                            installation: { ...prev.installation, installation_videos: videos }
+                                          }));
+                                        }}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <Tabs defaultValue="upload" className="w-full">
+                                      <TabsList className="grid w-full grid-cols-2">
+                                        <TabsTrigger value="upload">Upload File</TabsTrigger>
+                                        <TabsTrigger value="url">From URL</TabsTrigger>
+                                      </TabsList>
+                                      <TabsContent value="upload" className="space-y-3">
+                                        <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-gray-400 transition-colors">
+                                          <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                                          <span className="text-sm text-gray-600">Click to select a video file</span>
+                                          <span className="text-xs text-gray-500 mt-1">MP4, WebM, MOV — up to 2GB</span>
+                                          <input
+                                            type="file"
+                                            accept="video/mp4,video/webm,video/quicktime"
+                                            className="hidden"
+                                            onChange={async (e) => {
+                                              const file = e.target.files?.[0];
+                                              if (!file) return;
+                                              try {
+                                                await processInstallationVideoFile(file, index);
+                                              } catch (err: any) {
+                                                toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+                                              }
+                                              e.target.value = '';
+                                            }}
+                                          />
+                                        </label>
+                                      </TabsContent>
+                                      <TabsContent value="url" className="space-y-3">
+                                        <Input
+                                          placeholder="https://youtube.com/watch?v=... or https://vimeo.com/..."
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault();
+                                              const url = (e.target as HTMLInputElement).value.trim();
+                                              if (!url) return;
+                                              const videos = [...formData.installation.installation_videos];
+                                              videos[index] = { ...videos[index], url };
+                                              setFormData(prev => ({
+                                                ...prev,
+                                                installation: { ...prev.installation, installation_videos: videos }
+                                              }));
+                                            }
+                                          }}
+                                        />
+                                        <p className="text-xs text-gray-500">Press Enter to apply. YouTube and Vimeo links are embedded.</p>
+                                      </TabsContent>
+                                    </Tabs>
+                                  )}
                                   <div className="grid grid-cols-2 gap-3">
                                     <div>
                                       <Label className="text-xs text-muted-foreground">Title</Label>
