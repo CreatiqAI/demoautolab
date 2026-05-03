@@ -36,6 +36,7 @@ import {
   AlertTriangle,
   Loader2,
   Globe,
+  Sparkles,
 } from 'lucide-react';
 
 type TabType = 'dashboard' | 'profile' | 'subscription';
