@@ -11,18 +11,38 @@ interface AddressSuggestion {
   secondary_text: string;
 }
 
+export interface ExtractedAddressComponents {
+  city?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 interface AddressAutocompleteProps {
   value: string;
-  onChange: (address: string, components?: any) => void;
+  /**
+   * Fired when the address text changes. The optional `components` param is
+   * populated only when the user picks a Google suggestion — it contains
+   * structured city / state / postcode etc. extracted from the Place's
+   * address_components. Manual typing still fires onChange but with no
+   * components, so callers can fall back to manual fields.
+   */
+  onChange: (address: string, components?: ExtractedAddressComponents) => void;
   placeholder?: string;
   required?: boolean;
+  showLabel?: boolean;
+  label?: string;
 }
 
 const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
   value,
   onChange,
   placeholder = "Type address like 'Nadayu28' or 'KLCC'...",
-  required = false
+  required = false,
+  showLabel = true,
+  label = 'Address',
 }) => {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -30,14 +50,18 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteService = useRef<any>(null);
+  const placesService = useRef<any>(null);
 
   // Initialize Google Places API with reliable AutocompleteService
   useEffect(() => {
     const initializeGoogleMaps = async () => {
       if (window.google && window.google.maps && window.google.maps.places) {
         try {
-          // Use AutocompleteService (reliable and well-documented)
           autocompleteService.current = new window.google.maps.places.AutocompleteService();
+          // PlacesService needs an HTMLElement (or a Map) to render attribution.
+          // A throwaway div is enough since we never display anything.
+          const attrDiv = document.createElement('div');
+          placesService.current = new window.google.maps.places.PlacesService(attrDiv);
           setIsGoogleMapsLoaded(true);
         } catch (error) {
         }
@@ -57,6 +81,8 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
         (window as any).initMap = () => {
           try {
             autocompleteService.current = new window.google.maps.places.AutocompleteService();
+            const attrDiv = document.createElement('div');
+            placesService.current = new window.google.maps.places.PlacesService(attrDiv);
             setIsGoogleMapsLoaded(true);
           } catch (error) {
           }
@@ -139,10 +165,57 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
     }
   };
 
+  // Pull city / state / postcode out of a Google place's address_components.
+  // The Google component types we care about:
+  //   - locality                       => city
+  //   - administrative_area_level_1    => state (e.g. "Selangor", "Kuala Lumpur")
+  //   - postal_code                    => postcode
+  //   - country                        => country
+  // Some Malaysian places use "administrative_area_level_2" for city when
+  // locality is missing, so we fall back to that.
+  const extractComponents = (placeDetails: any): ExtractedAddressComponents => {
+    const out: ExtractedAddressComponents = {};
+    const comps: any[] = placeDetails?.address_components || [];
+    for (const c of comps) {
+      const types: string[] = c.types || [];
+      if (types.includes('postal_code')) out.postcode = c.long_name;
+      else if (types.includes('locality')) out.city = c.long_name;
+      else if (!out.city && types.includes('administrative_area_level_2')) out.city = c.long_name;
+      else if (types.includes('administrative_area_level_1')) out.state = c.long_name;
+      else if (types.includes('country')) out.country = c.long_name;
+    }
+    if (placeDetails?.geometry?.location) {
+      out.latitude = typeof placeDetails.geometry.location.lat === 'function'
+        ? placeDetails.geometry.location.lat()
+        : placeDetails.geometry.location.lat;
+      out.longitude = typeof placeDetails.geometry.location.lng === 'function'
+        ? placeDetails.geometry.location.lng()
+        : placeDetails.geometry.location.lng;
+    }
+    return out;
+  };
+
   const selectAddress = (suggestion: AddressSuggestion) => {
-    onChange(suggestion.description);
     setSuggestions([]);
     setShowSuggestions(false);
+    // Fire a synchronous onChange first with the address text, so the input
+    // updates immediately. Then asynchronously enrich with components.
+    onChange(suggestion.description);
+    if (placesService.current) {
+      placesService.current.getDetails(
+        {
+          placeId: suggestion.place_id,
+          fields: ['address_components', 'geometry', 'formatted_address'],
+        },
+        (place: any, status: string) => {
+          if (status !== 'OK' || !place) return;
+          const components = extractComponents(place);
+          // Fire onChange again, this time with components so the caller can
+          // populate city / state / postcode automatically.
+          onChange(suggestion.description, components);
+        }
+      );
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -158,9 +231,11 @@ const AddressAutocompleteSimple: React.FC<AddressAutocompleteProps> = ({
 
   return (
     <div className="relative">
-      <Label htmlFor="address">
-        Address {required && '*'}
-      </Label>
+      {showLabel && (
+        <Label htmlFor="address">
+          {label} {required && '*'}
+        </Label>
+      )}
       <div className="relative">
         <Input
           ref={inputRef}

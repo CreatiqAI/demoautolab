@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -90,6 +90,48 @@ const SERVICES = [
 const MIN_PHOTOS = 2;
 const MAX_PHOTOS = 5;
 
+interface ProfileFormState {
+  business_name: string;
+  business_type: string;
+  description: string;
+  contact_phone: string;
+  contact_email: string;
+  address: string;
+  city: string;
+  state: string;
+  postcode: string;
+  services_offered: string[];
+}
+
+const emptyProfileFormState: ProfileFormState = {
+  business_name: '',
+  business_type: '',
+  description: '',
+  contact_phone: '',
+  contact_email: '',
+  address: '',
+  city: '',
+  state: '',
+  postcode: '',
+  services_offered: [],
+};
+
+function profileStateFromPartnership(p: PartnershipData | null): ProfileFormState {
+  if (!p) return emptyProfileFormState;
+  return {
+    business_name: p.business_name ?? '',
+    business_type: p.business_type ?? '',
+    description: p.description ?? '',
+    contact_phone: p.contact_phone ?? '',
+    contact_email: p.contact_email ?? '',
+    address: p.address ?? '',
+    city: p.city ?? '',
+    state: p.state ?? '',
+    postcode: p.postcode ?? '',
+    services_offered: p.services_offered ?? [],
+  };
+}
+
 export default function MerchantConsole() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -98,6 +140,32 @@ export default function MerchantConsole() {
   const [loading, setLoading] = useState(true);
   const [partnership, setPartnership] = useState<PartnershipData | null>(null);
   const [isMerchant, setIsMerchant] = useState(false);
+
+  // Profile form state lives at the parent level so it survives tab switches.
+  // Previously it lived inside ProfileTab; switching tabs would unmount the
+  // component and discard unsaved input — confusing UX. Now switching tabs
+  // just hides the form, the values stay until the user saves or refreshes.
+  const [profileFormData, setProfileFormData] = useState<ProfileFormState>(
+    () => profileStateFromPartnership(partnership)
+  );
+  const [profileShopPhotos, setProfileShopPhotos] = useState<string[]>([]);
+  const [profileIsPubliclyListed, setProfileIsPubliclyListed] = useState<boolean>(false);
+  // True when the form has been "rehydrated" from a freshly-fetched
+  // partnership and is safe to overwrite from the prop. We only sync the
+  // local state from partnership ONCE — subsequent prop changes (from
+  // refetch after save) only touch the listing flag, never blow away the
+  // user's typing.
+  const profileHydrated = useRef(false);
+
+  useEffect(() => {
+    if (!partnership) return;
+    if (!profileHydrated.current) {
+      setProfileFormData(profileStateFromPartnership(partnership));
+      setProfileShopPhotos(partnership.shop_photos ?? []);
+      setProfileIsPubliclyListed(partnership.is_publicly_listed ?? false);
+      profileHydrated.current = true;
+    }
+  }, [partnership]);
 
   const navItems = [
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: Store },
@@ -240,7 +308,26 @@ export default function MerchantConsole() {
 
         {/* Tab content */}
         {activeTab === 'dashboard' && <DashboardTab partnership={partnership} />}
-        {activeTab === 'profile' && <ProfileTab partnership={partnership} onUpdate={checkMerchantAndFetchData} />}
+        {/* Profile tab is hidden, not unmounted, so unsaved input survives
+            tab switches. Display flips off when not active. */}
+        <div hidden={activeTab !== 'profile'}>
+          <ProfileTab
+            partnership={partnership}
+            onUpdate={() => {
+              // After save, re-allow rehydration from the next fetched
+              // partnership so the form picks up any server-side
+              // normalisation (e.g. trimmed whitespace).
+              profileHydrated.current = false;
+              void checkMerchantAndFetchData();
+            }}
+            formData={profileFormData}
+            setFormData={setProfileFormData}
+            shopPhotos={profileShopPhotos}
+            setShopPhotos={setProfileShopPhotos}
+            isPubliclyListed={profileIsPubliclyListed}
+            setIsPubliclyListed={setProfileIsPubliclyListed}
+          />
+        </div>
         {activeTab === 'subscription' && <SubscriptionTab partnership={partnership} />}
       </main>
 
@@ -375,47 +462,27 @@ function Row({ icon: Icon, label, children }: { icon?: any; label: string; child
 // ===========================================================================
 // Profile tab
 // ===========================================================================
-function ProfileTab({ partnership, onUpdate }: { partnership: PartnershipData | null; onUpdate: () => void }) {
+function ProfileTab({
+  partnership,
+  onUpdate,
+  formData,
+  setFormData,
+  shopPhotos,
+  setShopPhotos,
+  isPubliclyListed,
+  setIsPubliclyListed,
+}: {
+  partnership: PartnershipData | null;
+  onUpdate: () => void;
+  formData: ProfileFormState;
+  setFormData: (next: ProfileFormState | ((prev: ProfileFormState) => ProfileFormState)) => void;
+  shopPhotos: string[];
+  setShopPhotos: (next: string[] | ((prev: string[]) => string[])) => void;
+  isPubliclyListed: boolean;
+  setIsPubliclyListed: (next: boolean) => void;
+}) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [shopPhotos, setShopPhotos] = useState<string[]>(partnership?.shop_photos ?? []);
-  const [isPubliclyListed, setIsPubliclyListed] = useState<boolean>(partnership?.is_publicly_listed ?? false);
-  const [formData, setFormData] = useState({
-    business_name: partnership?.business_name ?? '',
-    business_type: partnership?.business_type ?? '',
-    description: partnership?.description ?? '',
-    contact_phone: partnership?.contact_phone ?? '',
-    contact_email: partnership?.contact_email ?? '',
-    address: partnership?.address ?? '',
-    city: partnership?.city ?? '',
-    state: partnership?.state ?? '',
-    postcode: partnership?.postcode ?? '',
-    services_offered: partnership?.services_offered ?? [],
-  });
-
-  // The component initialises from `partnership` once on mount. When the
-  // parent finishes its async fetch and a new partnership object lands
-  // (or after a save triggers onUpdate -> refetch), we need to sync the
-  // local form state. Without this, the form shows the empty/initial
-  // values forever — which is exactly the "preset data, not saved" bug
-  // the user reported on refresh.
-  useEffect(() => {
-    if (!partnership) return;
-    setShopPhotos(partnership.shop_photos ?? []);
-    setIsPubliclyListed(partnership.is_publicly_listed ?? false);
-    setFormData({
-      business_name: partnership.business_name ?? '',
-      business_type: partnership.business_type ?? '',
-      description: partnership.description ?? '',
-      contact_phone: partnership.contact_phone ?? '',
-      contact_email: partnership.contact_email ?? '',
-      address: partnership.address ?? '',
-      city: partnership.city ?? '',
-      state: partnership.state ?? '',
-      postcode: partnership.postcode ?? '',
-      services_offered: partnership.services_offered ?? [],
-    });
-  }, [partnership?.id, partnership?.business_name, partnership?.business_type, partnership?.description, partnership?.contact_phone, partnership?.contact_email, partnership?.address, partnership?.city, partnership?.state, partnership?.postcode, partnership?.shop_photos, partnership?.services_offered, partnership?.is_publicly_listed]);
 
   const photoCount = shopPhotos.length;
   const minMet = photoCount >= MIN_PHOTOS;
@@ -574,11 +641,27 @@ function ProfileTab({ partnership, onUpdate }: { partnership: PartnershipData | 
           <CardDescription>Where your shop is. Used in Find Shops listings and directions.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Google Places autocomplete — same component used at checkout. */}
+          {/* Google Places autocomplete. When the merchant picks a Google
+              suggestion the second `components` arg is populated with
+              structured city / state / postcode pulled from
+              address_components — we auto-fill those fields below so the
+              merchant doesn't have to retype them. They remain editable
+              as a fallback. */}
           <AddressAutocompleteSimple
             value={formData.address}
-            onChange={(address) => setFormData({ ...formData, address })}
+            onChange={(address, components) =>
+              setFormData((prev) => {
+                const next: ProfileFormState = { ...prev, address };
+                if (components?.city) next.city = components.city;
+                if (components?.state && STATES.includes(components.state)) {
+                  next.state = components.state;
+                }
+                if (components?.postcode) next.postcode = components.postcode;
+                return next;
+              })
+            }
             placeholder="Type address like 'Nadayu28' or 'KLCC'..."
+            label="Street address"
           />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
