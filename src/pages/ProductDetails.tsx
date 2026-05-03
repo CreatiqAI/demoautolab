@@ -132,17 +132,16 @@ const ProductDetails = () => {
       );
     }
 
-    // Fallback: Show link button
+    // Direct video file (uploaded MP4/WebM/MOV or any non-YouTube/Vimeo URL):
+    // play it inline with native HTML5 controls.
     return (
-      <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
-        <Button
-          onClick={() => window.open(url, '_blank')}
-          className="bg-gray-900 hover:bg-gray-800"
-        >
-          <Video className="h-4 w-4 mr-2" />
-          Watch Video
-        </Button>
-      </div>
+      <video
+        src={url}
+        className="w-full h-full rounded-lg bg-black"
+        controls
+        playsInline
+        preload="metadata"
+      />
     );
   };
 

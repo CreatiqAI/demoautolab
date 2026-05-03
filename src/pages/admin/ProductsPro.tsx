@@ -1437,6 +1437,7 @@ export default function ProductsPro() {
                               id="year_from"
                               type="number"
                               value={formData.year_from ?? ''}
+                              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                               onChange={(e) => setFormData(prev => ({ ...prev, year_from: e.target.value ? parseInt(e.target.value) : null }))}
                               placeholder="e.g., 2020"
                             />
@@ -1447,6 +1448,7 @@ export default function ProductsPro() {
                               id="year_to"
                               type="number"
                               value={formData.year_to ?? ''}
+                              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                               onChange={(e) => setFormData(prev => ({ ...prev, year_to: e.target.value ? parseInt(e.target.value) : null }))}
                               placeholder="e.g., 2025"
                             />
@@ -2302,6 +2304,7 @@ export default function ProductsPro() {
                                 type="number"
                                 min="1"
                                 value={formData.installation.workman_power}
+                                onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                                 onChange={(e) => setFormData(prev => ({
                                   ...prev,
                                   installation: { ...prev.installation, workman_power: parseInt(e.target.value) || 1 }
@@ -2318,6 +2321,7 @@ export default function ProductsPro() {
                                 min="0"
                                 step="0.01"
                                 value={formData.installation.installation_price}
+                                onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                                 onChange={(e) => setFormData(prev => ({
                                   ...prev,
                                   installation: { ...prev.installation, installation_price: parseFloat(e.target.value) || 0 }
