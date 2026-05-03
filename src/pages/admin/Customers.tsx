@@ -45,6 +45,9 @@ interface CustomerProfile {
   subscription_end_date: string | null;
   is_panel_customer: boolean | null;
   last_sign_in_at: string | null;
+  demoted_at: string | null;
+  demoted_from: string | null;
+  demotion_reason: string | null;
 }
 
 interface SocialMediaLink {
@@ -103,6 +106,10 @@ export default function Customers() {
   // Subscription editor for B2B
   const [subEndDateInput, setSubEndDateInput] = useState<string>('');
   const [subSaving, setSubSaving] = useState(false);
+  // Demote-to-B2C confirmation
+  const [demoteOpen, setDemoteOpen] = useState(false);
+  const [demoteReason, setDemoteReason] = useState('');
+  const [demoting, setDemoting] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<MerchantApplication | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -518,9 +525,106 @@ export default function Customers() {
         .eq('id', customer.id);
       if (error) throw error;
       patchCustomer(customer.id, { is_panel_customer: value });
-      toast({ title: value ? 'Promoted to Panel' : 'Removed from Panel' });
+
+      // Sync premium_partnerships so the customer appears (or disappears)
+      // in the admin/premium-partners listing. The Customers drawer is the
+      // single source of truth for the panel flag — premium_partnerships is
+      // the listing's data source.
+      if (value) {
+        const { data: existing } = await supabase
+          .from('premium_partnerships' as any)
+          .select('id')
+          .eq('merchant_id', customer.id)
+          .maybeSingle();
+        if (existing) {
+          await supabase
+            .from('premium_partnerships' as any)
+            .update({
+              subscription_status: 'ACTIVE',
+              subscription_plan: 'panel',
+              admin_approved: true,
+              approved_at: new Date().toISOString(),
+            } as any)
+            .eq('id', (existing as any).id);
+        } else {
+          await supabase
+            .from('premium_partnerships' as any)
+            .insert({
+              merchant_id: customer.id,
+              business_name: merchantDetails?.company_name || customer.full_name || 'Untitled',
+              business_registration_no: merchantDetails?.business_registration_no || null,
+              business_type: merchantDetails?.business_type || null,
+              contact_person: customer.full_name,
+              contact_phone: customer.phone,
+              contact_email: customer.email,
+              address: merchantDetails?.address || null,
+              subscription_status: 'ACTIVE',
+              subscription_plan: 'panel',
+              admin_approved: true,
+              approved_at: new Date().toISOString(),
+              is_admin_invited: true,
+            } as any);
+        }
+      } else {
+        await supabase
+          .from('premium_partnerships' as any)
+          .update({ subscription_status: 'INACTIVE' } as any)
+          .eq('merchant_id', customer.id);
+      }
+
+      toast({
+        title: value ? 'Promoted to Panel' : 'Removed from Panel',
+        description: value
+          ? 'Now visible in admin/premium-partners listing.'
+          : 'Hidden from premium-partners listing (record kept).',
+        variant: 'success',
+      });
     } catch (err: any) {
       toast({ title: 'Failed', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    }
+  };
+
+  const demoteToB2C = async () => {
+    if (!selectedCustomer) return;
+    setDemoting(true);
+    try {
+      const { error } = await supabase
+        .from('customer_profiles' as any)
+        .update({
+          customer_type: 'normal',
+          pricing_type: 'retail',
+          demoted_at: new Date().toISOString(),
+          demoted_from: selectedCustomer.customer_type ?? 'merchant',
+          demotion_reason: demoteReason || null,
+          // Keep subscription_start_date and subscription_end_date as
+          // historical record. Clear is_panel_customer since they're no
+          // longer a B2B account.
+          is_panel_customer: false,
+        } as any)
+        .eq('id', selectedCustomer.id);
+      if (error) throw error;
+
+      // Also deactivate any premium_partnerships row
+      await supabase
+        .from('premium_partnerships' as any)
+        .update({ subscription_status: 'INACTIVE' } as any)
+        .eq('merchant_id', selectedCustomer.id);
+
+      patchCustomer(selectedCustomer.id, {
+        customer_type: 'normal',
+        is_panel_customer: false,
+        demoted_at: new Date().toISOString(),
+        demoted_from: selectedCustomer.customer_type ?? 'merchant',
+        demotion_reason: demoteReason || null,
+      });
+      toast({ title: 'Demoted to B2C', description: 'Customer is now a normal account.', variant: 'success' });
+      setDemoteOpen(false);
+      setDemoteReason('');
+      setIsDrawerOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Failed to demote', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setDemoting(false);
     }
   };
 
@@ -2194,6 +2298,41 @@ export default function Customers() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Demote to B2C confirmation */}
+      <AlertDialog open={demoteOpen} onOpenChange={setDemoteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Demote to B2C customer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will set <strong>{selectedCustomer?.full_name}</strong>'s account back to a normal B2C customer.
+              They will lose merchant pricing and access to merchant-only features.
+              The subscription dates and merchant_registration record are <strong>kept</strong> for audit purposes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="demote-reason">Reason (optional, but recommended)</Label>
+            <Textarea
+              id="demote-reason"
+              placeholder="e.g. Did not renew RM99 subscription"
+              value={demoteReason}
+              onChange={(e) => setDemoteReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={demoting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); demoteToB2C(); }}
+              disabled={demoting}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {demoting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserCheck className="h-4 w-4 mr-2" />}
+              Demote to B2C
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Customer details — right Sheet drawer with Overview + Purchase History tabs */}
       <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
         <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto">
@@ -2329,6 +2468,90 @@ export default function Customers() {
                     </div>
                   )}
 
+                  {/* Merchant documents (uploaded during registration) */}
+                  {selectedCustomer.customer_type === 'merchant' && merchantDetails && (
+                    merchantDetails.ssm_document_url ||
+                    merchantDetails.bank_proof_url ||
+                    (merchantDetails as any).payment_slip_url ||
+                    (merchantDetails.workshop_photos && merchantDetails.workshop_photos.length > 0)
+                  ) ? (
+                    <div className="rounded-lg border p-4 space-y-3">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase">Documents</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {merchantDetails.ssm_document_url && (
+                          <a
+                            href={merchantDetails.ssm_document_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-muted text-sm"
+                          >
+                            <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                            <span className="flex-1">SSM Document</span>
+                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                          </a>
+                        )}
+                        {merchantDetails.bank_proof_url && (
+                          <a
+                            href={merchantDetails.bank_proof_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-muted text-sm"
+                          >
+                            <FileText className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            <span className="flex-1">Bank Proof</span>
+                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                          </a>
+                        )}
+                        {(merchantDetails as any).payment_slip_url && (
+                          <a
+                            href={(merchantDetails as any).payment_slip_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-muted text-sm"
+                          >
+                            <FileText className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                            <span className="flex-1">Payment Slip</span>
+                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                          </a>
+                        )}
+                      </div>
+                      {merchantDetails.workshop_photos && merchantDetails.workshop_photos.length > 0 && (
+                        <div className="space-y-1.5">
+                          <div className="text-xs text-muted-foreground">Workshop photos ({merchantDetails.workshop_photos.length})</div>
+                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                            {merchantDetails.workshop_photos.map((photo: string, idx: number) => (
+                              <a
+                                key={idx}
+                                href={photo}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block aspect-square rounded border overflow-hidden hover:ring-2 hover:ring-primary"
+                                title={`Workshop photo ${idx + 1}`}
+                              >
+                                <img src={photo} alt={`Workshop ${idx + 1}`} className="w-full h-full object-cover" />
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {/* Demoted record */}
+                  {selectedCustomer.demoted_at && (
+                    <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 space-y-1">
+                      <div className="text-xs font-semibold text-orange-800 uppercase flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />Previously demoted
+                      </div>
+                      <div className="text-sm text-orange-900">
+                        Demoted from <strong>{selectedCustomer.demoted_from}</strong> on {formatDateShort(selectedCustomer.demoted_at)}
+                      </div>
+                      {selectedCustomer.demotion_reason && (
+                        <div className="text-xs text-orange-800">Reason: {selectedCustomer.demotion_reason}</div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Vehicle */}
                   {(selectedCustomer.car_make_name || selectedCustomer.car_model_name) && (
                     <div className="rounded-lg border p-4 space-y-1">
@@ -2338,7 +2561,7 @@ export default function Customers() {
                   )}
 
                   {/* Action buttons */}
-                  <div className="flex gap-2 pt-2 border-t">
+                  <div className="flex flex-wrap gap-2 pt-2 border-t">
                     {selectedCustomer.is_active ? (
                       <Button variant="outline" className="text-orange-600" onClick={() => { setCustomerToAction(selectedCustomer); setIsSuspendDialogOpen(true); }}>
                         <Ban className="h-4 w-4 mr-2" />Suspend account
@@ -2346,6 +2569,11 @@ export default function Customers() {
                     ) : (
                       <Button variant="outline" className="text-green-600" onClick={() => handleReactivateCustomer(selectedCustomer)}>
                         <RotateCcw className="h-4 w-4 mr-2" />Reactivate
+                      </Button>
+                    )}
+                    {selectedCustomer.customer_type === 'merchant' && (
+                      <Button variant="outline" className="text-amber-700 border-amber-300" onClick={() => { setDemoteReason(''); setDemoteOpen(true); }}>
+                        <UserCheck className="h-4 w-4 mr-2" />Demote to B2C
                       </Button>
                     )}
                     <Button variant="outline" className="text-red-600" onClick={() => { setCustomerToAction(selectedCustomer); setIsDeleteDialogOpen(true); }}>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,7 +49,9 @@ import {
   DollarSign,
   TrendingUp,
   RefreshCw,
-  Loader2
+  Loader2,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -69,8 +71,12 @@ interface Salesman {
 }
 
 interface ReferralOrder {
+  id: string;
+  order_no: string;
+  status: string;
   created_at: string;
   total: number;
+  delivery_method: string | null;
 }
 
 interface ReferredMerchant {
@@ -117,6 +123,8 @@ export default function Salesmen() {
   const [isReferralsSheetOpen, setIsReferralsSheetOpen] = useState(false);
   // 'all' or 'YYYY-MM' (e.g. '2026-05')
   const [referralsMonth, setReferralsMonth] = useState<string>('all');
+  // Set of merchant registration IDs that are currently expanded inline
+  const [expandedMerchants, setExpandedMerchants] = useState<Set<string>>(new Set());
   const [selectedSalesman, setSelectedSalesman] = useState<Salesman | null>(null);
   const [formData, setFormData] = useState<SalesmanFormData>(initialFormData);
   const [isSaving, setIsSaving] = useState(false);
@@ -393,10 +401,20 @@ export default function Salesmen() {
     setIsDeleteDialogOpen(true);
   };
 
+  const toggleExpandMerchant = (registrationId: string) => {
+    setExpandedMerchants(prev => {
+      const next = new Set(prev);
+      if (next.has(registrationId)) next.delete(registrationId);
+      else next.add(registrationId);
+      return next;
+    });
+  };
+
   const openReferralsSheet = async (salesman: Salesman) => {
     setSelectedSalesman(salesman);
     setIsReferralsSheetOpen(true);
     setReferralsMonth('all');
+    setExpandedMerchants(new Set());
     setReferrals([]);
     setReferralsLoading(true);
     try {
@@ -423,10 +441,11 @@ export default function Salesmen() {
       );
 
       // Pull each non-cancelled order so we can filter by month client-side
-      // without re-querying when the user changes the period.
+      // without re-querying when the user changes the period. Includes full
+      // order metadata so the expandable row can show a useful breakdown.
       const { data: orderRows } = await supabase
         .from('orders' as any)
-        .select('customer_profile_id, total, status, created_at')
+        .select('id, order_no, customer_profile_id, total, status, created_at, delivery_method')
         .in('customer_profile_id', customerIds)
         .neq('status', 'CANCELLED')
         .order('created_at', { ascending: false });
@@ -434,7 +453,14 @@ export default function Salesmen() {
       const ordersByCustomer = new Map<string, ReferralOrder[]>();
       for (const o of (orderRows as any[] | null) ?? []) {
         const list = ordersByCustomer.get(o.customer_profile_id) ?? [];
-        list.push({ created_at: o.created_at, total: Number(o.total) || 0 });
+        list.push({
+          id: o.id,
+          order_no: o.order_no || `ORD-${o.id?.slice(0, 8)}`,
+          status: o.status,
+          created_at: o.created_at,
+          total: Number(o.total) || 0,
+          delivery_method: o.delivery_method,
+        });
         ordersByCustomer.set(o.customer_profile_id, list);
       }
 
@@ -1106,43 +1132,99 @@ export default function Salesmen() {
                         const periodOrders = filterOrdersForMonth(r.orders);
                         const value = periodOrders.reduce((s, o) => s + o.total, 0);
                         const commission = r.status === 'APPROVED' ? (value * rate) / 100 : 0;
+                        const isExpanded = expandedMerchants.has(r.registration_id);
                         return (
-                          <TableRow key={r.registration_id}>
-                            <TableCell>
-                              <div className="font-medium">{r.company_name || r.full_name || '—'}</div>
-                              {r.full_name && r.full_name !== r.company_name && (
-                                <div className="text-xs text-muted-foreground">{r.full_name}</div>
-                              )}
-                              {r.email && (
-                                <div className="text-xs text-muted-foreground">{r.email}</div>
-                              )}
-                              <div className="text-xs text-muted-foreground mt-0.5">
-                                Registered {formatDate(r.registered_at)}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  r.status === 'APPROVED'
-                                    ? 'default'
-                                    : r.status === 'REJECTED'
-                                      ? 'destructive'
-                                      : 'secondary'
-                                }
-                              >
-                                {r.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">{periodOrders.length}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(value)}</TableCell>
-                            <TableCell className="text-right font-medium">
-                              {r.status === 'APPROVED' ? (
-                                <span className="text-emerald-700">{formatCurrency(commission)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
+                          <Fragment key={r.registration_id}>
+                            <TableRow
+                              className="cursor-pointer hover:bg-muted/40"
+                              onClick={() => toggleExpandMerchant(r.registration_id)}
+                            >
+                              <TableCell>
+                                <div className="flex items-start gap-1.5">
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                  )}
+                                  <div>
+                                    <div className="font-medium">{r.company_name || r.full_name || '—'}</div>
+                                    {r.full_name && r.full_name !== r.company_name && (
+                                      <div className="text-xs text-muted-foreground">{r.full_name}</div>
+                                    )}
+                                    {r.email && (
+                                      <div className="text-xs text-muted-foreground">{r.email}</div>
+                                    )}
+                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                      Registered {formatDate(r.registered_at)}
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    r.status === 'APPROVED'
+                                      ? 'default'
+                                      : r.status === 'REJECTED'
+                                        ? 'destructive'
+                                        : 'secondary'
+                                  }
+                                >
+                                  {r.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">{periodOrders.length}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(value)}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {r.status === 'APPROVED' ? (
+                                  <span className="text-emerald-700">{formatCurrency(commission)}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                            {isExpanded && (
+                              <TableRow className="bg-muted/20 hover:bg-muted/20">
+                                <TableCell colSpan={5} className="p-0">
+                                  <div className="px-4 py-3 border-t">
+                                    {periodOrders.length === 0 ? (
+                                      <div className="text-sm text-muted-foreground text-center py-4">
+                                        No orders {referralsMonth === 'all' ? 'yet' : 'in this period'}.
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                                          {periodOrders.length} order{periodOrders.length === 1 ? '' : 's'} · {formatCurrency(value)}
+                                        </div>
+                                        <div className="space-y-1">
+                                          {periodOrders.map(o => (
+                                            <div
+                                              key={o.id}
+                                              className="grid grid-cols-12 gap-2 items-center text-sm py-1.5 px-2 rounded hover:bg-white"
+                                            >
+                                              <div className="col-span-3 font-mono text-xs">{o.order_no}</div>
+                                              <div className="col-span-3 text-xs text-muted-foreground">
+                                                {formatDate(o.created_at)}
+                                              </div>
+                                              <div className="col-span-2">
+                                                <Badge variant="secondary" className="text-[10px]">{o.status}</Badge>
+                                              </div>
+                                              <div className="col-span-2 text-xs capitalize text-muted-foreground">
+                                                {o.delivery_method ?? '—'}
+                                              </div>
+                                              <div className="col-span-2 text-right font-medium">
+                                                {formatCurrency(o.total)}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </Fragment>
                         );
                       })}
                     </TableBody>
