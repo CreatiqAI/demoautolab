@@ -6,6 +6,7 @@ import Footer from '@/components/Footer';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -13,13 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  MapPin,
-  Phone,
-  Search,
-  Award,
-  Store
-} from 'lucide-react';
+import { MapPin, Search, Award, Store, Loader2, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Shop {
@@ -54,18 +49,14 @@ const MALAYSIAN_STATES = [
   'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan',
   'Pahang', 'Penang', 'Perak', 'Perlis', 'Sabah',
   'Sarawak', 'Selangor', 'Terengganu', 'Kuala Lumpur',
-  'Labuan', 'Putrajaya'
+  'Labuan', 'Putrajaya',
 ];
 
 const SERVICE_TYPES = [
   'All Services',
-  'Installation Service',
-  'Repair & Maintenance',
-  'Consultation',
-  'Product Sourcing',
-  'Warranty Service',
-  'Custom Orders',
-  'Delivery Available'
+  'Installation Service', 'Repair & Maintenance', 'Consultation',
+  'Product Sourcing', 'Warranty Service', 'Custom Orders',
+  'Delivery Available',
 ];
 
 export default function FindShops() {
@@ -80,55 +71,46 @@ export default function FindShops() {
   const [currentPhotoIndexes, setCurrentPhotoIndexes] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {
-    fetchShops();
+    void fetchShops();
   }, []);
 
   useEffect(() => {
     filterShops();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shops, selectedState, selectedService, searchQuery]);
 
-  // Auto-rotate shop photos
+  // Auto-rotate shop photos for cards that have multiple photos
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentPhotoIndexes((prev) => {
-        const newIndexes = { ...prev };
+        const next = { ...prev };
         filteredShops.forEach((shop) => {
           if (shop.shop_photos && shop.shop_photos.length > 1) {
-            const currentIndex = newIndexes[shop.id] || 0;
-            newIndexes[shop.id] = (currentIndex + 1) % shop.shop_photos.length;
+            next[shop.id] = ((next[shop.id] ?? 0) + 1) % shop.shop_photos.length;
           }
         });
-        return newIndexes;
+        return next;
       });
     }, 3000);
-
     return () => clearInterval(interval);
   }, [filteredShops]);
 
   const fetchShops = async () => {
     try {
       setLoading(true);
-      // CRITICAL CHANGE: Only show Panel tier shops (not Professional tier)
-      // Panel tier is RM350/month, invitation-only, top 100 authorized shops
       const { data, error } = await supabase
         .from('premium_partnerships' as any)
         .select('*')
-        .eq('subscription_plan', 'panel') // ONLY Panel tier
+        .eq('subscription_plan', 'panel')
         .eq('subscription_status', 'ACTIVE')
         .eq('admin_approved', true)
-        .gt('subscription_end_date', new Date().toISOString()) // Only active, non-expired subscriptions
+        .gt('subscription_end_date', new Date().toISOString())
         .order('is_featured', { ascending: false })
         .order('total_views', { ascending: false });
-
       if (error) throw error;
-
       setShops((data as any) || []);
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: 'Failed to load authorized Panel shops',
-        variant: 'destructive'
-      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: 'Failed to load authorized Panel shops', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -136,31 +118,18 @@ export default function FindShops() {
 
   const filterShops = () => {
     let filtered = [...shops];
-
-    if (selectedState !== 'All States') {
-      filtered = filtered.filter(shop => shop.state === selectedState);
-    }
-
-    if (selectedService !== 'All Services') {
-      filtered = filtered.filter(shop =>
-        shop.services_offered?.includes(selectedService)
-      );
-    }
-
+    if (selectedState !== 'All States') filtered = filtered.filter((s) => s.state === selectedState);
+    if (selectedService !== 'All Services') filtered = filtered.filter((s) => s.services_offered?.includes(selectedService));
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(shop =>
-        shop.business_name.toLowerCase().includes(query) ||
-        shop.city.toLowerCase().includes(query) ||
-        shop.description?.toLowerCase().includes(query)
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (s) =>
+          s.business_name.toLowerCase().includes(q) ||
+          s.city.toLowerCase().includes(q) ||
+          s.description?.toLowerCase().includes(q)
       );
     }
-
     setFilteredShops(filtered);
-  };
-
-  const handleViewShop = async (shop: Shop) => {
-    navigate(`/shop/${shop.id}`);
   };
 
   const handleClearFilters = () => {
@@ -169,151 +138,130 @@ export default function FindShops() {
     setSearchQuery('');
   };
 
-  const hasActiveFilters = selectedState !== 'All States' || selectedService !== 'All Services' || searchQuery;
+  const hasActiveFilters =
+    selectedState !== 'All States' || selectedService !== 'All Services' || !!searchQuery;
 
   return (
     <div className="bg-gray-50 flex flex-col">
       <Header />
 
-      <main className="min-h-[calc(100vh-80px)] container mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8 flex-1">
-        {/* Page Header */}
-        <div className="mb-6 sm:mb-8 border-b border-gray-200 pb-4 sm:pb-6 text-center lg:text-left">
-          <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-2 sm:gap-3 mb-3">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide">Find Authorized <span className="text-lime-600 italic">Shops</span></h1>
-            <Badge className="bg-purple-600 text-white text-[10px] uppercase font-bold self-center sm:self-start sm:mt-2 hover:bg-purple-600 cursor-default">Panel Members Only</Badge>
+      <main className="container mx-auto px-3 sm:px-6 lg:px-8 py-6 md:py-8 min-h-[calc(100vh-80px)] flex-1">
+        {/* Page header */}
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+              Find Authorized Shops
+              <Badge className="bg-amber-500 hover:bg-amber-600 text-white">
+                <Sparkles className="h-3 w-3 mr-1" />Panel
+              </Badge>
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Our top authorized Panel shops across Malaysia — invitation only.
+            </p>
           </div>
-          <p className="text-xs sm:text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">Our top 100 authorized Panel shops across Malaysia - invitation only</p>
         </div>
 
-        {/* Search & Filters */}
-        <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 mb-6 shadow-md">
-          <div className="grid md:grid-cols-4 gap-4">
-            {/* Search Input */}
-            <div className="md:col-span-2 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search shops, cities..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-12 bg-gray-50 border-gray-200 rounded-xl text-[15px]"
-              />
+        {/* Filters card */}
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="grid md:grid-cols-4 gap-3">
+              <div className="md:col-span-2 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search shop name, city, description…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Select value={selectedState} onValueChange={setSelectedState}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All states" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[280px]">
+                  {MALAYSIAN_STATES.map((state) => (
+                    <SelectItem key={state} value={state}>
+                      {state}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedService} onValueChange={setSelectedService}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All services" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[280px]">
+                  {SERVICE_TYPES.map((service) => (
+                    <SelectItem key={service} value={service}>
+                      {service}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            {hasActiveFilters && (
+              <div className="mt-3 pt-3 border-t flex items-center justify-between gap-3 flex-wrap">
+                <span className="text-xs text-gray-500">
+                  Showing <span className="font-semibold text-gray-900">{filteredShops.length}</span> of {shops.length} shops
+                </span>
+                <Button variant="ghost" size="sm" onClick={handleClearFilters} className="h-7">
+                  Clear filters
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-            {/* State Filter */}
-            <Select value={selectedState} onValueChange={setSelectedState}>
-              <SelectTrigger className="h-12 bg-gray-50 border-gray-200 rounded-xl">
-                <SelectValue placeholder="All States" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border border-gray-200 rounded-xl shadow-lg max-h-[280px]">
-                {MALAYSIAN_STATES.map((state) => (
-                  <SelectItem
-                    key={state}
-                    value={state}
-                    className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5"
-                  >
-                    {state}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Service Filter */}
-            <Select value={selectedService} onValueChange={setSelectedService}>
-              <SelectTrigger className="h-12 bg-gray-50 border-gray-200 rounded-xl">
-                <SelectValue placeholder="All Services" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border border-gray-200 rounded-xl shadow-lg max-h-[280px]">
-                {SERVICE_TYPES.map((service) => (
-                  <SelectItem
-                    key={service}
-                    value={service}
-                    className="cursor-pointer hover:bg-lime-50 focus:bg-lime-50 focus:text-lime-700 rounded-lg mx-1 my-0.5"
-                  >
-                    {service}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Active Filters */}
-          {hasActiveFilters && (
-            <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-3 flex-wrap">
-              <span className="text-[13px] font-medium uppercase tracking-wide text-gray-500">
-                Showing {filteredShops.length} of {shops.length} shops
-              </span>
-              <Button
-                variant="ghost"
-                onClick={handleClearFilters}
-                className="text-[13px] font-bold uppercase tracking-wide text-lime-600 hover:text-lime-700 h-8 px-3"
-              >
-                Clear Filters
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Shops Grid */}
+        {/* Shops list */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <Store className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
-              <p className="text-gray-500 text-[15px]">Finding shops...</p>
-            </div>
+          <div className="flex items-center justify-center py-20 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            Finding shops...
           </div>
         ) : filteredShops.length === 0 ? (
-          <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-8 text-center shadow-md">
-            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <MapPin className="h-6 w-6 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-heading font-bold uppercase italic text-gray-900 mb-2">No Shops Found</h3>
-            <p className="text-[15px] text-gray-500 mb-5">
-              Try adjusting your filters to see more results
-            </p>
-            {hasActiveFilters && (
-              <Button
-                variant="outline"
-                onClick={handleClearFilters}
-                className="px-6 border-gray-200 rounded-lg text-[13px] h-10"
-              >
-                Clear Filters
-              </Button>
-            )}
-          </div>
+          <Card>
+            <CardContent className="py-12 text-center">
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <MapPin className="h-6 w-6 text-gray-400" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 mb-1">No shops found</h3>
+              <p className="text-sm text-gray-500 mb-4">Try adjusting your filters to see more results.</p>
+              {hasActiveFilters && (
+                <Button variant="outline" onClick={handleClearFilters}>
+                  Clear filters
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredShops.map((shop) => {
               const currentPhotoIndex = currentPhotoIndexes[shop.id] || 0;
               const hasPhotos = shop.shop_photos && shop.shop_photos.length > 0;
-
               return (
-                <div
+                <Card
                   key={shop.id}
-                  onClick={() => handleViewShop(shop)}
-                  className={`bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer group ${
-                    shop.is_featured ? 'ring-2 ring-lime-400' : ''
+                  onClick={() => navigate(`/shop/${shop.id}`)}
+                  className={`overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${
+                    shop.is_featured ? 'ring-1 ring-amber-300' : ''
                   }`}
                 >
-                  {/* Shop Photo */}
-                  <div className="relative h-48 overflow-hidden bg-gray-100">
+                  {/* Photo */}
+                  <div className="relative h-40 sm:h-44 bg-gray-100 overflow-hidden">
                     {hasPhotos ? (
                       <>
                         <img
                           src={shop.shop_photos[currentPhotoIndex]}
-                          alt={`${shop.business_name}`}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                          alt={shop.business_name}
+                          className="w-full h-full object-cover"
                         />
-
-                        {/* Photo Indicators */}
                         {shop.shop_photos.length > 1 && (
-                          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
-                            {shop.shop_photos.map((_, index) => (
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                            {shop.shop_photos.map((_, idx) => (
                               <div
-                                key={index}
+                                key={idx}
                                 className={`h-1 rounded-full transition-all ${
-                                  index === currentPhotoIndex
-                                    ? 'w-4 bg-white'
-                                    : 'w-1 bg-white/60'
+                                  idx === currentPhotoIndex ? 'w-4 bg-white' : 'w-1 bg-white/60'
                                 }`}
                               />
                             ))}
@@ -322,56 +270,54 @@ export default function FindShops() {
                       </>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Store className="h-16 w-16 text-gray-300" />
+                        <Store className="h-12 w-12 text-gray-300" />
                       </div>
                     )}
-
-                    {/* Featured Badge */}
                     {shop.is_featured && (
-                      <Badge className="absolute top-3 right-3 bg-lime-500 text-white border-0 text-[10px] font-bold uppercase tracking-wider">
+                      <Badge className="absolute top-2 right-2 bg-amber-500 hover:bg-amber-500 text-white text-[10px]">
                         <Award className="h-3 w-3 mr-1" />
                         Featured
                       </Badge>
                     )}
-
-                    {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
 
-                  {/* Shop Info */}
-                  <div className="p-4">
-                    <div className="mb-2">
-                      <h3 className="font-heading font-bold text-gray-900 uppercase text-[15px] line-clamp-1 group-hover:text-lime-600 transition-colors">
+                  {/* Body */}
+                  <CardContent className="p-4 space-y-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-base line-clamp-1">
                         {shop.business_name}
                       </h3>
-                      <p className="text-xs text-gray-500 mt-0.5">{shop.business_type}</p>
+                      {shop.business_type && (
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{shop.business_type}</p>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-3">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
                       <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span className="line-clamp-1">{shop.city}, {shop.state}</span>
+                      <span className="line-clamp-1">
+                        {[shop.city, shop.state].filter(Boolean).join(', ')}
+                      </span>
                     </div>
 
-                    {/* Services Tags */}
+                    {/* Service tags */}
                     {shop.services_offered && shop.services_offered.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wide rounded">
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge variant="secondary" className="text-[10px]">
                           {shop.services_offered[0]}
-                        </span>
+                        </Badge>
                         {shop.services_offered.length > 1 && (
-                          <span className="px-2 py-0.5 border border-gray-200 text-gray-500 text-[10px] font-bold uppercase tracking-wide rounded">
+                          <Badge variant="outline" className="text-[10px]">
                             +{shop.services_offered.length - 1} more
-                          </span>
+                          </Badge>
                         )}
                       </div>
                     )}
 
-                    {/* CTA Button */}
-                    <Button variant="hero" className="w-full text-[13px] h-10">
-                      View Details
+                    <Button variant="outline" className="w-full" size="sm">
+                      View details
                     </Button>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>

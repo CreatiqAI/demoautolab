@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   MapPin,
   Phone,
@@ -23,7 +25,10 @@ import {
   Store,
   ChevronLeft,
   ChevronRight,
-  X
+  Loader2,
+  Sparkles,
+  Award,
+  CheckCircle2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -63,24 +68,24 @@ export default function ShopDetails() {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
+  const [submittingInquiry, setSubmittingInquiry] = useState(false);
   const [inquiryForm, setInquiryForm] = useState({
     customer_name: '',
     customer_phone: '',
     customer_email: '',
-    message: ''
+    message: '',
   });
 
   useEffect(() => {
-    fetchShopDetails();
+    void fetchShopDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shopId]);
 
   useEffect(() => {
     if (!shop || !shop.shop_photos || shop.shop_photos.length <= 1) return;
-
     const interval = setInterval(() => {
       setCurrentPhotoIndex((prev) => (prev + 1) % shop.shop_photos.length);
     }, 4000);
-
     return () => clearInterval(interval);
   }, [shop]);
 
@@ -93,23 +98,17 @@ export default function ShopDetails() {
         .eq('subscription_status', 'ACTIVE')
         .eq('admin_approved', true)
         .maybeSingle();
-
       if (error) throw error;
-
       setShop(data as any);
       await (supabase.rpc as any)('increment_partnership_views', { p_partnership_id: shopId });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to load shop details',
-        variant: 'destructive'
-      });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load shop details', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleContactClick = async (type: string) => {
+  const handleContactClick = async () => {
     if (!shop) return;
     await (supabase.rpc as any)('increment_partnership_clicks', { p_partnership_id: shop.id });
   };
@@ -117,7 +116,6 @@ export default function ShopDetails() {
   const handleNavigate = async () => {
     if (!shop) return;
     await (supabase.rpc as any)('increment_partnership_clicks', { p_partnership_id: shop.id });
-
     if (shop.latitude && shop.longitude) {
       window.open(
         `https://www.google.com/maps/dir/?api=1&destination=${shop.latitude},${shop.longitude}`,
@@ -134,44 +132,40 @@ export default function ShopDetails() {
 
   const handleSendInquiry = async () => {
     if (!shop) return;
-
+    setSubmittingInquiry(true);
     try {
       const { error } = await supabase
         .from('partner_inquiries' as any)
-        .insert([{
-          partnership_id: shop.id,
-          ...inquiryForm,
-          inquiry_type: 'General Question'
-        } as any]);
-
+        .insert([
+          {
+            partnership_id: shop.id,
+            ...inquiryForm,
+            inquiry_type: 'General Question',
+          } as any,
+        ]);
       if (error) throw error;
-
       await (supabase.rpc as any)('increment_partnership_inquiries', { p_partnership_id: shop.id });
-
       toast({
-        title: 'Inquiry Sent',
-        description: 'Your message has been sent to the shop. They will contact you soon.'
+        title: 'Inquiry sent',
+        description: 'Your message has been sent to the shop. They will contact you soon.',
+        variant: 'success',
       });
-
       setIsInquiryModalOpen(false);
       setInquiryForm({ customer_name: '', customer_phone: '', customer_email: '', message: '' });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to send inquiry. Please try again.',
-        variant: 'destructive'
-      });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to send inquiry. Please try again.', variant: 'destructive' });
+    } finally {
+      setSubmittingInquiry(false);
     }
   };
 
   const nextPhoto = () => {
     if (!shop?.shop_photos) return;
-    setCurrentPhotoIndex((prev) => (prev + 1) % shop.shop_photos.length);
+    setCurrentPhotoIndex((p) => (p + 1) % shop.shop_photos.length);
   };
-
   const prevPhoto = () => {
     if (!shop?.shop_photos) return;
-    setCurrentPhotoIndex((prev) => (prev - 1 + shop.shop_photos.length) % shop.shop_photos.length);
+    setCurrentPhotoIndex((p) => (p - 1 + shop.shop_photos.length) % shop.shop_photos.length);
   };
 
   if (loading) {
@@ -180,7 +174,7 @@ export default function ShopDetails() {
         <Header />
         <div className="min-h-[calc(100vh-80px)] flex-1 flex items-center justify-center">
           <div className="text-center">
-            <Store className="h-12 w-12 animate-pulse mx-auto mb-4 text-lime-600" />
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-lime-600" />
             <p className="text-gray-500 text-sm">Loading shop details...</p>
           </div>
         </div>
@@ -194,19 +188,20 @@ export default function ShopDetails() {
       <div className="bg-gray-50 flex flex-col">
         <Header />
         <div className="min-h-[calc(100vh-80px)] flex-1 flex items-center justify-center">
-          <div className="text-center px-4">
-            <div className="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Store className="h-8 w-8 text-gray-400" />
-            </div>
-            <h1 className="text-xl font-heading font-bold uppercase italic text-gray-900 mb-2">Shop Not Found</h1>
-            <button
-              onClick={() => navigate('/find-shops')}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-lime-600 text-white font-bold uppercase tracking-widest text-[10px] hover:bg-lime-700 transition-all rounded-lg"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Find Shops
-            </button>
-          </div>
+          <Card className="max-w-md mx-auto text-center">
+            <CardContent className="py-10">
+              <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <Store className="h-8 w-8 text-gray-400" />
+              </div>
+              <h1 className="text-xl font-semibold text-gray-900 mb-2">Shop not found</h1>
+              <p className="text-sm text-gray-500 mb-4">
+                This listing may be inactive or no longer available.
+              </p>
+              <Button onClick={() => navigate('/find-shops')}>
+                <ArrowLeft className="h-4 w-4 mr-2" />Back to Find Shops
+              </Button>
+            </CardContent>
+          </Card>
         </div>
         <Footer />
       </div>
@@ -214,81 +209,95 @@ export default function ShopDetails() {
   }
 
   const displayPhotos = shop.shop_photos && shop.shop_photos.length > 0 ? shop.shop_photos : [];
+  const isPanel = shop.subscription_plan === 'panel';
 
   return (
     <div className="bg-gray-50 flex flex-col">
       <Header />
 
-      <main className="min-h-[calc(100vh-80px)] container mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8 flex-1">
-        {/* Back Button */}
-        <button
+      <main className="container mx-auto px-3 sm:px-6 lg:px-8 py-6 md:py-8 min-h-[calc(100vh-80px)] flex-1">
+        {/* Back link */}
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => navigate('/find-shops')}
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-lime-700 mb-6 text-sm font-medium transition-colors"
+          className="mb-4 -ml-2"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back to Find Shops
-        </button>
+        </Button>
 
-        {/* Shop Header */}
-        <div className="mb-6 md:mb-8 border-b border-gray-200 pb-6">
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-heading font-bold text-gray-900 uppercase italic mb-2">
-            {shop.business_name}
-          </h1>
-          <div className="flex items-center gap-3 text-xs md:text-sm text-gray-500">
-            <span>{shop.business_type}</span>
-            <span>•</span>
-            <span className="flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" />
-              {shop.city}, {shop.state}
-            </span>
+        {/* Header */}
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
+              {shop.business_name}
+              {isPanel && (
+                <Badge className="bg-amber-500 hover:bg-amber-600 text-white">
+                  <Sparkles className="h-3 w-3 mr-1" />Panel
+                </Badge>
+              )}
+              {shop.is_featured && (
+                <Badge className="bg-lime-500 hover:bg-lime-600 text-white">
+                  <Award className="h-3 w-3 mr-1" />Featured
+                </Badge>
+              )}
+            </h1>
+            <div className="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">
+              {shop.business_type && <span>{shop.business_type}</span>}
+              {shop.business_type && (shop.city || shop.state) && <span>·</span>}
+              {(shop.city || shop.state) && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {[shop.city, shop.state].filter(Boolean).join(', ')}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Photo Gallery */}
+        {/* Photo gallery */}
         {displayPhotos.length > 0 && (
-          <div className="mb-6 md:mb-8">
+          <div className="mb-6">
             <div
-              className="relative rounded-xl md:rounded-2xl overflow-hidden cursor-pointer group bg-gray-100"
+              className="relative rounded-lg overflow-hidden cursor-pointer group bg-gray-100 border"
               onClick={() => setIsImageModalOpen(true)}
             >
               <img
                 src={displayPhotos[currentPhotoIndex]}
-                alt={`${shop.business_name}`}
-                className="w-full h-[180px] sm:h-[220px] md:h-[320px] lg:h-[400px] object-cover group-hover:scale-105 transition-transform duration-700"
+                alt={shop.business_name}
+                className="w-full h-[200px] sm:h-[260px] md:h-[360px] lg:h-[440px] object-cover transition-transform duration-500 group-hover:scale-[1.02]"
               />
-
-              {/* Overlay */}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 px-4 py-2 rounded-full text-sm text-gray-900 font-bold uppercase tracking-wider">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 px-3 py-1.5 rounded text-xs text-gray-900 font-medium">
                   Click to enlarge
                 </div>
               </div>
-
-              {/* Navigation */}
               {displayPhotos.length > 1 && (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); prevPhoto(); }}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow-lg transition z-10"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow-md transition z-10"
+                    aria-label="Previous photo"
                   >
-                    <ChevronLeft className="w-5 h-5" />
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); nextPhoto(); }}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow-lg transition z-10"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow-md transition z-10"
+                    aria-label="Next photo"
                   >
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-4 h-4" />
                   </button>
-
-                  {/* Indicators */}
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                    {displayPhotos.map((_, index) => (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                    {displayPhotos.map((_, idx) => (
                       <button
-                        key={index}
-                        onClick={(e) => { e.stopPropagation(); setCurrentPhotoIndex(index); }}
-                        className={`h-2 rounded-full transition-all ${
-                          index === currentPhotoIndex ? 'w-6 bg-white' : 'w-2 bg-white/50'
+                        key={idx}
+                        onClick={(e) => { e.stopPropagation(); setCurrentPhotoIndex(idx); }}
+                        className={`h-1.5 rounded-full transition-all ${
+                          idx === currentPhotoIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/60'
                         }`}
+                        aria-label={`Photo ${idx + 1}`}
                       />
                     ))}
                   </div>
@@ -298,164 +307,178 @@ export default function ShopDetails() {
           </div>
         )}
 
-        {/* Content Grid */}
-        <div className="grid lg:grid-cols-3 gap-5 md:gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-5 md:space-y-6">
+        {/* Content grid */}
+        <div className="grid lg:grid-cols-3 gap-5">
+          {/* Main content */}
+          <div className="lg:col-span-2 space-y-5">
             {/* About */}
-            <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 md:p-6 shadow-md">
-              <h2 className="text-base font-heading font-bold uppercase italic text-gray-900 mb-3 pl-3 border-l-4 border-lime-600">About</h2>
-              <p className="text-sm text-gray-600 leading-relaxed">{shop.description}</p>
-            </div>
+            {shop.description && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">About</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                    {shop.description}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Services */}
             {shop.services_offered && shop.services_offered.length > 0 && (
-              <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 md:p-6 shadow-md">
-                <h2 className="text-base font-heading font-bold uppercase italic text-gray-900 mb-4 pl-3 border-l-4 border-lime-600">Services Offered</h2>
-                <div className="grid sm:grid-cols-2 gap-2">
-                  {shop.services_offered.map((service, index) => (
-                    <div key={index} className="flex items-center gap-2.5 p-3 rounded-lg bg-gray-50 border border-gray-100">
-                      <div className="w-1.5 h-1.5 bg-lime-600 rounded-full flex-shrink-0"></div>
-                      <span className="text-gray-700 text-xs font-medium">{service}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Services Offered</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {shop.services_offered.map((service, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 px-3 py-2 rounded-md border bg-gray-50"
+                      >
+                        <CheckCircle2 className="h-4 w-4 text-lime-600 flex-shrink-0" />
+                        <span className="text-sm text-gray-700">{service}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
-            {/* Operating Hours */}
+            {/* Operating hours */}
             {shop.operating_hours && Object.keys(shop.operating_hours).length > 0 && (
-              <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 md:p-6 shadow-md">
-                <h2 className="text-base font-heading font-bold uppercase italic text-gray-900 mb-4 pl-3 border-l-4 border-lime-600 flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Operating Hours
-                </h2>
-                <div className="space-y-2">
-                  {Object.entries(shop.operating_hours).map(([day, hours]) => (
-                    <div key={day} className="flex justify-between py-2 border-b border-gray-100 last:border-0 text-sm">
-                      <span className="capitalize text-gray-900 font-medium">{day}</span>
-                      <span className="text-gray-500">{hours as string}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Operating Hours
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <dl className="divide-y divide-gray-100">
+                    {Object.entries(shop.operating_hours).map(([day, hours]) => (
+                      <div key={day} className="flex justify-between py-2 text-sm">
+                        <dt className="capitalize text-gray-900 font-medium">{day}</dt>
+                        <dd className="text-gray-500">{hours as string}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </CardContent>
+              </Card>
             )}
 
             {/* Location */}
-            <div className="bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 md:p-6 shadow-md">
-              <h2 className="text-base font-heading font-bold uppercase italic text-gray-900 mb-4 pl-3 border-l-4 border-lime-600">Location</h2>
-              <div className="p-3 bg-gray-50 rounded-lg mb-4">
-                <div className="flex items-start gap-2.5">
-                  <MapPin className="h-4 w-4 text-lime-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-gray-900 text-sm">{shop.address}</p>
-                    <p className="text-gray-500 text-xs mt-0.5">
-                      {shop.postcode} {shop.city}, {shop.state}
-                    </p>
-                  </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Location
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border bg-gray-50 p-3 mb-3">
+                  <p className="text-sm font-medium text-gray-900">{shop.address}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {[shop.postcode, shop.city, shop.state].filter(Boolean).join(' · ')}
+                  </p>
                 </div>
-              </div>
-              <button
-                onClick={handleNavigate}
-                className="w-full py-2.5 border border-gray-200 text-gray-700 font-bold uppercase tracking-widest text-[10px] hover:bg-lime-600 hover:text-white hover:border-lime-600 transition-all rounded-lg flex items-center justify-center gap-1.5"
-              >
-                <Navigation className="h-3.5 w-3.5" />
-                Get Directions
-              </button>
-            </div>
+                <Button variant="outline" className="w-full" onClick={handleNavigate}>
+                  <Navigation className="h-4 w-4 mr-2" />
+                  Get directions
+                </Button>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Sticky Sidebar */}
+          {/* Sidebar */}
           <div className="lg:col-span-1">
-            <div className="sticky top-24 bg-white/80 backdrop-blur-xl border border-gray-100 rounded-xl p-4 md:p-5 shadow-lg">
-              <h3 className="text-base font-heading font-bold uppercase italic text-gray-900 mb-4">Contact</h3>
+            <Card className="lg:sticky lg:top-24">
+              <CardHeader>
+                <CardTitle className="text-base">Contact</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {shop.contact_phone && (
+                  <a
+                    href={`tel:${shop.contact_phone}`}
+                    onClick={() => void handleContactClick()}
+                    className="flex items-center gap-3 p-3 rounded-md border hover:border-lime-500 hover:bg-lime-50/50 transition-colors group"
+                  >
+                    <div className="w-9 h-9 bg-gray-100 group-hover:bg-lime-100 rounded-md flex items-center justify-center">
+                      <Phone className="h-4 w-4 text-gray-600 group-hover:text-lime-700" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">{shop.contact_phone}</span>
+                  </a>
+                )}
 
-              <div className="space-y-2.5 mb-4">
-                {/* Phone */}
-                <button
-                  className="w-full flex items-center gap-2.5 p-3 rounded-lg border border-gray-200 hover:border-lime-600 hover:bg-lime-50 text-left transition group"
-                  onClick={() => {
-                    handleContactClick('phone');
-                    window.location.href = `tel:${shop.contact_phone}`;
-                  }}
-                >
-                  <div className="w-9 h-9 bg-gray-100 group-hover:bg-lime-100 rounded-lg flex items-center justify-center">
-                    <Phone className="h-4 w-4 text-gray-600 group-hover:text-lime-600" />
-                  </div>
-                  <span className="text-gray-900 font-medium text-sm">{shop.contact_phone}</span>
-                </button>
-
-                {/* Email */}
                 {shop.contact_email && (
-                  <button
-                    className="w-full flex items-center gap-2.5 p-3 rounded-lg border border-gray-200 hover:border-lime-600 hover:bg-lime-50 text-left transition group"
-                    onClick={() => {
-                      handleContactClick('email');
-                      window.location.href = `mailto:${shop.contact_email}`;
-                    }}
+                  <a
+                    href={`mailto:${shop.contact_email}`}
+                    onClick={() => void handleContactClick()}
+                    className="flex items-center gap-3 p-3 rounded-md border hover:border-lime-500 hover:bg-lime-50/50 transition-colors group"
                   >
-                    <div className="w-9 h-9 bg-gray-100 group-hover:bg-lime-100 rounded-lg flex items-center justify-center">
-                      <Mail className="h-4 w-4 text-gray-600 group-hover:text-lime-600" />
+                    <div className="w-9 h-9 bg-gray-100 group-hover:bg-lime-100 rounded-md flex items-center justify-center">
+                      <Mail className="h-4 w-4 text-gray-600 group-hover:text-lime-700" />
                     </div>
-                    <span className="text-gray-900 text-xs font-medium truncate">{shop.contact_email}</span>
-                  </button>
+                    <span className="text-sm text-gray-900 truncate">{shop.contact_email}</span>
+                  </a>
                 )}
 
-                {/* Website */}
                 {shop.website_url && (
-                  <button
-                    className="w-full flex items-center gap-2.5 p-3 rounded-lg border border-gray-200 hover:border-lime-600 hover:bg-lime-50 text-left transition group"
-                    onClick={() => {
-                      handleContactClick('website');
-                      window.open(shop.website_url, '_blank');
-                    }}
+                  <a
+                    href={shop.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => void handleContactClick()}
+                    className="flex items-center gap-3 p-3 rounded-md border hover:border-lime-500 hover:bg-lime-50/50 transition-colors group"
                   >
-                    <div className="w-9 h-9 bg-gray-100 group-hover:bg-lime-100 rounded-lg flex items-center justify-center">
-                      <Globe className="h-4 w-4 text-gray-600 group-hover:text-lime-600" />
+                    <div className="w-9 h-9 bg-gray-100 group-hover:bg-lime-100 rounded-md flex items-center justify-center">
+                      <Globe className="h-4 w-4 text-gray-600 group-hover:text-lime-700" />
                     </div>
-                    <span className="text-gray-900 font-medium text-sm flex-1">Visit Website</span>
+                    <span className="text-sm font-medium text-gray-900 flex-1">Website</span>
                     <ExternalLink className="h-3.5 w-3.5 text-gray-400" />
-                  </button>
+                  </a>
                 )}
 
-                {/* Social Media */}
                 {(shop.facebook_url || shop.instagram_url) && (
                   <div className="flex gap-2 pt-1">
                     {shop.facebook_url && (
-                      <button
-                        className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg border border-gray-200 hover:border-blue-600 hover:bg-blue-50 transition group"
-                        onClick={() => {
-                          handleContactClick('facebook');
-                          window.open(shop.facebook_url, '_blank');
-                        }}
+                      <a
+                        href={shop.facebook_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => void handleContactClick()}
+                        className="flex-1 flex items-center justify-center p-2.5 rounded-md border hover:border-blue-500 hover:bg-blue-50/50 transition-colors"
+                        aria-label="Facebook"
                       >
-                        <Facebook className="h-4 w-4 text-gray-600 group-hover:text-blue-600" />
-                      </button>
+                        <Facebook className="h-4 w-4 text-gray-600" />
+                      </a>
                     )}
                     {shop.instagram_url && (
-                      <button
-                        className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg border border-gray-200 hover:border-pink-600 hover:bg-pink-50 transition group"
-                        onClick={() => {
-                          handleContactClick('instagram');
-                          window.open(shop.instagram_url, '_blank');
-                        }}
+                      <a
+                        href={shop.instagram_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => void handleContactClick()}
+                        className="flex-1 flex items-center justify-center p-2.5 rounded-md border hover:border-pink-500 hover:bg-pink-50/50 transition-colors"
+                        aria-label="Instagram"
                       >
-                        <Instagram className="h-4 w-4 text-gray-600 group-hover:text-pink-600" />
-                      </button>
+                        <Instagram className="h-4 w-4 text-gray-600" />
+                      </a>
                     )}
                   </div>
                 )}
-              </div>
 
-              {/* Primary CTA */}
-              <button
-                onClick={() => setIsInquiryModalOpen(true)}
-                className="w-full py-3 bg-lime-600 text-white font-bold uppercase tracking-widest text-[10px] hover:bg-lime-700 transition-all rounded-lg flex items-center justify-center gap-1.5"
-              >
-                <MessageSquare className="h-4 w-4" />
-                Send Inquiry
-              </button>
-            </div>
+                <Button
+                  className="w-full mt-2 bg-lime-600 hover:bg-lime-700"
+                  onClick={() => setIsInquiryModalOpen(true)}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Send inquiry
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>
@@ -470,26 +493,26 @@ export default function ShopDetails() {
               <>
                 <img
                   src={displayPhotos[currentPhotoIndex]}
-                  alt={`${shop.business_name}`}
+                  alt={shop.business_name}
                   className="max-w-full max-h-[90vh] object-contain"
                 />
-
                 {displayPhotos.length > 1 && (
                   <>
                     <button
                       onClick={prevPhoto}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-3 shadow-lg transition"
+                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2.5 shadow-lg transition"
+                      aria-label="Previous photo"
                     >
-                      <ChevronLeft className="w-6 h-6" />
+                      <ChevronLeft className="w-5 h-5" />
                     </button>
                     <button
                       onClick={nextPhoto}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-3 shadow-lg transition"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2.5 shadow-lg transition"
+                      aria-label="Next photo"
                     >
-                      <ChevronRight className="w-6 h-6" />
+                      <ChevronRight className="w-5 h-5" />
                     </button>
-
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 text-gray-900 px-4 py-2 rounded-full text-sm font-bold">
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 text-gray-900 px-3 py-1.5 rounded-full text-xs font-medium">
                       {currentPhotoIndex + 1} / {displayPhotos.length}
                     </div>
                   </>
@@ -502,63 +525,83 @@ export default function ShopDetails() {
 
       {/* Inquiry Modal */}
       <Dialog open={isInquiryModalOpen} onOpenChange={setIsInquiryModalOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-white border-0 rounded-2xl">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-heading font-bold uppercase italic text-gray-900">Send Inquiry</DialogTitle>
-            <p className="text-sm text-gray-500">Send a message to {shop.business_name}</p>
+            <DialogTitle>Send inquiry</DialogTitle>
+            <DialogDescription>
+              Send a message to {shop.business_name}. They'll reach out using the contact details you provide.
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 mt-4">
-            <div>
-              <Label className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2 block">Your Name *</Label>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="inq-name">
+                Your name <span className="text-red-500">*</span>
+              </Label>
               <Input
+                id="inq-name"
                 value={inquiryForm.customer_name}
                 onChange={(e) => setInquiryForm({ ...inquiryForm, customer_name: e.target.value })}
                 placeholder="John Doe"
-                className="h-12 bg-gray-50 border-gray-200 focus:border-lime-600 rounded-xl"
               />
             </div>
-
-            <div>
-              <Label className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2 block">Phone Number *</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="inq-phone">
+                Phone <span className="text-red-500">*</span>
+              </Label>
               <Input
+                id="inq-phone"
                 value={inquiryForm.customer_phone}
                 onChange={(e) => setInquiryForm({ ...inquiryForm, customer_phone: e.target.value })}
-                placeholder="+60123456789"
-                className="h-12 bg-gray-50 border-gray-200 focus:border-lime-600 rounded-xl"
+                placeholder="+60 12-345 6789"
               />
             </div>
-
-            <div>
-              <Label className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2 block">Email (Optional)</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="inq-email">Email (optional)</Label>
               <Input
+                id="inq-email"
                 type="email"
                 value={inquiryForm.customer_email}
                 onChange={(e) => setInquiryForm({ ...inquiryForm, customer_email: e.target.value })}
                 placeholder="john@example.com"
-                className="h-12 bg-gray-50 border-gray-200 focus:border-lime-600 rounded-xl"
               />
             </div>
-
-            <div>
-              <Label className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2 block">Message *</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="inq-message">
+                Message <span className="text-red-500">*</span>
+              </Label>
               <Textarea
+                id="inq-message"
+                rows={4}
                 value={inquiryForm.message}
                 onChange={(e) => setInquiryForm({ ...inquiryForm, message: e.target.value })}
-                placeholder="I'm interested in..."
-                rows={4}
-                className="bg-gray-50 border-gray-200 focus:border-lime-600 rounded-xl"
+                placeholder="I'm interested in…"
               />
             </div>
-
-            <button
-              onClick={handleSendInquiry}
-              disabled={!inquiryForm.customer_name || !inquiryForm.customer_phone || !inquiryForm.message}
-              className="w-full py-4 bg-lime-600 text-white font-bold uppercase tracking-widest text-xs hover:bg-lime-700 transition-all rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Send Inquiry
-            </button>
           </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsInquiryModalOpen(false)} disabled={submittingInquiry}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendInquiry}
+              disabled={
+                submittingInquiry ||
+                !inquiryForm.customer_name ||
+                !inquiryForm.customer_phone ||
+                !inquiryForm.message
+              }
+              className="bg-lime-600 hover:bg-lime-700"
+            >
+              {submittingInquiry ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <MessageSquare className="h-4 w-4 mr-2" />
+              )}
+              Send inquiry
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
