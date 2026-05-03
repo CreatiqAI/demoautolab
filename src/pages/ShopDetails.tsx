@@ -260,14 +260,20 @@ export default function ShopDetails() {
         {displayPhotos.length > 0 && (
           <div className="mb-6">
             <div
-              className="relative rounded-lg overflow-hidden cursor-pointer group bg-gray-100 border"
+              className="relative rounded-lg overflow-hidden cursor-pointer group bg-gray-900 border"
               onClick={() => setIsImageModalOpen(true)}
             >
-              <img
-                src={displayPhotos[currentPhotoIndex]}
-                alt={shop.business_name}
-                className="w-full h-[200px] sm:h-[260px] md:h-[360px] lg:h-[440px] object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-              />
+              {/* Fixed-height container with object-contain so portrait,
+                  landscape, and square photos all show in full (with
+                  letterboxing on the sides as needed) instead of being
+                  centre-cropped. */}
+              <div className="w-full h-[280px] sm:h-[340px] md:h-[420px] lg:h-[500px] flex items-center justify-center">
+                <img
+                  src={displayPhotos[currentPhotoIndex]}
+                  alt={shop.business_name}
+                  className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+                />
+              </div>
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 px-3 py-1.5 rounded text-xs text-gray-900 font-medium">
                   Click to enlarge
