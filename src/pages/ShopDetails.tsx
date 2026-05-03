@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   MapPin,
   Phone,
@@ -29,6 +30,7 @@ import {
   Sparkles,
   Award,
   CheckCircle2,
+  X,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -491,43 +493,67 @@ export default function ShopDetails() {
 
       <Footer />
 
-      {/* Image Modal */}
-      <Dialog open={isImageModalOpen} onOpenChange={setIsImageModalOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 border-0 bg-black/95">
-          <div className="relative w-full h-full flex items-center justify-center min-h-[400px]">
+      {/* Image lightbox — uses Radix primitives directly so we can give the
+          OVERLAY (not just the content) a backdrop-blur. shadcn's default
+          DialogContent always renders a solid bg-black/80 overlay which
+          can't be customised, so a backdrop-blur on the content alone has
+          nothing to blur except that solid layer. */}
+      <DialogPrimitive.Root open={isImageModalOpen} onOpenChange={setIsImageModalOpen}>
+        <DialogPrimitive.Portal>
+          {/* Frosted overlay: page content behind blurs through, with a
+              gentle dark tint so the photo still pops. */}
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Content className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+            <DialogPrimitive.Title className="sr-only">{shop.business_name} photo</DialogPrimitive.Title>
+
+            {/* Visible close — white circle, dark X, big shadow */}
+            <DialogPrimitive.Close
+              className="absolute top-4 right-4 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white text-gray-900 shadow-xl ring-1 ring-black/10 hover:bg-gray-100 hover:scale-105 transition focus:outline-none focus:ring-2 focus:ring-white/70"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </DialogPrimitive.Close>
+
             {displayPhotos[currentPhotoIndex] && (
-              <>
+              <div
+                className="relative w-full h-full flex items-center justify-center"
+                onClick={(e) => {
+                  // Click outside the image (on the blur backdrop area) closes the modal.
+                  if (e.target === e.currentTarget) setIsImageModalOpen(false);
+                }}
+              >
                 <img
                   src={displayPhotos[currentPhotoIndex]}
                   alt={shop.business_name}
-                  className="max-w-full max-h-[90vh] object-contain"
+                  className="max-w-full max-h-full object-contain drop-shadow-2xl rounded-md"
                 />
+
                 {displayPhotos.length > 1 && (
                   <>
                     <button
                       onClick={prevPhoto}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2.5 shadow-lg transition"
+                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-900 rounded-full p-2.5 shadow-lg transition"
                       aria-label="Previous photo"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
                     <button
                       onClick={nextPhoto}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2.5 shadow-lg transition"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-900 rounded-full p-2.5 shadow-lg transition"
                       aria-label="Next photo"
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 text-gray-900 px-3 py-1.5 rounded-full text-xs font-medium">
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/95 text-gray-900 px-3 py-1.5 rounded-full text-xs font-medium shadow-lg">
                       {currentPhotoIndex + 1} / {displayPhotos.length}
                     </div>
                   </>
                 )}
-              </>
+              </div>
             )}
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
 
       {/* Inquiry Modal */}
       <Dialog open={isInquiryModalOpen} onOpenChange={setIsInquiryModalOpen}>
