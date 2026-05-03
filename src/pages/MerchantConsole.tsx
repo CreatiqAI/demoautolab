@@ -939,11 +939,25 @@ function SubscriptionTab({ partnership }: { partnership: PartnershipData | null 
   const { toast } = useToast();
   const currentPlan = partnership?.subscription_plan || 'none';
   const isActive = partnership?.subscription_status === 'ACTIVE' && partnership?.admin_approved;
-  const isExpired = partnership?.subscription_end_date
-    ? new Date(partnership.subscription_end_date) < new Date()
-    : false;
+  const endDate = partnership?.subscription_end_date ? new Date(partnership.subscription_end_date) : null;
+  const startDate = partnership?.subscription_start_date ? new Date(partnership.subscription_start_date) : null;
+  const isExpired = endDate ? endDate < new Date() : false;
 
-  const handleRenewSubscription = async (plan: 'professional' | 'panel') => {
+  // Days remaining + total period length, used to draw a progress bar.
+  const daysRemaining = endDate
+    ? Math.ceil((endDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const periodTotalDays = startDate && endDate
+    ? Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)))
+    : null;
+  const periodElapsed = periodTotalDays && daysRemaining !== null
+    ? Math.max(0, Math.min(periodTotalDays, periodTotalDays - daysRemaining))
+    : null;
+  const progressPct = periodTotalDays && periodElapsed !== null
+    ? Math.min(100, Math.round((periodElapsed / periodTotalDays) * 100))
+    : null;
+
+  const handleRenewSubscription = (plan: 'professional' | 'panel') => {
     if (!user || !partnership) return;
     const amount = plan === 'professional' ? 99 : 350;
     navigate('/payment-gateway', {
@@ -963,43 +977,95 @@ function SubscriptionTab({ partnership }: { partnership: PartnershipData | null 
     });
   };
 
+  // Status palette for the summary card / status badge
+  const statusPalette = isExpired
+    ? { ring: 'border-red-200', bg: 'bg-red-50/60', accent: 'text-red-700', dot: 'bg-red-500', label: 'Expired' }
+    : isActive
+      ? { ring: 'border-emerald-200', bg: 'bg-emerald-50/60', accent: 'text-emerald-700', dot: 'bg-emerald-500', label: 'Active' }
+      : { ring: 'border-amber-200', bg: 'bg-amber-50/60', accent: 'text-amber-700', dot: 'bg-amber-500', label: 'Pending' };
+
   return (
     <div className="space-y-6">
-      {/* Current plan summary */}
+      {/* Active subscription summary — informative hero */}
       {partnership && currentPlan !== 'none' && (
-        <Card
-          className={
-            isExpired
-              ? 'border-red-200 bg-red-50'
-              : isActive
-                ? 'border-lime-200 bg-lime-50'
-                : 'border-amber-200 bg-amber-50'
-          }
-        >
+        <Card className={`${statusPalette.ring} ${statusPalette.bg}`}>
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold capitalize">Current plan: {currentPlan}</p>
-                <p className="text-xs text-gray-600 mt-1">
-                  {isExpired
-                    ? `Expired on ${new Date(partnership.subscription_end_date).toLocaleDateString('en-MY')}`
-                    : isActive
-                      ? `Active until ${new Date(partnership.subscription_end_date).toLocaleDateString('en-MY')}`
-                      : 'Pending admin approval'}
-                </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+              {/* Plan + status */}
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Current plan</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xl font-semibold capitalize">{currentPlan}</span>
+                  {currentPlan === 'panel' && (
+                    <Badge className="bg-amber-500 hover:bg-amber-600 text-white">
+                      <Sparkles className="h-3 w-3 mr-1" />Authorized
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${statusPalette.dot}`} />
+                  <span className={statusPalette.accent + ' font-medium'}>{statusPalette.label}</span>
+                  {!isActive && !isExpired && <span className="text-gray-500">— admin review</span>}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={isExpired ? 'destructive' : isActive ? 'default' : 'secondary'}>
-                  {isExpired ? 'Expired' : isActive ? 'Active' : 'Pending'}
-                </Badge>
-                {isExpired && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleRenewSubscription(currentPlan as 'professional' | 'panel')}
-                    className="bg-lime-600 hover:bg-lime-700"
-                  >
-                    Renew now
-                  </Button>
+
+              {/* Period info */}
+              <div className="space-y-2 md:border-l md:pl-6">
+                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Period</div>
+                <div className="text-sm text-gray-900">
+                  {startDate ? startDate.toLocaleDateString('en-MY', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                  <span className="text-gray-400 mx-1.5">→</span>
+                  {endDate ? endDate.toLocaleDateString('en-MY', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                </div>
+                {progressPct !== null && (
+                  <div className="space-y-1">
+                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${
+                          isExpired ? 'bg-red-500' : progressPct >= 85 ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {isExpired
+                        ? `Expired ${Math.abs(daysRemaining ?? 0)} days ago`
+                        : `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining`}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action */}
+              <div className="space-y-2 md:border-l md:pl-6 md:flex md:flex-col md:justify-center">
+                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Renewal</div>
+                {isExpired ? (
+                  <>
+                    <p className="text-xs text-gray-600">Reactivate to keep your shop publicly visible.</p>
+                    <Button
+                      size="sm"
+                      onClick={() => handleRenewSubscription(currentPlan as 'professional' | 'panel')}
+                      className="bg-lime-600 hover:bg-lime-700 w-fit"
+                    >
+                      Renew now
+                    </Button>
+                  </>
+                ) : isActive && daysRemaining !== null && daysRemaining <= 30 ? (
+                  <>
+                    <p className="text-xs text-gray-600">Subscription ending soon — renew to avoid gaps.</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleRenewSubscription(currentPlan as 'professional' | 'panel')}
+                      className="w-fit"
+                    >
+                      Renew early
+                    </Button>
+                  </>
+                ) : isActive ? (
+                  <p className="text-xs text-gray-600">Auto-renewal not enabled. We'll remind you 30 days before expiry.</p>
+                ) : (
+                  <p className="text-xs text-gray-600">Awaiting admin approval. You'll be notified when active.</p>
                 )}
               </div>
             </div>
@@ -1007,95 +1073,181 @@ function SubscriptionTab({ partnership }: { partnership: PartnershipData | null 
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Professional */}
-        <Card className={currentPlan === 'professional' ? 'border-lime-500 ring-1 ring-lime-200' : ''}>
-          <CardHeader>
-            <div className="flex items-center justify-between mb-1">
-              <CardTitle>Professional</CardTitle>
-              {currentPlan === 'professional' && <Badge>Current</Badge>}
-            </div>
-            <CardDescription>Essential features for B2B merchants</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-5">
-              <span className="text-3xl font-bold">RM 99</span>
-              <span className="text-gray-500 text-sm">/year</span>
-            </div>
-            <PerkRow icon={Check}>B2B merchant pricing</PerkRow>
-            <PerkRow icon={Check}>Installation guides library</PerkRow>
-            <PerkRow icon={Gift}>RM50 welcome voucher</PerkRow>
-            <PerkRow icon={XIcon} muted>Find Shops listing</PerkRow>
-            <Button
-              disabled={currentPlan === 'professional'}
-              className="w-full mt-4 bg-lime-600 hover:bg-lime-700"
-              onClick={() => toast({ title: 'Contact admin', description: 'Please contact our team to subscribe.' })}
-            >
-              {currentPlan === 'professional' ? 'Current plan' : 'Subscribe'}
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Plan cards */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Available plans</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Professional */}
+          <PlanCard
+            tone="light"
+            name="Professional"
+            tagline="Essential B2B features"
+            price={99}
+            period="year"
+            isCurrent={currentPlan === 'professional'}
+            recommended={false}
+            perks={[
+              { type: 'on', label: 'B2B merchant pricing' },
+              { type: 'on', label: 'Installation guides library' },
+              { type: 'gift', label: 'RM 50 welcome voucher' },
+              { type: 'off', label: 'Find Shops public listing' },
+            ]}
+            cta={{
+              label: currentPlan === 'professional' ? 'Current plan' : 'Subscribe',
+              disabled: currentPlan === 'professional',
+              onClick: () => toast({ title: 'Contact admin', description: 'Please contact our team to subscribe.' }),
+            }}
+          />
 
-        {/* Panel */}
-        <Card className={`bg-gray-900 text-white ${currentPlan === 'panel' ? 'ring-2 ring-amber-400' : ''}`}>
-          <CardHeader>
-            <div className="flex items-center justify-between mb-1">
-              <CardTitle className="text-white">Panel (Authorized)</CardTitle>
-              {currentPlan === 'panel' ? (
-                <Badge className="bg-amber-500">Current</Badge>
-              ) : (
-                <Badge variant="outline" className="text-white border-white/20">Invite only</Badge>
-              )}
-            </div>
-            <CardDescription className="text-gray-300">Top-tier authorized shops</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-5">
-              <span className="text-3xl font-bold text-white">RM 350</span>
-              <span className="text-gray-400 text-sm">/month</span>
-            </div>
-            <PerkRow icon={Check} dark>Everything in Professional</PerkRow>
-            <PerkRow icon={Check} dark highlight>Featured Find Shops listing</PerkRow>
-            <PerkRow icon={Check} dark highlight>Authorized Panel badge</PerkRow>
-            <PerkRow icon={Check} dark>Priority support</PerkRow>
-            <Button disabled className="w-full mt-4 bg-white/10 text-white cursor-not-allowed">
-              <Lock className="h-4 w-4 mr-2" />
-              {currentPlan === 'panel' ? 'Current plan' : 'By invitation only'}
-            </Button>
-          </CardContent>
-        </Card>
+          {/* Panel */}
+          <PlanCard
+            tone="dark"
+            name="Panel"
+            subname="Authorized"
+            tagline="Top-tier visibility for authorized shops"
+            price={350}
+            period="month"
+            isCurrent={currentPlan === 'panel'}
+            recommended
+            inviteOnly
+            perks={[
+              { type: 'on', label: 'Everything in Professional' },
+              { type: 'on', label: 'Featured Find Shops listing', highlight: true },
+              { type: 'on', label: 'Authorized Panel badge', highlight: true },
+              { type: 'on', label: 'Priority support' },
+            ]}
+            cta={{
+              label: currentPlan === 'panel' ? 'Current plan' : 'By invitation only',
+              disabled: true,
+              icon: 'lock',
+            }}
+          />
+        </div>
+
+        <p className="text-xs text-gray-500 mt-3">
+          Need to change plan or have billing questions?{' '}
+          <a href="mailto:sales@autolab.my" className="text-lime-700 hover:underline">Contact our team</a>.
+        </p>
       </div>
     </div>
   );
 }
 
-function PerkRow({
-  icon: Icon,
-  dark,
-  muted,
-  highlight,
-  children,
-}: {
-  icon: any;
-  dark?: boolean;
-  muted?: boolean;
-  highlight?: boolean;
-  children: React.ReactNode;
-}) {
-  const iconColor = muted
-    ? 'text-gray-400'
-    : dark
-      ? 'text-amber-400'
-      : 'text-lime-600';
-  const textColor = muted
-    ? 'text-gray-400'
-    : dark
-      ? highlight ? 'text-white font-medium' : 'text-gray-200'
-      : 'text-gray-700';
+interface PlanCardProps {
+  tone: 'light' | 'dark';
+  name: string;
+  subname?: string;
+  tagline: string;
+  price: number;
+  period: 'year' | 'month';
+  isCurrent: boolean;
+  recommended?: boolean;
+  inviteOnly?: boolean;
+  perks: Array<{ type: 'on' | 'off' | 'gift'; label: string; highlight?: boolean }>;
+  cta: {
+    label: string;
+    disabled: boolean;
+    onClick?: () => void;
+    icon?: 'lock';
+  };
+}
+
+function PlanCard({ tone, name, subname, tagline, price, period, isCurrent, recommended, inviteOnly, perks, cta }: PlanCardProps) {
+  const isDark = tone === 'dark';
   return (
-    <div className={`flex items-center gap-2 text-sm py-1 ${textColor}`}>
-      <Icon className={`w-4 h-4 ${iconColor}`} />
-      <span>{children}</span>
-    </div>
+    <Card
+      className={`relative overflow-hidden transition-all ${
+        isDark
+          ? 'bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white border-gray-800'
+          : 'bg-white'
+      } ${isCurrent ? (isDark ? 'ring-2 ring-amber-400 shadow-lg' : 'ring-2 ring-lime-500 shadow-lg') : ''}`}
+    >
+      {/* Top corner ribbon — Recommended (when not current) or Current */}
+      {isCurrent ? (
+        <div className="absolute top-0 right-0">
+          <div className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${
+            isDark ? 'bg-amber-500 text-white' : 'bg-lime-600 text-white'
+          } rounded-bl-md`}>
+            Current plan
+          </div>
+        </div>
+      ) : recommended ? (
+        <div className="absolute top-0 right-0">
+          <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wide bg-amber-400 text-gray-900 rounded-bl-md">
+            Recommended
+          </div>
+        </div>
+      ) : null}
+
+      <CardHeader className="space-y-1.5 pb-4">
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{name}</span>
+          {subname && (
+            <span className={`text-xs font-medium uppercase tracking-wide ${isDark ? 'text-amber-400' : 'text-gray-500'}`}>
+              {subname}
+            </span>
+          )}
+        </div>
+        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{tagline}</p>
+      </CardHeader>
+
+      <CardContent className="space-y-5">
+        {/* Price */}
+        <div className="flex items-baseline gap-1">
+          <span className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>RM</span>
+          <span className={`text-4xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{price}</span>
+          <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>/{period}</span>
+        </div>
+
+        {/* Perks */}
+        <ul className="space-y-2">
+          {perks.map((perk, idx) => {
+            const Icon = perk.type === 'gift' ? Gift : perk.type === 'off' ? XIcon : Check;
+            const iconClass =
+              perk.type === 'off'
+                ? isDark ? 'text-gray-500' : 'text-gray-400'
+                : perk.type === 'gift'
+                  ? isDark ? 'text-amber-400' : 'text-lime-600'
+                  : isDark ? 'text-amber-400' : 'text-lime-600';
+            const textClass =
+              perk.type === 'off'
+                ? isDark ? 'text-gray-500 line-through' : 'text-gray-400 line-through'
+                : isDark
+                  ? perk.highlight ? 'text-white font-medium' : 'text-gray-200'
+                  : 'text-gray-700';
+            return (
+              <li key={idx} className="flex items-start gap-2 text-sm">
+                <Icon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${iconClass}`} />
+                <span className={textClass}>{perk.label}</span>
+              </li>
+            );
+          })}
+        </ul>
+
+        {/* CTA */}
+        <Button
+          disabled={cta.disabled}
+          onClick={cta.onClick}
+          className={`w-full ${
+            isCurrent
+              ? isDark ? 'bg-white/10 hover:bg-white/10 text-white cursor-default' : 'bg-lime-50 hover:bg-lime-50 text-lime-700 cursor-default border border-lime-200'
+              : isDark
+                ? 'bg-white/10 hover:bg-white/15 text-white border border-white/20'
+                : 'bg-lime-600 hover:bg-lime-700 text-white'
+          }`}
+        >
+          {cta.icon === 'lock' && <Lock className="h-4 w-4 mr-2" />}
+          {isCurrent && <Check className="h-4 w-4 mr-2" />}
+          {cta.label}
+        </Button>
+
+        {inviteOnly && !isCurrent && (
+          <p className="text-[11px] text-gray-400 text-center -mt-2">
+            By invitation only — admin promotes selected merchants.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
+
