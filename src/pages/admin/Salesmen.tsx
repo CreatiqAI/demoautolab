@@ -17,6 +17,20 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -35,7 +49,6 @@ import {
   DollarSign,
   TrendingUp,
   RefreshCw,
-  ListOrdered,
   Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -55,6 +68,11 @@ interface Salesman {
   updated_at: string;
 }
 
+interface ReferralOrder {
+  created_at: string;
+  total: number;
+}
+
 interface ReferredMerchant {
   registration_id: string;
   customer_id: string;
@@ -65,9 +83,7 @@ interface ReferredMerchant {
   phone: string | null;
   approved_at: string | null;
   registered_at: string;
-  total_orders: number;
-  total_order_value: number;
-  earned_commission: number;
+  orders: ReferralOrder[];
 }
 
 interface SalesmanFormData {
@@ -98,7 +114,9 @@ export default function Salesmen() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isReferralsDialogOpen, setIsReferralsDialogOpen] = useState(false);
+  const [isReferralsSheetOpen, setIsReferralsSheetOpen] = useState(false);
+  // 'all' or 'YYYY-MM' (e.g. '2026-05')
+  const [referralsMonth, setReferralsMonth] = useState<string>('all');
   const [selectedSalesman, setSelectedSalesman] = useState<Salesman | null>(null);
   const [formData, setFormData] = useState<SalesmanFormData>(initialFormData);
   const [isSaving, setIsSaving] = useState(false);
@@ -375,13 +393,13 @@ export default function Salesmen() {
     setIsDeleteDialogOpen(true);
   };
 
-  const openReferralsDialog = async (salesman: Salesman) => {
+  const openReferralsSheet = async (salesman: Salesman) => {
     setSelectedSalesman(salesman);
-    setIsReferralsDialogOpen(true);
+    setIsReferralsSheetOpen(true);
+    setReferralsMonth('all');
     setReferrals([]);
     setReferralsLoading(true);
     try {
-      // 1. Pull merchant_registrations referred by this salesman
       const { data: regs, error: regErr } = await supabase
         .from('merchant_registrations' as any)
         .select('id, customer_id, company_name, status, created_at, approved_at')
@@ -396,7 +414,6 @@ export default function Salesmen() {
 
       const customerIds = registrations.map(r => r.customer_id);
 
-      // 2. Fetch customer profile contact info
       const { data: profiles } = await supabase
         .from('customer_profiles' as any)
         .select('id, full_name, email, phone')
@@ -405,24 +422,24 @@ export default function Salesmen() {
         ((profiles as any[] | null) ?? []).map(p => [p.id, p])
       );
 
-      // 3. Fetch order totals for these customers (excluding cancelled)
+      // Pull each non-cancelled order so we can filter by month client-side
+      // without re-querying when the user changes the period.
       const { data: orderRows } = await supabase
         .from('orders' as any)
-        .select('customer_profile_id, total, status')
+        .select('customer_profile_id, total, status, created_at')
         .in('customer_profile_id', customerIds)
-        .neq('status', 'CANCELLED');
-      const orderStats = new Map<string, { count: number; sum: number }>();
+        .neq('status', 'CANCELLED')
+        .order('created_at', { ascending: false });
+
+      const ordersByCustomer = new Map<string, ReferralOrder[]>();
       for (const o of (orderRows as any[] | null) ?? []) {
-        const stat = orderStats.get(o.customer_profile_id) ?? { count: 0, sum: 0 };
-        stat.count += 1;
-        stat.sum += Number(o.total) || 0;
-        orderStats.set(o.customer_profile_id, stat);
+        const list = ordersByCustomer.get(o.customer_profile_id) ?? [];
+        list.push({ created_at: o.created_at, total: Number(o.total) || 0 });
+        ordersByCustomer.set(o.customer_profile_id, list);
       }
 
-      const rate = Number(salesman.commission_rate) || 0;
       const merged: ReferredMerchant[] = registrations.map(r => {
         const profile = profileById.get(r.customer_id);
-        const stat = orderStats.get(r.customer_id) ?? { count: 0, sum: 0 };
         return {
           registration_id: r.id,
           customer_id: r.customer_id,
@@ -433,9 +450,7 @@ export default function Salesmen() {
           phone: profile?.phone ?? null,
           approved_at: r.approved_at,
           registered_at: r.created_at,
-          total_orders: stat.count,
-          total_order_value: stat.sum,
-          earned_commission: r.status === 'APPROVED' ? (stat.sum * rate) / 100 : 0,
+          orders: ordersByCustomer.get(r.customer_id) ?? [],
         };
       });
       setReferrals(merged);
@@ -448,6 +463,36 @@ export default function Salesmen() {
     } finally {
       setReferralsLoading(false);
     }
+  };
+
+  // Build a list of {value, label} months that appear in the data + the
+  // current month, sorted desc. Always includes "All time".
+  const referralsMonthOptions = (() => {
+    const set = new Set<string>();
+    for (const r of referrals) {
+      for (const o of r.orders) {
+        set.add(o.created_at.slice(0, 7));
+      }
+    }
+    const now = new Date();
+    set.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    return [
+      { value: 'all', label: 'All time' },
+      ...Array.from(set)
+        .sort((a, b) => (a < b ? 1 : -1))
+        .map(ym => ({
+          value: ym,
+          label: new Date(`${ym}-01T00:00:00`).toLocaleDateString('en-MY', {
+            year: 'numeric',
+            month: 'long',
+          }),
+        })),
+    ];
+  })();
+
+  const filterOrdersForMonth = (orders: ReferralOrder[]) => {
+    if (referralsMonth === 'all') return orders;
+    return orders.filter(o => o.created_at.slice(0, 7) === referralsMonth);
   };
 
   const filteredSalesmen = salesmen.filter(salesman => {
@@ -609,7 +654,11 @@ export default function Salesmen() {
                   </TableRow>
                 ) : (
                   filteredSalesmen.map((salesman) => (
-                    <TableRow key={salesman.id}>
+                    <TableRow
+                      key={salesman.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => openReferralsSheet(salesman)}
+                    >
                       <TableCell>
                         <div>
                           <div className="font-medium">{salesman.name}</div>
@@ -630,7 +679,7 @@ export default function Salesmen() {
                             variant="ghost"
                             size="icon"
                             className="h-6 w-6"
-                            onClick={() => copyReferralCode(salesman.referral_code)}
+                            onClick={(e) => { e.stopPropagation(); copyReferralCode(salesman.referral_code); }}
                           >
                             <Copy className="h-3 w-3" />
                           </Button>
@@ -655,7 +704,7 @@ export default function Salesmen() {
                         </Badge>
                       </TableCell>
                       <TableCell>{formatDate(salesman.created_at)}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
@@ -663,10 +712,6 @@ export default function Salesmen() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openReferralsDialog(salesman)}>
-                              <ListOrdered className="mr-2 h-4 w-4" />
-                              View Referrals
-                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEditDialog(salesman)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               Edit
@@ -955,123 +1000,159 @@ export default function Salesmen() {
         </DialogContent>
       </Dialog>
 
-      {/* Referrals dialog */}
-      <Dialog open={isReferralsDialogOpen} onOpenChange={setIsReferralsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              Referrals — {selectedSalesman?.name}
+      {/* Referrals drawer (slides in from the right) */}
+      <Sheet open={isReferralsSheetOpen} onOpenChange={setIsReferralsSheetOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2 flex-wrap">
+              {selectedSalesman?.name}
               {selectedSalesman && (
-                <Badge variant="secondary" className="ml-2 font-normal">
+                <Badge variant="secondary" className="font-normal">
                   {selectedSalesman.commission_rate}% commission
                 </Badge>
               )}
-            </DialogTitle>
-            <DialogDescription>
-              Merchants who registered using <code className="px-1 rounded bg-gray-100">{selectedSalesman?.referral_code}</code>.
-              Earned commission is calculated as <strong>{selectedSalesman?.commission_rate}%</strong> of the merchant's non-cancelled order total (only for approved merchants).
-            </DialogDescription>
-          </DialogHeader>
+              {selectedSalesman?.referral_code && (
+                <code className="px-1.5 py-0.5 rounded bg-gray-100 font-mono text-sm">
+                  {selectedSalesman.referral_code}
+                </code>
+              )}
+            </SheetTitle>
+            <SheetDescription>
+              Merchants who registered with this code. Commission = <strong>{selectedSalesman?.commission_rate}%</strong> of non-cancelled order totals (APPROVED merchants only).
+            </SheetDescription>
+          </SheetHeader>
 
           {referralsLoading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin mr-2" />
               Loading referrals...
             </div>
           ) : referrals.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-16 text-muted-foreground">
               No merchants have registered with this code yet.
             </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">Total referrals</div>
-                  <div className="text-2xl font-semibold">{referrals.length}</div>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">Approved merchants</div>
-                  <div className="text-2xl font-semibold">
-                    {referrals.filter(r => r.status === 'APPROVED').length}
+          ) : (() => {
+            const rate = Number(selectedSalesman?.commission_rate) || 0;
+            const periodCommission = referrals.reduce((sum, r) => {
+              if (r.status !== 'APPROVED') return sum;
+              const orders = filterOrdersForMonth(r.orders);
+              return sum + (orders.reduce((s, o) => s + o.total, 0) * rate) / 100;
+            }, 0);
+            const periodOrderCount = referrals.reduce(
+              (sum, r) => sum + filterOrdersForMonth(r.orders).length,
+              0
+            );
+            const periodOrderValue = referrals.reduce(
+              (sum, r) => sum + filterOrdersForMonth(r.orders).reduce((s, o) => s + o.total, 0),
+              0
+            );
+            return (
+              <div className="mt-6 space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Period</Label>
+                    <Select value={referralsMonth} onValueChange={setReferralsMonth}>
+                      <SelectTrigger className="w-[200px] mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {referralsMonthOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                <div className="rounded-lg border p-3 bg-emerald-50">
-                  <div className="text-xs text-muted-foreground">Earned commission</div>
-                  <div className="text-2xl font-semibold text-emerald-700">
-                    {formatCurrency(referrals.reduce((s, r) => s + r.earned_commission, 0))}
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Total referrals</div>
+                    <div className="text-xl font-semibold">{referrals.length}</div>
                   </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Approved</div>
+                    <div className="text-xl font-semibold">
+                      {referrals.filter(r => r.status === 'APPROVED').length}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Orders ({referralsMonth === 'all' ? 'all time' : 'this period'})</div>
+                    <div className="text-xl font-semibold">{periodOrderCount}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {formatCurrency(periodOrderValue)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3 bg-emerald-50">
+                    <div className="text-xs text-muted-foreground">Commission ({referralsMonth === 'all' ? 'all time' : 'this period'})</div>
+                    <div className="text-xl font-semibold text-emerald-700">
+                      {formatCurrency(periodCommission)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Merchant</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Orders</TableHead>
+                        <TableHead className="text-right">Value</TableHead>
+                        <TableHead className="text-right">Commission</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {referrals.map(r => {
+                        const periodOrders = filterOrdersForMonth(r.orders);
+                        const value = periodOrders.reduce((s, o) => s + o.total, 0);
+                        const commission = r.status === 'APPROVED' ? (value * rate) / 100 : 0;
+                        return (
+                          <TableRow key={r.registration_id}>
+                            <TableCell>
+                              <div className="font-medium">{r.company_name || r.full_name || '—'}</div>
+                              {r.full_name && r.full_name !== r.company_name && (
+                                <div className="text-xs text-muted-foreground">{r.full_name}</div>
+                              )}
+                              {r.email && (
+                                <div className="text-xs text-muted-foreground">{r.email}</div>
+                              )}
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                Registered {formatDate(r.registered_at)}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  r.status === 'APPROVED'
+                                    ? 'default'
+                                    : r.status === 'REJECTED'
+                                      ? 'destructive'
+                                      : 'secondary'
+                                }
+                              >
+                                {r.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">{periodOrders.length}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(value)}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {r.status === 'APPROVED' ? (
+                                <span className="text-emerald-700">{formatCurrency(commission)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Merchant</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Registered</TableHead>
-                    <TableHead className="text-right">Orders</TableHead>
-                    <TableHead className="text-right">Order value</TableHead>
-                    <TableHead className="text-right">Commission</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {referrals.map(r => (
-                    <TableRow key={r.registration_id}>
-                      <TableCell>
-                        <div className="font-medium">{r.company_name || r.full_name || '—'}</div>
-                        {r.full_name && r.full_name !== r.company_name && (
-                          <div className="text-xs text-muted-foreground">{r.full_name}</div>
-                        )}
-                        {r.email && (
-                          <div className="text-xs text-muted-foreground">{r.email}</div>
-                        )}
-                        {r.phone && (
-                          <div className="text-xs text-muted-foreground">{r.phone}</div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            r.status === 'APPROVED'
-                              ? 'default'
-                              : r.status === 'REJECTED'
-                                ? 'destructive'
-                                : 'secondary'
-                          }
-                        >
-                          {r.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(r.registered_at)}
-                      </TableCell>
-                      <TableCell className="text-right">{r.total_orders}</TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(r.total_order_value)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {r.status === 'APPROVED' ? (
-                          <span className="text-emerald-700">
-                            {formatCurrency(r.earned_commission)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsReferralsDialogOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
