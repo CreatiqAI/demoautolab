@@ -110,6 +110,26 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
     }
   }, [uploads]);
 
+  // Warn before refresh / tab close while uploads are in flight. The browser
+  // aborts the underlying fetch on navigation, so any 'uploading' item will
+  // come back as 'interrupted' on reload — we want the admin to confirm
+  // before that happens. Modern browsers ignore the custom message and show
+  // their own ("Leave site?" / "Reload site?"), so the string here is a
+  // no-op placeholder for the legacy non-standard API.
+  useEffect(() => {
+    const hasActive = uploads.some(
+      (u) => u.status === 'uploading' || u.status === 'cancelling'
+    );
+    if (!hasActive) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [uploads]);
+
   const enqueueVideoUpload = useCallback<UploadQueueContextValue['enqueueVideoUpload']>(
     ({ file, productId, productName, target = 'product-image', installationMeta, onComplete }) => {
       const id = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;

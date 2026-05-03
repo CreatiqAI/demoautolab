@@ -2408,7 +2408,7 @@ export default function ProductsPro() {
                                       <Loader2 className="h-6 w-6 animate-spin text-blue-600 flex-shrink-0" />
                                       <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate" title={video._uploadFileName}>{video._uploadFileName}</p>
-                                        <p className="text-xs text-blue-700">{((video._uploadFileSize || 0) / 1024 / 1024).toFixed(1)}MB · uploading in background — you can save and close this modal</p>
+                                        <p className="text-xs text-blue-700">{((video._uploadFileSize || 0) / 1024 / 1024).toFixed(1)}MB · uploading in background — safe to save and close this modal, but don't refresh until done</p>
                                       </div>
                                       <Button
                                         type="button"
