@@ -52,6 +52,7 @@ import InventoryAlerts from './pages/admin/InventoryAlerts';
 import VoucherManagement from './pages/admin/VoucherManagement';
 import ReviewModeration from './pages/admin/ReviewModeration';
 import CustomerTiers from './pages/admin/CustomerTiers';
+import AuditLog from './pages/admin/AuditLog';
 import SecondhandModeration from './pages/admin/SecondhandModeration';
 import Analytics from './pages/admin/Analytics';
 
@@ -163,6 +164,7 @@ const App = () => (
                     <Route path="review-moderation" element={<ReviewModeration />} />
                     <Route path="vouchers" element={<VoucherManagement />} />
                     <Route path="customer-tiers" element={<CustomerTiers />} />
+                    <Route path="audit-log" element={<AuditLog />} />
                     <Route path="points-rewards" element={<PointsRewards />} />
                     <Route path="secondhand-moderation" element={<SecondhandModeration />} />
                     <Route path="salesmen" element={<Salesmen />} />

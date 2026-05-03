@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CustomerTypeManager } from '@/components/admin/CustomerTypeManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { logAdminAction } from '@/lib/adminAudit';
 
 interface CustomerProfile {
   id: string;
@@ -635,6 +636,14 @@ export default function Customers() {
 
       patchCustomer(selectedCustomer.id, { is_panel_customer: true });
       await fetchPartnerships();
+      void logAdminAction({
+        action: 'panel.promote',
+        entityType: 'customer',
+        entityId: selectedCustomer.id,
+        entityLabel: selectedCustomer.full_name,
+        after: { subscription_end_date: endDate.toISOString(), payment_slip_url: publicUrl },
+        notes: promoteNotes || null,
+      });
       toast({
         title: 'Promoted to Panel',
         description: `${selectedCustomer.full_name} now has a panel subscription until ${endDate.toLocaleDateString('en-MY')}.`,
@@ -672,6 +681,14 @@ export default function Customers() {
       if (cpErr) throw cpErr;
       patchCustomer(selectedCustomer.id, { is_panel_customer: false });
       await fetchPartnerships();
+      void logAdminAction({
+        action: 'panel.cancel',
+        entityType: 'customer',
+        entityId: selectedCustomer.id,
+        entityLabel: selectedCustomer.full_name,
+        before: { is_panel_customer: true, partnership_status: 'ACTIVE' },
+        after: { is_panel_customer: false, partnership_status: 'INACTIVE' },
+      });
       toast({ title: 'Panel subscription cancelled', description: 'Customer remains a B2B merchant.', variant: 'success' });
       setCancelPanelOpen(false);
     } catch (err: any) {
@@ -777,6 +794,14 @@ export default function Customers() {
       }
 
       await fetchPaymentHistory(selectedCustomer.id);
+      void logAdminAction({
+        action: 'subscription.renew',
+        entityType: 'customer',
+        entityId: selectedCustomer.id,
+        entityLabel: selectedCustomer.full_name,
+        after: { subscription_type: renewType, period_end: newPeriodEnd.toISOString(), amount: amount.toFixed(2) },
+        notes: renewNotes || null,
+      });
       toast({
         title: 'Renewal recorded',
         description: `${renewType === 'panel' ? 'Panel' : 'B2B'} subscription extended to ${newPeriodEnd.toLocaleDateString('en-MY')} (RM ${amount.toFixed(2)})`,
@@ -943,6 +968,15 @@ export default function Customers() {
         demoted_from: selectedCustomer.customer_type ?? 'merchant',
         demotion_reason: demoteReason || null,
       });
+      void logAdminAction({
+        action: 'customer.demote',
+        entityType: 'customer',
+        entityId: selectedCustomer.id,
+        entityLabel: selectedCustomer.full_name,
+        before: { customer_type: selectedCustomer.customer_type, is_panel_customer: selectedCustomer.is_panel_customer },
+        after: { customer_type: 'normal', is_panel_customer: false },
+        notes: demoteReason || null,
+      });
       toast({ title: 'Demoted to B2C', description: 'Customer is now a normal account.', variant: 'success' });
       setDemoteOpen(false);
       setDemoteReason('');
@@ -1062,6 +1096,14 @@ export default function Customers() {
         throw new Error(data.error || 'Failed to suspend customer');
       }
 
+      void logAdminAction({
+        action: 'customer.suspend',
+        entityType: 'customer',
+        entityId: customerToAction.id,
+        entityLabel: customerToAction.full_name,
+        before: { is_active: true },
+        after: { is_active: false },
+      });
       toast({
         title: 'Account Suspended',
         description: `${customerToAction.full_name}'s account has been suspended.`
@@ -1093,6 +1135,14 @@ export default function Customers() {
         throw new Error(data.error || 'Failed to reactivate customer');
       }
 
+      void logAdminAction({
+        action: 'customer.reactivate',
+        entityType: 'customer',
+        entityId: customer.id,
+        entityLabel: customer.full_name,
+        before: { is_active: false },
+        after: { is_active: true },
+      });
       toast({
         title: 'Account Reactivated',
         description: `${customer.full_name}'s account has been reactivated.`
@@ -1123,6 +1173,19 @@ export default function Customers() {
       if (data && !data.success) {
         throw new Error(data.error || 'Failed to delete customer');
       }
+
+      void logAdminAction({
+        action: 'customer.delete',
+        entityType: 'customer',
+        entityId: customerToAction.id,
+        entityLabel: customerToAction.full_name,
+        before: {
+          customer_type: customerToAction.customer_type,
+          is_active: customerToAction.is_active,
+          email: customerToAction.email,
+        },
+        notes: 'Permanent deletion via admin panel',
+      });
 
       toast({
         title: 'Customer Deleted',
