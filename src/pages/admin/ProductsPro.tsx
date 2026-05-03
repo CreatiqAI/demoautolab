@@ -138,6 +138,11 @@ export default function ProductsPro() {
   const [allComponents, setAllComponents] = useState<ComponentSearchResult[]>([]);
   const [activeTab, setActiveTab] = useState('basic');
 
+  // Snapshot of media URLs that existed in DB when the modal opened. Used by
+  // the diff-based save so background-uploaded videos that arrive after open
+  // are NOT touched (they're in DB but not in this snapshot).
+  const [originalMediaUrls, setOriginalMediaUrls] = useState<string[]>([]);
+
   // Orphan-storage cleanup tool state
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [cleanupScanning, setCleanupScanning] = useState(false);
@@ -688,18 +693,6 @@ export default function ProductsPro() {
         return;
       }
 
-      // Block save while videos are still uploading. Saving mid-upload would
-      // race with the queue's own DB insert and risk losing the video.
-      const inFlight = formData.images.filter(img => img._uploading);
-      if (inFlight.length > 0) {
-        toast({
-          title: 'Upload still in progress',
-          description: `${inFlight.length} video${inFlight.length === 1 ? '' : 's'} still uploading. Wait for completion or cancel before saving.`,
-          variant: 'destructive',
-        });
-        return;
-      }
-
       // 1. Create the product
       const productData = {
         name: formData.name,
@@ -739,48 +732,80 @@ export default function ProductsPro() {
         product = newProduct;
       }
 
-      // 2. Handle product images. For edit mode, snapshot existing URLs first
-      // so we can delete any files that won't be referenced after save.
-      let originalUrls: string[] = [];
+      // 2. Handle product images via DIFF-BASED save. Comparing against the
+      // snapshot taken when the modal opened means background-uploaded videos
+      // (added to product_images_new directly by the queue while the modal was
+      // open) are never touched. The user can save other changes mid-upload.
+      const realFormImages = formData.images.filter(image => image.url && !image._uploading);
+      const realFormUrls = new Set(realFormImages.map(i => i.url));
+
       if (editingProduct) {
-        const { data: existing } = await supabase
-          .from('product_images_new' as any)
-          .select('url')
-          .eq('product_id', product.id);
-        originalUrls = (existing as any[] | null)?.map(r => r.url).filter(Boolean) ?? [];
+        // a) DELETE rows the user removed via slot X.
+        //    Identify by: was in original snapshot, no longer in formData.
+        const removedUrls = originalMediaUrls.filter(u => !realFormUrls.has(u));
+        if (removedUrls.length > 0) {
+          const { error: delErr } = await supabase
+            .from('product_images_new' as any)
+            .delete()
+            .eq('product_id', product.id)
+            .in('url', removedUrls);
+          if (delErr) throw delErr;
+          void deleteStorageFiles(removedUrls);
+        }
 
-        await supabase
-          .from('product_images_new' as any)
-          .delete()
-          .eq('product_id', product.id);
-      }
+        // b) UPDATE metadata (sort_order, is_primary, alt_text) for items the
+        //    user kept — they may have reordered or changed the primary.
+        const originalSet = new Set(originalMediaUrls);
+        for (let i = 0; i < realFormImages.length; i++) {
+          const img = realFormImages[i];
+          if (!originalSet.has(img.url)) continue; // not a kept item
+          const { error: updErr } = await supabase
+            .from('product_images_new' as any)
+            .update({
+              sort_order: i,
+              is_primary: img.is_primary,
+              alt_text: img.alt_text,
+            })
+            .eq('product_id', product.id)
+            .eq('url', img.url);
+          if (updErr) throw updErr;
+        }
 
-      const allMedia = formData.images
-        .filter(image => image.url && !image._uploading)
-        .map((image, index) => ({
+        // c) INSERT items that are new since the snapshot (e.g. the admin
+        //    pasted a YouTube URL or completed a sync image upload).
+        //    Background-uploaded videos already INSERTed themselves.
+        const newItems = realFormImages
+          .map((img, index) => ({ img, index }))
+          .filter(({ img }) => !originalSet.has(img.url))
+          .map(({ img, index }) => ({
+            product_id: product.id,
+            url: img.url,
+            alt_text: img.alt_text,
+            is_primary: img.is_primary,
+            sort_order: index,
+            media_type: img.media_type || 'image',
+          }));
+        if (newItems.length > 0) {
+          const { error: insErr } = await supabase
+            .from('product_images_new' as any)
+            .insert(newItems);
+          if (insErr) throw insErr;
+        }
+      } else {
+        // Create mode: simple bulk insert.
+        const allMedia = realFormImages.map((image, index) => ({
           product_id: product.id,
           url: image.url,
           alt_text: image.alt_text,
           is_primary: image.is_primary,
           sort_order: index,
-          media_type: image.media_type || 'image'
+          media_type: image.media_type || 'image',
         }));
-
-      if (allMedia.length > 0) {
-        const { error: imageError } = await supabase
-          .from('product_images_new' as any)
-          .insert(allMedia);
-
-        if (imageError) throw imageError;
-      }
-
-      // After successful DB save, clean up any storage files that are no longer
-      // referenced. Best-effort: storage failures don't roll back the save.
-      if (editingProduct && originalUrls.length > 0) {
-        const keptUrls = new Set(allMedia.map(m => m.url));
-        const orphanedUrls = originalUrls.filter(u => !keptUrls.has(u));
-        if (orphanedUrls.length > 0) {
-          void deleteStorageFiles(orphanedUrls);
+        if (allMedia.length > 0) {
+          const { error: imageError } = await supabase
+            .from('product_images_new' as any)
+            .insert(allMedia);
+          if (imageError) throw imageError;
         }
       }
 
@@ -839,9 +864,12 @@ export default function ProductsPro() {
           .eq('product_id', product.id);
       }
 
+      const inFlightCount = formData.images.filter(img => img._uploading).length;
       toast({
         title: "Success",
-        description: editingProduct ? `Product "${formData.name}" updated successfully!` : `Product "${formData.name}" created successfully!`
+        description: editingProduct
+          ? `Product "${formData.name}" updated${inFlightCount > 0 ? ` · ${inFlightCount} video${inFlightCount === 1 ? '' : 's'} still uploading in background` : '!'}`
+          : `Product "${formData.name}" created successfully!`
       });
 
       setIsDialogOpen(false);
@@ -882,6 +910,7 @@ export default function ProductsPro() {
       }
     });
     setEditingProduct(null);
+    setOriginalMediaUrls([]);
     setActiveTab('basic');
     setSearchTerm('');
     setSearchResults([]);
@@ -970,6 +999,7 @@ export default function ProductsPro() {
         installation: installationFormData
       });
 
+      setOriginalMediaUrls(formattedImages.map((img: any) => img.url).filter(Boolean));
       setEditingProduct(product);
       setIsDialogOpen(true);
     } catch (error: any) {
