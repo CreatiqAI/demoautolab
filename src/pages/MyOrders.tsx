@@ -820,8 +820,23 @@ export default function MyOrders() {
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                           <span className="font-semibold text-sm sm:text-base text-gray-900">{formatCurrency(order.total)}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 sm:px-3"
+                            onClick={(e) => handleReorder(order, e)}
+                            disabled={reorderingId === order.id || !order.order_items?.length}
+                            title="Reorder these items"
+                          >
+                            {reorderingId === order.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            )}
+                            <span className="hidden sm:inline ml-1.5">Reorder</span>
+                          </Button>
                           <Eye className="h-4 w-4 text-gray-400" />
                         </div>
                       </div>
@@ -917,8 +932,25 @@ export default function MyOrders() {
                             <span className="flex-shrink-0">{order.order_items.length} items ({order.order_items.reduce((t, i) => t + i.quantity, 0)} pcs)</span>
                           </p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                           <span className="font-semibold text-sm sm:text-base text-gray-900">{formatCurrency(order.total)}</span>
+                          {hasExtendedAccess && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-2 sm:px-3"
+                              onClick={(e) => handleReorder(order, e)}
+                              disabled={reorderingId === order.id || !order.order_items?.length}
+                              title="Reorder these items"
+                            >
+                              {reorderingId === order.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              )}
+                              <span className="hidden sm:inline ml-1.5">Reorder</span>
+                            </Button>
+                          )}
                           {hasExtendedAccess && <Eye className="h-4 w-4 text-gray-400" />}
                         </div>
                       </div>
