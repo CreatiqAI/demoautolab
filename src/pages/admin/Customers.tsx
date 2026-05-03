@@ -31,6 +31,8 @@ interface CustomerProfile {
   car_make_name: string | null;
   car_model_id: string | null;
   car_model_name: string | null;
+  subscription_start_date: string | null;
+  subscription_end_date: string | null;
 }
 
 interface SocialMediaLink {
@@ -78,6 +80,7 @@ export default function Customers() {
   const [applications, setApplications] = useState<MerchantApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [customerTypeFilter, setCustomerTypeFilter] = useState<'all' | 'b2b' | 'b2c'>('all');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<MerchantApplication | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -345,6 +348,8 @@ export default function Customers() {
   };
 
   const filteredCustomers = customers.filter(customer => {
+    if (customerTypeFilter === 'b2b' && customer.customer_type !== 'merchant') return false;
+    if (customerTypeFilter === 'b2c' && customer.customer_type === 'merchant') return false;
     const searchLower = searchTerm.toLowerCase();
     return (
       customer.full_name?.toLowerCase().includes(searchLower) ||
@@ -353,6 +358,27 @@ export default function Customers() {
       customer.id?.toLowerCase().includes(searchLower)
     );
   });
+
+  const getSubscriptionInfo = (customer: CustomerProfile) => {
+    if (customer.customer_type !== 'merchant' || !customer.subscription_end_date) return null;
+    const now = Date.now();
+    const end = new Date(customer.subscription_end_date).getTime();
+    const daysRemaining = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+    let status: 'active' | 'expiring' | 'expired';
+    if (daysRemaining < 0) status = 'expired';
+    else if (daysRemaining <= 30) status = 'expiring';
+    else status = 'active';
+    return { daysRemaining, status };
+  };
+
+  const formatDateShort = (dateString: string | null) => {
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleDateString('en-MY', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
 
 
   const formatDate = (dateString: string | null) => {
@@ -604,14 +630,36 @@ export default function Customers() {
                 All registered customers who use your automotive parts service
               </CardDescription>
 
-              <div className="relative max-w-sm">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search customers..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative max-w-sm flex-1 min-w-[200px]">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search customers..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                <div className="inline-flex rounded-md border bg-muted/30 p-0.5">
+                  {([
+                    { key: 'all', label: 'All' },
+                    { key: 'b2b', label: 'B2B Merchants' },
+                    { key: 'b2c', label: 'B2C Customers' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setCustomerTypeFilter(opt.key)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                        customerTypeFilter === opt.key
+                          ? 'bg-white shadow-sm text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </CardHeader>
 
@@ -682,10 +730,39 @@ export default function Customers() {
                           </TableCell>
                           <TableCell>
                             {customer.customer_type === 'merchant' ? (
-                              <Badge className="bg-purple-600 hover:bg-purple-700 text-white">
-                                <Store className="h-3 w-3 mr-1" />
-                                B2B Merchant
-                              </Badge>
+                              <div className="space-y-1">
+                                <Badge className="bg-purple-600 hover:bg-purple-700 text-white">
+                                  <Store className="h-3 w-3 mr-1" />
+                                  B2B Merchant
+                                </Badge>
+                                {(() => {
+                                  const sub = getSubscriptionInfo(customer);
+                                  if (!sub) return null;
+                                  const palette =
+                                    sub.status === 'active'
+                                      ? 'border-green-300 text-green-700 bg-green-50'
+                                      : sub.status === 'expiring'
+                                        ? 'border-amber-300 text-amber-700 bg-amber-50'
+                                        : 'border-red-300 text-red-700 bg-red-50';
+                                  const label =
+                                    sub.status === 'expired'
+                                      ? `Expired ${Math.abs(sub.daysRemaining)}d ago`
+                                      : sub.status === 'expiring'
+                                        ? `${sub.daysRemaining}d left — renew soon`
+                                        : `${sub.daysRemaining}d left`;
+                                  return (
+                                    <div className="space-y-0.5">
+                                      <Badge variant="outline" className={palette}>
+                                        <Calendar className="h-3 w-3 mr-1" />
+                                        {label}
+                                      </Badge>
+                                      <div className="text-[11px] text-muted-foreground leading-tight">
+                                        {formatDateShort(customer.subscription_start_date)} → {formatDateShort(customer.subscription_end_date)}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
                             ) : (
                               <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50">
                                 <User className="h-3 w-3 mr-1" />
