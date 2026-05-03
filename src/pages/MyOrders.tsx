@@ -10,6 +10,7 @@ import { Eye, ArrowLeft, Package, Truck, CheckCircle, Clock, XCircle, CreditCard
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useCart } from '@/hooks/useCartDB';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -67,6 +68,8 @@ interface ExtendedAccessPlan {
 
 export default function MyOrders() {
   const { user } = useAuth();
+  const { addToCart } = useCart();
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
@@ -444,6 +447,90 @@ export default function MyOrders() {
     }).format(amount);
   };
 
+  // Reorder a previous order. Looks up current stock + price for each item
+  // and adds the smaller of (ordered qty, available stock) to cart. Items
+  // that are completely out of stock are skipped with a warning.
+  const handleReorder = async (order: CustomerOrder, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!user) {
+      toast({ title: 'Sign in required', description: 'Please log in to reorder.', variant: 'destructive' });
+      return;
+    }
+    if (!order.order_items?.length) return;
+    setReorderingId(order.id);
+    try {
+      const skus = order.order_items.map(i => i.component_sku);
+      const { data: components } = await supabase
+        .from('component_library' as any)
+        .select('component_sku, name, normal_price, merchant_price, stock_level, default_image_url, is_active')
+        .in('component_sku', skus);
+      const compMap = new Map<string, any>(
+        ((components as any[] | null) ?? []).map(c => [c.component_sku, c])
+      );
+
+      let added = 0;
+      const limited: string[] = [];   // items added at less than requested qty
+      const outOfStock: string[] = [];
+      const removed: string[] = [];   // SKU no longer in catalog or inactive
+
+      for (const item of order.order_items) {
+        const comp = compMap.get(item.component_sku);
+        if (!comp || !comp.is_active) {
+          removed.push(item.component_name);
+          continue;
+        }
+        const available = Math.max(0, Number(comp.stock_level) || 0);
+        if (available <= 0) {
+          outOfStock.push(item.component_name);
+          continue;
+        }
+        const qty = Math.min(item.quantity, available);
+        if (qty < item.quantity) limited.push(`${item.component_name} (${qty}/${item.quantity})`);
+        await addToCart({
+          component_sku: item.component_sku,
+          name: comp.name || item.component_name,
+          // Use the price the user previously paid as the displayed price.
+          // The cart/checkout will recompute with current pricing rules.
+          normal_price: Number(comp.normal_price) || item.unit_price,
+          quantity: qty,
+          product_name: item.product_context || item.component_name,
+          component_image: comp.default_image_url || item.component_image || undefined,
+        });
+        added++;
+      }
+
+      // Surface the outcome with appropriate variant
+      if (added === 0) {
+        toast({
+          title: 'Could not reorder',
+          description: outOfStock.length > 0
+            ? `All items are out of stock: ${outOfStock.join(', ')}`
+            : `None of the items are available anymore.`,
+          variant: 'destructive',
+        });
+      } else if (limited.length > 0 || outOfStock.length > 0 || removed.length > 0) {
+        const parts: string[] = [`${added} item${added === 1 ? '' : 's'} added to cart`];
+        if (limited.length) parts.push(`Stock-limited: ${limited.join(', ')}`);
+        if (outOfStock.length) parts.push(`Out of stock: ${outOfStock.join(', ')}`);
+        if (removed.length) parts.push(`No longer available: ${removed.join(', ')}`);
+        toast({
+          title: 'Added with warnings',
+          description: parts.join(' · '),
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Reorder added to cart',
+          description: `${added} item${added === 1 ? '' : 's'} added at current stock.`,
+        });
+      }
+    } catch (err: any) {
+      toast({ title: 'Reorder failed', description: err?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-MY', {
       year: 'numeric',
@@ -633,6 +720,9 @@ export default function MyOrders() {
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight">My Orders</h2>
             <p className="text-xs sm:text-sm text-muted-foreground">Track your order history and delivery status</p>
           </div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/my-insights')}>
+            <TrendingUp className="h-3.5 w-3.5 mr-1.5" />My Insights
+          </Button>
           <Select value={timeFilter} onValueChange={(v) => {
             if (v === 'all' && !hasExtendedAccess) { setShowUpgradeDialog(true); return; }
             setTimeFilter(v);
@@ -1122,6 +1212,19 @@ export default function MyOrders() {
 
             {/* Footer actions — pinned at bottom */}
             <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-t bg-white flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => handleReorder(selectedOrder, e)}
+                disabled={reorderingId === selectedOrder.id || !selectedOrder.order_items?.length}
+              >
+                {reorderingId === selectedOrder.id ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Reorder
+              </Button>
               {selectedOrder.payment_state === 'SUCCESS' && (
                 <Button variant="outline" size="sm" onClick={() => openInvoiceModal(selectedOrder)}>
                   <FileDown className="h-3.5 w-3.5 mr-1.5" /> Invoice

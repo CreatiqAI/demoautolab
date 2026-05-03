@@ -21,6 +21,7 @@ import Profile from './pages/Profile';
 import FindShops from './pages/FindShops';
 import PremiumPartner from './pages/PremiumPartner';
 import MyOrders from './pages/MyOrders';
+import MyInsights from './pages/MyInsights';
 import MyVouchers from './pages/MyVouchers';
 import Cart from './pages/Cart';
 import PaymentGateway from './pages/PaymentGateway';
@@ -109,6 +110,7 @@ const App = () => (
                   <Route path="/product/:id" element={<ProductDetails />} />
                   <Route path="/cart" element={<Cart />} />
                   <Route path="/my-orders" element={<MyOrders />} />
+                  <Route path="/my-insights" element={<MyInsights />} />
                   <Route path="/my-vouchers" element={<MyVouchers />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/settings" element={<UserSettings />} />
