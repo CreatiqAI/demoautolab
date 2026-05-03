@@ -262,6 +262,7 @@ export function UploadQueueProvider({ children }: { children: ReactNode }) {
           toast({
             title: target === 'installation-video' ? 'Installation video uploaded' : 'Video uploaded',
             description: `${file.name} added to ${productName}`,
+            variant: 'success',
           });
 
           setTimeout(() => {

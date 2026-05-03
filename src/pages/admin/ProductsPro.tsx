@@ -1007,7 +1007,8 @@ export default function ProductsPro() {
         title: "Success",
         description: editingProduct
           ? `Product "${formData.name}" updated${inFlightCount > 0 ? ` · ${inFlightCount} video${inFlightCount === 1 ? '' : 's'} still uploading in background` : '!'}`
-          : `Product "${formData.name}" created successfully!`
+          : `Product "${formData.name}" created successfully!`,
+        variant: 'success',
       });
 
       setIsDialogOpen(false);
