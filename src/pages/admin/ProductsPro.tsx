@@ -15,7 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye, RotateCcw, AlertTriangle, Copy, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
-import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
+import VideoUpload, { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
 import { useUploadQueue, PRODUCT_MEDIA_UPLOADED_EVENT, PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, type ProductMediaUploadedDetail } from '@/hooks/useUploadQueue';
 import { deleteStorageFiles, findOrphanStorageFiles, deleteOrphans } from '@/lib/storageCleanup';
 
@@ -2241,53 +2241,9 @@ export default function ProductsPro() {
 
                             {formData.installation.installation_videos.map((video, index) => (
                               <Card key={index} className="p-4">
-                                <div className="grid grid-cols-12 gap-3">
-                                  <div className="col-span-6">
-                                    <Label className="text-xs text-muted-foreground">Video URL</Label>
-                                    <Input
-                                      value={video.url}
-                                      onChange={(e) => {
-                                        const videos = [...formData.installation.installation_videos];
-                                        videos[index] = { ...videos[index], url: e.target.value };
-                                        setFormData(prev => ({
-                                          ...prev,
-                                          installation: { ...prev.installation, installation_videos: videos }
-                                        }));
-                                      }}
-                                      placeholder="https://youtube.com/watch?v=..."
-                                    />
-                                  </div>
-                                  <div className="col-span-3">
-                                    <Label className="text-xs text-muted-foreground">Title</Label>
-                                    <Input
-                                      value={video.title}
-                                      onChange={(e) => {
-                                        const videos = [...formData.installation.installation_videos];
-                                        videos[index] = { ...videos[index], title: e.target.value };
-                                        setFormData(prev => ({
-                                          ...prev,
-                                          installation: { ...prev.installation, installation_videos: videos }
-                                        }));
-                                      }}
-                                      placeholder="Video title"
-                                    />
-                                  </div>
-                                  <div className="col-span-2">
-                                    <Label className="text-xs text-muted-foreground">Duration</Label>
-                                    <Input
-                                      value={video.duration}
-                                      onChange={(e) => {
-                                        const videos = [...formData.installation.installation_videos];
-                                        videos[index] = { ...videos[index], duration: e.target.value };
-                                        setFormData(prev => ({
-                                          ...prev,
-                                          installation: { ...prev.installation, installation_videos: videos }
-                                        }));
-                                      }}
-                                      placeholder="15:30"
-                                    />
-                                  </div>
-                                  <div className="col-span-1 flex items-end justify-center">
+                                <div className="space-y-3">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <Label className="text-xs text-muted-foreground pt-1">Video {index + 1} — paste a YouTube/Vimeo URL or upload an MP4 (max 2GB)</Label>
                                     <Button
                                       type="button"
                                       size="sm"
@@ -2302,6 +2258,60 @@ export default function ProductsPro() {
                                     >
                                       <Trash2 className="h-4 w-4 text-red-500" />
                                     </Button>
+                                  </div>
+                                  <VideoUpload
+                                    value={video.url}
+                                    onChange={(url) => {
+                                      const videos = [...formData.installation.installation_videos];
+                                      videos[index] = { ...videos[index], url };
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        installation: { ...prev.installation, installation_videos: videos }
+                                      }));
+                                    }}
+                                    onRemove={() => {
+                                      const videos = [...formData.installation.installation_videos];
+                                      videos[index] = { ...videos[index], url: '' };
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        installation: { ...prev.installation, installation_videos: videos }
+                                      }));
+                                    }}
+                                    bucket="product-videos"
+                                    path="installation-videos"
+                                    placeholder="Upload installation video"
+                                  />
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Title</Label>
+                                      <Input
+                                        value={video.title}
+                                        onChange={(e) => {
+                                          const videos = [...formData.installation.installation_videos];
+                                          videos[index] = { ...videos[index], title: e.target.value };
+                                          setFormData(prev => ({
+                                            ...prev,
+                                            installation: { ...prev.installation, installation_videos: videos }
+                                          }));
+                                        }}
+                                        placeholder="e.g. Step-by-step installation"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Duration</Label>
+                                      <Input
+                                        value={video.duration}
+                                        onChange={(e) => {
+                                          const videos = [...formData.installation.installation_videos];
+                                          videos[index] = { ...videos[index], duration: e.target.value };
+                                          setFormData(prev => ({
+                                            ...prev,
+                                            installation: { ...prev.installation, installation_videos: videos }
+                                          }));
+                                        }}
+                                        placeholder="15:30"
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                               </Card>
