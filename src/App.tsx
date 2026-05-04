@@ -54,6 +54,15 @@ import VoucherManagement from './pages/admin/VoucherManagement';
 import ReviewModeration from './pages/admin/ReviewModeration';
 import CustomerTiers from './pages/admin/CustomerTiers';
 import AuditLog from './pages/admin/AuditLog';
+import Vendors from './pages/admin/Vendors';
+import VendorApply from './pages/VendorApply';
+import VendorLayout from './components/vendor/VendorLayout';
+import ProtectedVendorRoute from './components/vendor/ProtectedVendorRoute';
+import VendorDashboard from './pages/vendor/Dashboard';
+import VendorProducts from './pages/vendor/Products';
+import VendorOrders from './pages/vendor/Orders';
+import VendorPayouts from './pages/vendor/Payouts';
+import VendorSettings from './pages/vendor/Settings';
 import SecondhandModeration from './pages/admin/SecondhandModeration';
 import Analytics from './pages/admin/Analytics';
 
@@ -163,6 +172,7 @@ const App = () => (
                     <Route path="warehouse-operations" element={<WarehouseOperations />} />
                     <Route path="inventory-alerts" element={<InventoryAlerts />} />
                     <Route path="customers" element={<Customers />} />
+                    <Route path="vendors" element={<Vendors />} />
                     <Route path="review-moderation" element={<ReviewModeration />} />
                     <Route path="vouchers" element={<VoucherManagement />} />
                     <Route path="customer-tiers" element={<CustomerTiers />} />
@@ -174,6 +184,24 @@ const App = () => (
                     <Route path="knowledge-base" element={<KnowledgeBase />} />
                     <Route path="users" element={<UserManagement />} />
                     <Route path="settings" element={<Settings />} />
+                  </Route>
+
+                  {/* Vendor public application + protected console */}
+                  <Route path="/vendor/apply" element={<VendorApply />} />
+                  <Route
+                    path="/vendor"
+                    element={
+                      <ProtectedVendorRoute>
+                        <VendorLayout />
+                      </ProtectedVendorRoute>
+                    }
+                  >
+                    <Route index element={<VendorDashboard />} />
+                    <Route path="dashboard" element={<VendorDashboard />} />
+                    <Route path="products" element={<VendorProducts />} />
+                    <Route path="orders" element={<VendorOrders />} />
+                    <Route path="payouts" element={<VendorPayouts />} />
+                    <Route path="settings" element={<VendorSettings />} />
                   </Route>
 
                   <Route path="*" element={<NotFound />} />

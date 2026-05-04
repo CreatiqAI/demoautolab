@@ -87,6 +87,7 @@ const navigation: NavigationElement[] = [
     icon: Users,
     items: [
       { name: 'Customers', href: '/admin/customers', icon: Users },
+      { name: 'Vendors', href: '/admin/vendors', icon: Briefcase },
       { name: 'Salesmen', href: '/admin/salesmen', icon: Briefcase },
     ]
   },
