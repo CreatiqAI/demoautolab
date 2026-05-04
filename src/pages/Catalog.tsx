@@ -36,6 +36,8 @@ interface Product {
     url: string;
     alt_text: string;
     is_primary: boolean;
+    media_type?: 'image' | 'video';
+    sort_order?: number;
   }>;
   product_variants?: Array<{
     id: string;
@@ -93,7 +95,8 @@ const Catalog = () => {
             url,
             alt_text,
             is_primary,
-            sort_order
+            sort_order,
+            media_type
           ),
           categories (
             id,
@@ -262,9 +265,13 @@ const Catalog = () => {
     },
   });
 
-  const getPrimaryImage = (images: Product['product_images']) => {
-    const primaryImage = images.find(img => img.is_primary) || images[0];
-    return primaryImage?.url || '/placeholder.svg';
+  const getPrimaryMedia = (images: Product['product_images']) => {
+    const imageOnly = images.filter(m => m.media_type !== 'video');
+    const primary = imageOnly.find(img => img.is_primary) || imageOnly[0];
+    if (primary) return { url: primary.url, mediaType: 'image' as const };
+    const firstVideo = images.find(m => m.media_type === 'video');
+    if (firstVideo) return { url: firstVideo.url, mediaType: 'video' as const };
+    return { url: '/placeholder.svg', mediaType: 'image' as const };
   };
 
   const getComponentCount = (product: Product) => {
@@ -597,7 +604,7 @@ const Catalog = () => {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-5">
                   {displayProducts.map((product) => {
-                    const primaryImage = getPrimaryImage(product.product_images);
+                    const primaryMedia = getPrimaryMedia(product.product_images);
                     const componentCount = getComponentCount(product);
 
                     return (
@@ -608,17 +615,27 @@ const Catalog = () => {
                       >
                         {/* Product Image */}
                         <div className="relative aspect-square overflow-hidden bg-gray-50">
-                          <img
-                            src={primaryImage}
-                            alt={product.name}
-                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
-                            loading="lazy"
-                            decoding="async"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/placeholder.svg';
-                            }}
-                          />
+                          {primaryMedia.mediaType === 'video' ? (
+                            <video
+                              src={`${primaryMedia.url}#t=0.1`}
+                              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                              muted
+                              playsInline
+                              preload="metadata"
+                            />
+                          ) : (
+                            <img
+                              src={primaryMedia.url}
+                              alt={product.name}
+                              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                              loading="lazy"
+                              decoding="async"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = '/placeholder.svg';
+                              }}
+                            />
+                          )}
 
                           {/* Status Badge - Top Left */}
                           {product.featured && (
