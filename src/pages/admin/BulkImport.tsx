@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { EntityPicker } from '@/components/admin/bulkImport/EntityPicker';
 import { TemplateDownloader } from '@/components/admin/bulkImport/TemplateDownloader';
 import { FileDropzone } from '@/components/admin/bulkImport/FileDropzone';
+import { PreviewTable } from '@/components/admin/bulkImport/PreviewTable';
 import { parseExcelFile } from '@/lib/bulkImport/parser';
 import { validateRows } from '@/lib/bulkImport/validators';
 import { getColumnMap } from '@/lib/bulkImport/columnMaps';
@@ -53,13 +54,16 @@ export default function BulkImport() {
 
       {!summary && <FileDropzone onFile={handleFile} />}
       {summary && (
-        <div className="space-y-2 p-4 border rounded-lg">
-          <p className="text-sm">{fileName}</p>
-          <p className="text-sm">
-            ✓ {summary.validRows} valid · ✗ {summary.errorRows} errors · ⚠ {summary.warningRows} warnings
-          </p>
-          <button className="text-sm underline" onClick={() => setSummary(null)}>Choose a different file</button>
-        </div>
+        <>
+          <div className="space-y-2 p-4 border rounded-lg">
+            <p className="text-sm">{fileName}</p>
+            <p className="text-sm">
+              ✓ {summary.validRows} valid · ✗ {summary.errorRows} errors · ⚠ {summary.warningRows} warnings
+            </p>
+            <button className="text-sm underline" onClick={() => setSummary(null)}>Choose a different file</button>
+          </div>
+          <PreviewTable summary={summary} />
+        </>
       )}
     </div>
   );
