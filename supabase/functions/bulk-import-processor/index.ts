@@ -134,7 +134,7 @@ serve(async (req) => {
       total_rows: results.length,
       succeeded,
       failed,
-      result_json: results as any,
+      result_json: results as unknown as Record<string, unknown>,
     });
 
     return new Response(JSON.stringify({ results }), {

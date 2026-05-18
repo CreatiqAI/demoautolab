@@ -15,11 +15,11 @@ export async function verifyAdmin(
     .from('admin_profiles')
     .select('id, is_active')
     .eq('id', admin_id)
-    .maybeSingle();
+    .maybeSingle<{ id: string; is_active: boolean | null }>();
   if (error || !admin) {
     return { ok: false, status: 403, message: 'Unauthorized — admin profile not found.' };
   }
-  if ((admin as any).is_active === false) {
+  if (admin.is_active === false) {
     return { ok: false, status: 403, message: 'Admin account is inactive.' };
   }
   return { ok: true };

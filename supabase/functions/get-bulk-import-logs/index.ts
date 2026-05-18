@@ -25,8 +25,8 @@ serve(async (req) => {
       .from('admin_profiles')
       .select('id, is_active')
       .eq('id', body.admin_id)
-      .maybeSingle();
-    if (!admin || (admin as any).is_active === false) {
+      .maybeSingle<{ id: string; is_active: boolean | null }>();
+    if (!admin || admin.is_active === false) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }

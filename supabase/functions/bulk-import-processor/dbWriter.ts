@@ -28,7 +28,7 @@ export async function writeRow(
     .from(input.table)
     .select('id')
     .eq(input.uniqueKey, skuValue as string)
-    .maybeSingle();
+    .maybeSingle<{ id: string }>();
 
   const payload: Record<string, unknown> = { ...input.fields };
   if (input.defaultImageUrl !== null) payload['default_image_url'] = input.defaultImageUrl;
@@ -36,17 +36,17 @@ export async function writeRow(
 
   if (existing) {
     if (input.mode === 'insert') {
-      return { status: 'skipped', recordId: (existing as any).id };
+      return { status: 'skipped', recordId: existing.id };
     }
     const { data: updated, error } = await supabase
       .from(input.table)
       .update(payload)
-      .eq('id', (existing as any).id)
+      .eq('id', existing.id)
       .select('id')
-      .single();
+      .single<{ id: string }>();
     if (error) throw error;
-    await writeGallery(supabase, (updated as any).id, input.galleryUrls, /*replace=*/true);
-    return { status: 'updated', recordId: (updated as any).id };
+    await writeGallery(supabase, updated.id, input.galleryUrls, /*replace=*/true);
+    return { status: 'updated', recordId: updated.id };
   } else {
     if (input.mode === 'update') {
       throw new Error(`SKU not found and mode=update: ${skuValue}`);
@@ -55,10 +55,10 @@ export async function writeRow(
       .from(input.table)
       .insert(payload)
       .select('id')
-      .single();
+      .single<{ id: string }>();
     if (error) throw error;
-    await writeGallery(supabase, (inserted as any).id, input.galleryUrls, /*replace=*/false);
-    return { status: 'inserted', recordId: (inserted as any).id };
+    await writeGallery(supabase, inserted.id, input.galleryUrls, /*replace=*/false);
+    return { status: 'inserted', recordId: inserted.id };
   }
 }
 
