@@ -1,8 +1,11 @@
 import type { ColumnMap, FieldDef, ParsedRow, RawRow, ValidationSummary } from './types';
+import type { CoerceResult } from './coerce';
 import { coerceText, coerceNumber, coerceInteger, coerceBoolean, coerceUuid } from './coerce';
 import { normalizeMediaUrl } from './driveUrl';
 
-function coerceField(value: unknown, field: FieldDef) {
+type FieldValue = string | number | boolean;
+
+function coerceField(value: unknown, field: FieldDef): CoerceResult<FieldValue> {
   switch (field.type) {
     case 'text':    return coerceText(value);
     case 'number':  return coerceNumber(value, { min: field.min, max: field.max });
