@@ -49,19 +49,12 @@ const componentsExample = {
   sku: 'BRK-001',
   name: 'Universal Door Bracket',
   type: 'body',
-  value: 'M8',
   description: 'Heavy-duty stainless steel bracket',
   normal_price: 12.50,
   merchant_price: 9.80,
   stock_level: 25,
-  min_stock_level: 10,
-  reorder_point: 15,
-  warehouse_location: 'A1-03',
   is_active: 'TRUE',
-  vendor_id: '',
-  image_1: 'https://drive.google.com/file/d/EXAMPLE_FILE_ID/view',
-  image_2: '', image_3: '', image_4: '', image_5: '',
-  video_url: '',
+  image_url: 'https://drive.google.com/file/d/EXAMPLE_FILE_ID/view',
 };
 
 mkdirSync(OUT_DIR, { recursive: true });
@@ -83,10 +76,7 @@ const productsExample = {
   year_from: 2018,
   year_to: 2022,
   is_active: 'TRUE',
-  vendor_id: '',
-  image_1: 'https://drive.google.com/file/d/EXAMPLE_FILE_ID/view',
-  image_2: '', image_3: '', image_4: '', image_5: '',
-  video_url: 'https://www.youtube.com/watch?v=EXAMPLE',
+  image_url: 'https://drive.google.com/file/d/EXAMPLE_FILE_ID/view',
 };
 
 XLSX.writeFile(

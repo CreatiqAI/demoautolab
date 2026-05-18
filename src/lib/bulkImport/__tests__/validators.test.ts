@@ -6,8 +6,7 @@ describe('validateRows', () => {
   const baseRow = {
     sku: 'BRK-001', name: 'Bracket', type: 'body',
     normal_price: 10, merchant_price: 8,
-    image_1: 'https://drive.google.com/file/d/ID1/view',
-    image_2: '', image_3: '', image_4: '', image_5: '', video_url: '',
+    image_url: 'https://drive.google.com/file/d/ID1/view',
   };
 
   it('accepts a valid row', () => {
@@ -54,15 +53,15 @@ describe('validateRows', () => {
     expect(summary.rows[0].fields.stock_level).toBe(15);
   });
 
-  it('normalizes Drive URLs in media columns', () => {
-    const row = { ...baseRow, image_2: 'https://drive.google.com/file/d/ID2/view' };
+  it('normalizes Drive URLs in image_url', () => {
+    const row = { ...baseRow, image_url: 'https://drive.google.com/file/d/ID2/view' };
     const summary = validateRows([{ rowIndex: 2, raw: row }], componentsColumnMap);
-    expect(summary.rows[0].mediaUrls.gallery[0]).toContain('uc?export=download&id=ID2');
+    expect(summary.rows[0].mediaUrls.default).toContain('uc?export=download&id=ID2');
   });
 
-  it('rejects invalid URLs in media columns with a row error', () => {
-    const row = { ...baseRow, image_1: 'not a url' };
+  it('rejects invalid URLs in image_url with a row error', () => {
+    const row = { ...baseRow, image_url: 'not a url' };
     const summary = validateRows([{ rowIndex: 2, raw: row }], componentsColumnMap);
-    expect(summary.rows[0].errors.some(e => e.toLowerCase().includes('image_1'))).toBe(true);
+    expect(summary.rows[0].errors.some(e => e.toLowerCase().includes('image_url'))).toBe(true);
   });
 });

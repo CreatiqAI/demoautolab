@@ -19,18 +19,18 @@ export function PreviewTable({ summary }: Props) {
             <TableHead>Type</TableHead>
             <TableHead className="text-right">Normal</TableHead>
             <TableHead className="text-right">Merchant</TableHead>
-            <TableHead className="text-right">Imgs</TableHead>
+            <TableHead className="text-right">Image</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {summary.rows.map((r) => {
-            const sku = (r.fields['component_sku'] ?? r.fields['sku']) as string;
+            const sku = (r.fields['component_sku'] ?? r.fields['slug'] ?? r.fields['sku']) as string;
             const name = r.fields['name'] as string;
-            const type = (r.fields['component_type'] ?? r.fields['brand']) as string;
-            const np = r.fields['normal_price'] ?? r.fields['price_regular'];
-            const mp = r.fields['merchant_price'] ?? r.fields['price_merchant'];
-            const imgCount = (r.mediaUrls.default ? 1 : 0) + r.mediaUrls.gallery.length;
+            const type = (r.fields['component_type'] ?? r.fields['brand']) as string | undefined;
+            const np = r.fields['normal_price'];
+            const mp = r.fields['merchant_price'];
+            const hasImage = r.mediaUrls.default ? '✓' : '—';
             const hasErr = r.errors.length > 0;
             const hasWarn = r.warnings.length > 0;
             return (
@@ -45,7 +45,7 @@ export function PreviewTable({ summary }: Props) {
                 <TableCell>{type ?? '—'}</TableCell>
                 <TableCell className="text-right">{typeof np === 'number' ? np.toFixed(2) : '—'}</TableCell>
                 <TableCell className="text-right">{typeof mp === 'number' ? mp.toFixed(2) : '—'}</TableCell>
-                <TableCell className="text-right">{imgCount}</TableCell>
+                <TableCell className="text-right">{hasImage}</TableCell>
                 <TableCell className="text-xs">
                   {hasErr ? (
                     <div className="space-y-0.5">
