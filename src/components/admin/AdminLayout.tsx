@@ -16,6 +16,7 @@ import {
   UserCog,
   CheckCircle,
   Warehouse,
+  Truck,
   BookOpen,
   Bell,
   Archive,
@@ -27,7 +28,9 @@ import {
   ChevronDown,
   ChevronUp,
   Briefcase,
-  RotateCcw
+  RotateCcw,
+  Wallet,
+  Upload
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UploadQueueProvider } from '@/hooks/useUploadQueue';
@@ -63,6 +66,7 @@ const navigation: NavigationElement[] = [
     icon: ShoppingBag,
     items: [
       { name: 'All Orders', href: '/admin/orders', icon: ShoppingBag },
+      { name: 'Vendor Fulfilments', href: '/admin/vendor-fulfilments', icon: Truck },
       { name: 'Warehouse Operations', href: '/admin/warehouse-operations', icon: Warehouse },
       { name: 'Returns', href: '/admin/returns', icon: RotateCcw },
       { name: 'Archived Orders', href: '/admin/archived-orders', icon: Archive },
@@ -76,6 +80,7 @@ const navigation: NavigationElement[] = [
     items: [
       { name: 'Products', href: '/admin/products', icon: Package },
       { name: 'Component Library', href: '/admin/component-library', icon: Layers },
+      { name: 'Bulk Import', href: '/admin/bulk-import', icon: Upload },
       { name: 'Review Moderation', href: '/admin/review-moderation', icon: Star },
       { name: 'Inventory Alerts', href: '/admin/inventory-alerts', icon: Bell },
     ]
@@ -88,6 +93,7 @@ const navigation: NavigationElement[] = [
     items: [
       { name: 'Customers', href: '/admin/customers', icon: Users },
       { name: 'Vendors', href: '/admin/vendors', icon: Briefcase },
+      { name: 'Vendor Payouts', href: '/admin/vendor-payouts', icon: Wallet },
       { name: 'Salesmen', href: '/admin/salesmen', icon: Briefcase },
     ]
   },

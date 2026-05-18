@@ -55,16 +55,20 @@ import ReviewModeration from './pages/admin/ReviewModeration';
 import CustomerTiers from './pages/admin/CustomerTiers';
 import AuditLog from './pages/admin/AuditLog';
 import Vendors from './pages/admin/Vendors';
-import VendorApply from './pages/VendorApply';
+import AdminVendorPayouts from './pages/admin/VendorPayouts';
+import AdminVendorFulfilments from './pages/admin/VendorFulfilments';
 import VendorLayout from './components/vendor/VendorLayout';
 import ProtectedVendorRoute from './components/vendor/ProtectedVendorRoute';
+import VendorRedirector from './components/vendor/VendorRedirector';
 import VendorDashboard from './pages/vendor/Dashboard';
 import VendorProducts from './pages/vendor/Products';
+import VendorComponents from './pages/vendor/Components';
 import VendorOrders from './pages/vendor/Orders';
 import VendorPayouts from './pages/vendor/Payouts';
 import VendorSettings from './pages/vendor/Settings';
 import SecondhandModeration from './pages/admin/SecondhandModeration';
 import Analytics from './pages/admin/Analytics';
+import BulkImport from '@/pages/admin/BulkImport';
 
 // New Phase 2 Pages
 import SecondhandMarketplace from './pages/SecondhandMarketplace';
@@ -92,8 +96,13 @@ function SessionEnforcer() {
 
 function CustomerChatBot() {
   const { pathname } = useLocation();
-  // Hide on admin and warehouse pages
-  if (pathname.startsWith('/admin') || pathname.startsWith('/warehouse')) return null;
+  // Hide on admin, warehouse and vendor pages — those audiences don't
+  // need the customer chat surface.
+  if (
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/warehouse') ||
+    pathname.startsWith('/vendor')
+  ) return null;
   return <ChatBot />;
 }
 
@@ -109,6 +118,7 @@ const App = () => (
             <CartProvider>
               <BrowserRouter>
                 <ScrollToTop />
+                <VendorRedirector />
                 <CustomerChatBot />
                 <Routes>
                   <Route path="/" element={<Home />} />
@@ -167,12 +177,15 @@ const App = () => (
                     <Route path="analytics" element={<Analytics />} />
                     <Route path="products" element={<ProductsPro />} />
                     <Route path="component-library" element={<ComponentLibraryPro />} />
+                    <Route path="bulk-import" element={<BulkImport />} />
                     <Route path="orders" element={<Orders />} />
                     <Route path="archived-orders" element={<ArchivedOrders />} />
                     <Route path="warehouse-operations" element={<WarehouseOperations />} />
                     <Route path="inventory-alerts" element={<InventoryAlerts />} />
                     <Route path="customers" element={<Customers />} />
                     <Route path="vendors" element={<Vendors />} />
+                    <Route path="vendor-payouts" element={<AdminVendorPayouts />} />
+                    <Route path="vendor-fulfilments" element={<AdminVendorFulfilments />} />
                     <Route path="review-moderation" element={<ReviewModeration />} />
                     <Route path="vouchers" element={<VoucherManagement />} />
                     <Route path="customer-tiers" element={<CustomerTiers />} />
@@ -186,8 +199,9 @@ const App = () => (
                     <Route path="settings" element={<Settings />} />
                   </Route>
 
-                  {/* Vendor public application + protected console */}
-                  <Route path="/vendor/apply" element={<VendorApply />} />
+                  {/* Vendor protected console — partner accounts are admin-issued */}
+                  <Route path="/vendor/login" element={<Navigate to="/auth?tab=partner" replace />} />
+                  <Route path="/vendor/apply" element={<Navigate to="/auth?tab=partner" replace />} />
                   <Route
                     path="/vendor"
                     element={
@@ -199,6 +213,7 @@ const App = () => (
                     <Route index element={<VendorDashboard />} />
                     <Route path="dashboard" element={<VendorDashboard />} />
                     <Route path="products" element={<VendorProducts />} />
+                    <Route path="components" element={<VendorComponents />} />
                     <Route path="orders" element={<VendorOrders />} />
                     <Route path="payouts" element={<VendorPayouts />} />
                     <Route path="settings" element={<VendorSettings />} />
