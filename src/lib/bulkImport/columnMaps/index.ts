@@ -1,15 +1,14 @@
 import type { ColumnMap, Entity } from '../types';
 import { componentsColumnMap } from './components';
+import { productsColumnMap } from './products';
 
-const maps: Record<Entity, ColumnMap | null> = {
+const maps: Record<Entity, ColumnMap> = {
   component: componentsColumnMap,
-  product: null,  // added in Task 23
+  product: productsColumnMap,
 };
 
 export function getColumnMap(entity: Entity): ColumnMap {
-  const map = maps[entity];
-  if (!map) throw new Error(`No column map registered for entity: ${entity}`);
-  return map;
+  return maps[entity];
 }
 
-export { componentsColumnMap };
+export { componentsColumnMap, productsColumnMap };

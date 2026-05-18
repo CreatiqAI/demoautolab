@@ -31,7 +31,7 @@ export default function BulkImport() {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [results, setResults] = useState<BatchResult[]>([]);
   const { toast } = useToast();
-  const productsEnabled = false;
+  const productsEnabled = true;
 
   const reset = () => {
     setPhase('pick'); setSummary(null); setFileName(''); setResults([]); setProgress({ done: 0, total: 0 });

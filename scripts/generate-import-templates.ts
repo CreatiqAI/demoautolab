@@ -7,6 +7,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { componentsColumnMap } from '../src/lib/bulkImport/columnMaps/components';
+import { productsColumnMap } from '../src/lib/bulkImport/columnMaps/products';
 import type { ColumnMap } from '../src/lib/bulkImport/types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -69,3 +70,27 @@ XLSX.writeFile(
   resolve(OUT_DIR, 'components-import-template.xlsx')
 );
 console.log('Wrote components-import-template.xlsx');
+
+// products_new has no sku / price / stock columns — pricing & stock live on
+// component_library and roll up via product_components. Keys here only include
+// fields present in the products column map.
+const productsExample = {
+  sku: 'PRD-001',
+  name: 'Android Head Unit 10"',
+  description: '10-inch Android car head unit with GPS and Bluetooth',
+  brand: 'Honda',
+  model: 'Civic',
+  year_from: 2018,
+  year_to: 2022,
+  is_active: 'TRUE',
+  vendor_id: '',
+  image_1: 'https://drive.google.com/file/d/EXAMPLE_FILE_ID/view',
+  image_2: '', image_3: '', image_4: '', image_5: '',
+  video_url: 'https://www.youtube.com/watch?v=EXAMPLE',
+};
+
+XLSX.writeFile(
+  buildTemplate(productsColumnMap, 'Products', productsExample),
+  resolve(OUT_DIR, 'products-import-template.xlsx')
+);
+console.log('Wrote products-import-template.xlsx');
