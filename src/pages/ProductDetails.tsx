@@ -70,7 +70,9 @@ const ProductDetails = () => {
   const [expandedComponent, setExpandedComponent] = useState<string | null>(null);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  // Lightbox supports both images and videos in the same nav loop, so we
+  // store the media type alongside the URL.
+  const [lightboxMedia, setLightboxMedia] = useState<Array<{ url: string; mediaType?: string }>>([]);
   const [currentLightboxIndex, setCurrentLightboxIndex] = useState(0);
   const [installationGuide, setInstallationGuide] = useState<ProductInstallationGuide | null>(null);
   const [installationOpen, setInstallationOpen] = useState(false);
@@ -292,22 +294,23 @@ const ProductDetails = () => {
     return localCart.reduce((total, item) => total + item.quantity, 0);
   };
 
-  const openLightbox = (images: string[], startIndex: number) => {
-    setLightboxImages(images);
+  const openLightbox = (media: Array<{ url: string; mediaType?: string }>, startIndex: number) => {
+    setLightboxMedia(media);
     setCurrentLightboxIndex(startIndex);
     setLightboxOpen(true);
   };
 
   const closeLightbox = () => {
     setLightboxOpen(false);
-    setLightboxImages([]);
+    setLightboxMedia([]);
     setCurrentLightboxIndex(0);
   };
 
   const navigateLightbox = (direction: "prev" | "next") => {
+    if (lightboxMedia.length === 0) return;
     const newIndex = direction === "prev"
-      ? (currentLightboxIndex - 1 + lightboxImages.length) % lightboxImages.length
-      : (currentLightboxIndex + 1) % lightboxImages.length;
+      ? (currentLightboxIndex - 1 + lightboxMedia.length) % lightboxMedia.length
+      : (currentLightboxIndex + 1) % lightboxMedia.length;
     setCurrentLightboxIndex(newIndex);
   };
 
@@ -404,7 +407,7 @@ const ProductDetails = () => {
                 return (
                   <div
                     className="relative w-full min-h-[55vw] sm:min-h-[45vw] lg:min-h-[28vw] max-h-[70vw] sm:max-h-[55vw] lg:max-h-[35vw] bg-white group flex items-center justify-center overflow-hidden"
-                    {...(!isVideo ? { onClick: () => openLightbox(product.product_images.filter(img => img.media_type !== 'video').map(img => img.url), selectedImage), style: { cursor: 'pointer' } } : {})}
+                    {...(!isVideo ? { onClick: () => openLightbox(product.product_images.map(img => ({ url: img.url, mediaType: img.media_type })), selectedImage), style: { cursor: 'pointer' } } : {})}
                   >
                     {isVideo ? (
                       embedUrl ? (
@@ -620,7 +623,7 @@ const ProductDetails = () => {
                                     onClick={(e) => {
                                       if (isExpanded) {
                                         e.stopPropagation();
-                                        openLightbox([component.default_image_url!], 0);
+                                        openLightbox([{ url: component.default_image_url!, mediaType: 'image' }], 0);
                                       }
                                     }}
                                   />
@@ -970,49 +973,83 @@ const ProductDetails = () => {
         </div>
       )}
 
-      {/* Image Lightbox */}
+      {/* Media Lightbox — handles both images and videos */}
       <Dialog open={lightboxOpen} onOpenChange={closeLightbox}>
         <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-0 border-0 bg-transparent" aria-describedby={undefined}>
-          <span className="sr-only"><DialogTitle>Product Image</DialogTitle></span>
+          <span className="sr-only"><DialogTitle>Product media</DialogTitle></span>
           <div className="relative flex items-center justify-center">
-            {lightboxImages[currentLightboxIndex] && (
-              <>
-                <div className="bg-white rounded-2xl overflow-hidden shadow-2xl">
-                  <img
-                    src={lightboxImages[currentLightboxIndex]}
-                    alt="Product image"
-                    className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain"
-                  />
-                </div>
+            {(() => {
+              const current = lightboxMedia[currentLightboxIndex];
+              if (!current) return null;
+              const isVideo = current.mediaType === 'video';
+              const ytMatch = isVideo ? current.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/) : null;
+              const vimeoMatch = isVideo ? current.url.match(/vimeo\.com\/(\d+)/) : null;
+              const embedUrl = ytMatch
+                ? `https://www.youtube.com/embed/${ytMatch[1]}`
+                : vimeoMatch
+                  ? `https://player.vimeo.com/video/${vimeoMatch[1]}`
+                  : null;
+              return (
+                <>
+                  <div className="bg-black rounded-2xl overflow-hidden shadow-2xl">
+                    {isVideo ? (
+                      embedUrl ? (
+                        <iframe
+                          // re-mount on slide change so the previous iframe stops playing
+                          key={currentLightboxIndex}
+                          src={embedUrl}
+                          className="w-[90vw] max-w-[1280px] aspect-video"
+                          allowFullScreen
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        />
+                      ) : (
+                        <video
+                          key={currentLightboxIndex}
+                          src={current.url}
+                          className="max-w-[90vw] max-h-[85vh] w-auto h-auto"
+                          controls
+                          autoPlay
+                          playsInline
+                        />
+                      )
+                    ) : (
+                      <img
+                        src={current.url}
+                        alt="Product image"
+                        className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain bg-white"
+                      />
+                    )}
+                  </div>
 
-                {/* Navigation */}
-                {lightboxImages.length > 1 && (
-                  <>
-                    <button
-                      onClick={() => navigateLightbox("prev")}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => navigateLightbox("next")}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                      </svg>
-                    </button>
+                  {/* Navigation */}
+                  {lightboxMedia.length > 1 && (
+                    <>
+                      <button
+                        onClick={() => navigateLightbox("prev")}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => navigateLightbox("next")}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                      </button>
 
-                    {/* Counter */}
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm font-medium">
-                      {currentLightboxIndex + 1} / {lightboxImages.length}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
+                      {/* Counter */}
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm font-medium">
+                        {currentLightboxIndex + 1} / {lightboxMedia.length}
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>
