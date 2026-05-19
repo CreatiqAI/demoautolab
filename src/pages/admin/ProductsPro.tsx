@@ -392,11 +392,12 @@ export default function ProductsPro() {
     let filtered = products;
 
     if (productSearchTerm) {
-      filtered = filtered.filter(product => 
-        product.name.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-        product.brand.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-        product.model.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-        product.description?.toLowerCase().includes(productSearchTerm.toLowerCase())
+      const q = productSearchTerm.toLowerCase();
+      filtered = filtered.filter(product =>
+        product.name?.toLowerCase().includes(q) ||
+        product.brand?.toLowerCase().includes(q) ||
+        product.model?.toLowerCase().includes(q) ||
+        product.description?.toLowerCase().includes(q)
       );
     }
 
