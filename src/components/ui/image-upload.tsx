@@ -35,6 +35,7 @@ export default function ImageUpload({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [urlInput, setUrlInput] = useState(value || '');
+  const [rehosting, setRehosting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -155,13 +156,32 @@ export default function ImageUpload({
     e.preventDefault();
   };
 
-  const handleUrlSubmit = () => {
-    if (urlInput.trim()) {
-      onChange(urlInput.trim());
+  const handleUrlSubmit = async () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    setRehosting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<{ url: string }>(
+        'rehost-media-url',
+        { body: { url: trimmed, folder: path } }
+      );
+      if (error || !data?.url) {
+        throw new Error(error?.message ?? 'Failed to import image');
+      }
+      onChange(data.url);
+      setUrlInput(data.url);
       toast({
-        title: "Success",
-        description: "Image URL added successfully"
+        title: "Image imported",
+        description: "Downloaded and saved to storage"
       });
+    } catch (e) {
+      toast({
+        title: "Failed to import URL",
+        description: (e as Error).message,
+        variant: "destructive"
+      });
+    } finally {
+      setRehosting(false);
     }
   };
 
@@ -266,32 +286,34 @@ export default function ImageUpload({
                   id="imageUrl"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
+                  placeholder="https://example.com/image.jpg or Google Drive share link"
                   type="url"
+                  disabled={rehosting}
                 />
                 <Button
                   type="button"
                   onClick={handleUrlSubmit}
-                  disabled={!urlInput.trim()}
+                  disabled={!urlInput.trim() || rehosting}
                 >
-                  <Link className="h-4 w-4" />
+                  {rehosting ? (
+                    <span className="text-xs">Importing…</span>
+                  ) : (
+                    <Link className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Direct image URL, Google Drive share link, or Dropbox link. The image is downloaded and saved to storage on import.
+              </p>
             </div>
             
-            {urlInput && (
+            {/* Preview only shown after successful re-host (URL points to our Storage bucket). */}
+            {urlInput && urlInput.includes('/storage/v1/object/public/') && (
               <div className="aspect-video w-full max-w-xs rounded-lg border overflow-hidden bg-gray-50">
                 <img
                   src={urlInput}
                   alt="Preview"
                   className="w-full h-full object-cover"
-                  onError={() => {
-                    toast({
-                      title: "Invalid URL",
-                      description: "Unable to load image from this URL",
-                      variant: "destructive"
-                    });
-                  }}
                 />
               </div>
             )}
