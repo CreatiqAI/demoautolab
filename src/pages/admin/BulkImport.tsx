@@ -112,10 +112,10 @@ export default function BulkImport() {
   };
 
   return (
-    <div className="p-6 max-w-7xl space-y-6">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Bulk Import</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-2xl sm:text-3xl font-bold">Bulk Import</h1>
+        <p className="text-muted-foreground">
           Upload a filled Excel template to bulk-create components or products.
           Google Drive image URLs are downloaded and re-hosted automatically.
         </p>
