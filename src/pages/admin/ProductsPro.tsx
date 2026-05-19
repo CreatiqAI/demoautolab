@@ -222,6 +222,10 @@ export default function ProductsPro() {
         };
         return { ...prev, images: next };
       });
+      // The upload queue already INSERTed this URL into product_images_new.
+      // Treat it as part of the original snapshot so the diff-based save in
+      // handleSubmit doesn't try to insert it a second time.
+      setOriginalMediaUrls(prev => prev.includes(detail.media.url) ? prev : [...prev, detail.media.url]);
     };
     const removedHandler = (e: Event) => {
       const detail = (e as CustomEvent<{ uploadId: string }>).detail;
@@ -259,6 +263,10 @@ export default function ProductsPro() {
           installation: { ...prev.installation, installation_videos: next },
         };
       });
+      // The upload queue already upserted this URL into the installation_videos
+      // jsonb. Update the snapshot so the diff-based save treats it as kept,
+      // not as a new entry that needs re-inserting.
+      setOriginalInstallationVideoUrls(prev => prev.includes(detail.url) ? prev : [...prev, detail.url]);
     };
     const installRemovedHandler = (e: Event) => {
       const detail = (e as CustomEvent<{ uploadId: string }>).detail;
