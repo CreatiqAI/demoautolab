@@ -66,6 +66,16 @@ export interface BatchResult {
   mediaErrors?: string[];
 }
 
+// Media URL after client-side re-hosting via the rehost-media-url edge function.
+// YouTube/Vimeo URLs pass through with their original URL; everything else has
+// been downloaded and re-uploaded to Supabase Storage by this point.
+export interface ResolvedMedia {
+  url: string;
+  mediaType: 'image' | 'video';
+  isPrimary: boolean;
+  sortOrder: number;
+}
+
 export interface ImportRequest {
   entity: Entity;
   mode: ImportMode;
@@ -73,7 +83,8 @@ export interface ImportRequest {
   rows: Array<{
     rowIndex: number;
     fields: Record<string, unknown>;
-    mediaUrls: ParsedRow['mediaUrls'];
+    resolvedMedia: ResolvedMedia[];
+    mediaErrors?: string[];
   }>;
 }
 

@@ -1,9 +1,13 @@
 // supabase/functions/bulk-import-processor/index.ts
+// Receives rows whose media URLs have ALREADY been re-hosted to Supabase
+// Storage (or YouTube/Vimeo embeds passed through) by the client, via the
+// rehost-media-url edge function. This function does NO image processing —
+// it only writes to the DB. That keeps each invocation well under the
+// CPU/memory budget and lets us scale to many rows per call.
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyAdmin } from "./auth.ts";
-import { processImageUrl } from "./imageProcessor.ts";
-import { processMediaUrl } from "./mediaProcessor.ts";
 import { writeRow, type Mode } from "./dbWriter.ts";
 import { writeProduct } from "./productWriter.ts";
 
@@ -14,10 +18,18 @@ const corsHeaders = {
 
 type Entity = 'component' | 'product';
 
+interface ResolvedMedia {
+  url: string;
+  mediaType: 'image' | 'video';
+  isPrimary: boolean;
+  sortOrder: number;
+}
+
 interface RowPayload {
   rowIndex: number;
   fields: Record<string, unknown>;
-  mediaUrls: { default: string | null; gallery: string[]; video: string | null };
+  resolvedMedia: ResolvedMedia[];
+  mediaErrors?: string[];
 }
 
 interface Payload {
@@ -39,7 +51,7 @@ interface RowResult {
 async function processWithLimit<T>(
   items: T[],
   limit: number,
-  fn: (t: T) => Promise<RowResult>
+  fn: (t: T) => Promise<RowResult>,
 ): Promise<RowResult[]> {
   const results: RowResult[] = new Array(items.length);
   let i = 0;
@@ -60,17 +72,13 @@ async function processComponentRow(
   supabase: SupabaseClient,
   row: RowPayload,
   mode: Mode,
-  folder: string
 ): Promise<RowResult> {
   const sku = String(row.fields['component_sku'] ?? '');
-  const mediaErrors: string[] = [];
-
-  let defaultImg: string | null = null;
-  if (row.mediaUrls.default) {
-    const r = await processImageUrl(supabase, row.mediaUrls.default, folder, `${sku}-1`);
-    if (r.ok) defaultImg = r.publicUrl;
-    else mediaErrors.push(`image_url: ${r.error}`);
-  }
+  // Components have one default image. Pick the first resolved image URL.
+  const defaultImg =
+    row.resolvedMedia.find(m => m.mediaType === 'image' && m.isPrimary)?.url ??
+    row.resolvedMedia.find(m => m.mediaType === 'image')?.url ??
+    null;
 
   try {
     const w = await writeRow(supabase, {
@@ -87,7 +95,6 @@ async function processComponentRow(
       status: w.status,
       sku,
       recordId: w.recordId,
-      mediaErrors: mediaErrors.length ? mediaErrors : undefined,
     };
   } catch (e) {
     return {
@@ -95,7 +102,6 @@ async function processComponentRow(
       status: 'error',
       sku,
       error: (e as Error).message,
-      mediaErrors: mediaErrors.length ? mediaErrors : undefined,
     };
   }
 }
@@ -104,47 +110,19 @@ async function processProductRow(
   supabase: SupabaseClient,
   row: RowPayload,
   mode: Mode,
-  folder: string
 ): Promise<RowResult> {
   const name = String(row.fields['name'] ?? '');
-  const filenameBase = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40) || `product-${Date.now()}`;
-  const mediaErrors: string[] = [];
-  const allMediaUrls: string[] = [];
-  if (row.mediaUrls.default) allMediaUrls.push(row.mediaUrls.default);
-  for (const u of row.mediaUrls.gallery) allMediaUrls.push(u);
-
-  const processedMedia: { url: string; mediaType: 'image' | 'video'; isPrimary: boolean; sortOrder: number }[] = [];
-
-  for (let i = 0; i < allMediaUrls.length; i++) {
-    const r = await processMediaUrl(supabase, allMediaUrls[i], folder, `${filenameBase}-${i + 1}`);
-    if (r.ok) {
-      processedMedia.push({
-        url: r.url,
-        mediaType: r.mediaType,
-        isPrimary: i === 0,
-        sortOrder: i,
-      });
-    } else {
-      mediaErrors.push(`media_${i + 1}: ${r.error}`);
-    }
-  }
-
   try {
     const w = await writeProduct(supabase, {
       mode,
       fields: row.fields,
-      media: processedMedia,
+      media: row.resolvedMedia,
     });
     return {
       rowIndex: row.rowIndex,
       status: w.status,
       sku: name,
       recordId: w.recordId,
-      mediaErrors: mediaErrors.length ? mediaErrors : undefined,
     };
   } catch (e) {
     return {
@@ -152,7 +130,6 @@ async function processProductRow(
       status: 'error',
       sku: name,
       error: (e as Error).message,
-      mediaErrors: mediaErrors.length ? mediaErrors : undefined,
     };
   }
 }
@@ -176,18 +153,16 @@ serve(async (req) => {
 
     if (body.entity !== 'component' && body.entity !== 'product') {
       return new Response(JSON.stringify({ error: `unknown entity: ${body.entity}` }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const dateFolder = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const folder = `imports/admin/${dateFolder}`;
-
     const results = await processWithLimit(body.rows, 5, async (row) => {
       if (body.entity === 'product') {
-        return processProductRow(supabase, row, body.mode, folder);
+        return processProductRow(supabase, row, body.mode);
       }
-      return processComponentRow(supabase, row, body.mode, folder);
+      return processComponentRow(supabase, row, body.mode);
     });
 
     const succeeded = results.filter(r => r.status !== 'error').length;
@@ -203,11 +178,13 @@ serve(async (req) => {
     });
 
     return new Response(JSON.stringify({ results }), {
-      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });

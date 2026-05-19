@@ -23,12 +23,15 @@ function getAdminId(): string | null {
   try { return (JSON.parse(raw) as { id?: string }).id ?? null; } catch { return null; }
 }
 
+type RunPhase = 'resolving' | 'writing';
+
 export default function BulkImport() {
   const [phase, setPhase] = useState<Phase>('pick');
   const [entity, setEntity] = useState<Entity>('component');
   const [mode, setMode] = useState<ImportMode>('upsert');
   const [summary, setSummary] = useState<ValidationSummary | null>(null);
   const [fileName, setFileName] = useState<string>('');
+  const [runPhase, setRunPhase] = useState<RunPhase>('resolving');
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [results, setResults] = useState<BatchResult[]>([]);
   const { toast } = useToast();
@@ -71,11 +74,17 @@ export default function BulkImport() {
     const adminId = getAdminId();
     if (!adminId) { toast({ title: 'Not signed in', variant: 'destructive' }); return; }
     setPhase('running');
-    setProgress({ done: 0, total: summary.validRows });
+    setRunPhase('resolving');
+    setProgress({ done: 0, total: 0 });
     try {
       const out = await runImport({
         entity, mode, adminId, rows: summary.rows,
-        onBatchComplete: (done, total) => setProgress({ done, total }),
+        onPhaseChange: (p) => {
+          setRunPhase(p);
+          setProgress({ done: 0, total: 0 });
+        },
+        onResolveProgress: (done, total) => setProgress({ done, total }),
+        onWriteProgress: (done, total) => setProgress({ done, total }),
       });
       setResults(out); setPhase('done');
     } catch (e) {
@@ -123,7 +132,21 @@ export default function BulkImport() {
         </div>
       )}
 
-      {phase === 'running' && <ImportProgress done={progress.done} total={progress.total} />}
+      {phase === 'running' && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">
+            {runPhase === 'resolving'
+              ? 'Step 1 of 2 — Re-hosting media to storage…'
+              : 'Step 2 of 2 — Writing rows to database…'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {runPhase === 'resolving'
+              ? 'Downloading from Google Drive / Dropbox / direct URLs and uploading to Supabase Storage. YouTube/Vimeo URLs are embedded as-is.'
+              : 'Inserting products, components, and media rows.'}
+          </p>
+          <ImportProgress done={progress.done} total={progress.total} />
+        </div>
+      )}
 
       {phase === 'done' && <ResultSummary results={results} onReset={reset} />}
     </div>
