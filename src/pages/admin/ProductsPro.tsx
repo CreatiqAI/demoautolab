@@ -456,7 +456,8 @@ export default function ProductsPro() {
     try {
       setLoading(true);
 
-      // Try with category join first
+      // Soft-deleted rows live in the Recently Deleted tab and must be
+      // excluded here, otherwise they pop back into Active on every refresh.
       let { data, error } = await supabase
         .from('products_new' as any)
         .select(`
@@ -474,9 +475,10 @@ export default function ProductsPro() {
             business_name
           )
         `)
+        .is('deleted_at', null)
         .order('updated_at', { ascending: false, nullsFirst: false });
 
-      // If the join fails, try without category join
+      // If the category join fails, try without it (still filtering soft-deletes).
       if (error) {
         const fallbackResult = await supabase
           .from('products_new' as any)
@@ -490,6 +492,7 @@ export default function ProductsPro() {
               business_name
             )
           `)
+          .is('deleted_at', null)
           .order('updated_at', { ascending: false, nullsFirst: false });
 
         data = fallbackResult.data;
@@ -530,9 +533,9 @@ export default function ProductsPro() {
     try {
       const { data, error } = await supabase
         .from('products_new' as any)
-        .select('id, name, brand, model, slug, active, updated_at')
-        .eq('active', false)
-        .order('updated_at', { ascending: false, nullsFirst: false });
+        .select('id, name, brand, model, slug, active, deleted_at, updated_at')
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false });
 
       if (!error) setDeletedProducts((data as any) || []);
     } catch {
@@ -543,13 +546,16 @@ export default function ProductsPro() {
   const handleSoftDeleteProduct = async (product: any) => {
     if (!confirm(`Delete "${product.name}"? It will be moved to Recently Deleted.`)) return;
     try {
+      const deletedAt = new Date().toISOString();
+      // Also flip active=false so customer-facing queries (Catalog, ProductDetails)
+      // which filter by `.eq('active', true)` immediately stop returning it.
       const { error } = await supabase
         .from('products_new' as any)
-        .update({ active: false, updated_at: new Date().toISOString() })
+        .update({ deleted_at: deletedAt, active: false, updated_at: deletedAt })
         .eq('id', product.id);
 
       if (error) throw error;
-      setDeletedProducts(prev => [{ ...product, active: false }, ...prev]);
+      setDeletedProducts(prev => [{ ...product, deleted_at: deletedAt, active: false }, ...prev]);
       setProducts(prev => prev.filter(p => p.id !== product.id));
       setFilteredProducts(prev => prev.filter(p => p.id !== product.id));
       toast({ title: "Deleted", description: `${product.name} moved to Recently Deleted` });
@@ -691,9 +697,11 @@ export default function ProductsPro() {
 
   const handleRestoreProduct = async (product: any) => {
     try {
+      // Clear deleted_at AND re-enable active so the product shows up again in
+      // both the admin Active tab and the customer-facing catalog.
       const { error } = await supabase
         .from('products_new' as any)
-        .update({ active: true, updated_at: new Date().toISOString() })
+        .update({ deleted_at: null, active: true, updated_at: new Date().toISOString() })
         .eq('id', product.id);
 
       if (error) throw error;
