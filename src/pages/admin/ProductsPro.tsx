@@ -12,12 +12,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye, RotateCcw, AlertTriangle, Copy, Loader2 } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Edit, DollarSign, Package, Clock, Users, Video, Wrench, Upload, X, Play, Link, GripVertical, Eye, EyeOff, RotateCcw, AlertTriangle, Copy, Loader2, Check, CheckCircle } from 'lucide-react';
+import { logAdminAction } from '@/lib/adminAudit';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 import { isEmbeddableUrl, getEmbedUrl } from '@/components/ui/video-upload';
 import { useUploadQueue, PRODUCT_MEDIA_UPLOADED_EVENT, PRODUCT_MEDIA_UPLOAD_REMOVED_EVENT, INSTALLATION_VIDEO_UPLOADED_EVENT, INSTALLATION_VIDEO_UPLOAD_REMOVED_EVENT, type ProductMediaUploadedDetail, type InstallationVideoUploadedDetail } from '@/hooks/useUploadQueue';
-import { deleteStorageFiles, findOrphanStorageFiles, deleteOrphans } from '@/lib/storageCleanup';
+import { deleteStorageFiles } from '@/lib/storageCleanup';
 
 interface ComponentSearchResult {
   id: string;
@@ -137,6 +138,11 @@ export default function ProductsPro() {
   const [brandFilter, setBrandFilter] = useState('all-brands');
   const [screenSizeFilter, setScreenSizeFilter] = useState('all-sizes');
   const [statusFilter, setStatusFilter] = useState('all-status');
+  const [approvalFilter, setApprovalFilter] = useState<'all' | 'PENDING' | 'APPROVED' | 'REJECTED'>('all');
+  const [vendorFilter, setVendorFilter] = useState<'all' | 'autolab' | string>('all');
+  // Filters scoped to the Pending Review queue
+  const [reviewSearch, setReviewSearch] = useState('');
+  const [reviewVendorFilter, setReviewVendorFilter] = useState<'all' | string>('all');
   const [searchResults, setSearchResults] = useState<ComponentSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [allComponents, setAllComponents] = useState<ComponentSearchResult[]>([]);
@@ -147,16 +153,6 @@ export default function ProductsPro() {
   // are NOT touched (they're in DB but not in this snapshot).
   const [originalMediaUrls, setOriginalMediaUrls] = useState<string[]>([]);
   const [originalInstallationVideoUrls, setOriginalInstallationVideoUrls] = useState<string[]>([]);
-
-  // Orphan-storage cleanup tool state
-  const [cleanupOpen, setCleanupOpen] = useState(false);
-  const [cleanupScanning, setCleanupScanning] = useState(false);
-  const [cleanupDeleting, setCleanupDeleting] = useState(false);
-  const [cleanupResult, setCleanupResult] = useState<{
-    orphans: { bucket: string; path: string }[];
-    totalScanned: number;
-    referencedCount: number;
-  } | null>(null);
 
   const { toast } = useToast();
   const { enqueueVideoUpload, cancelUpload } = useUploadQueue();
@@ -413,8 +409,24 @@ export default function ProductsPro() {
       }
     }
 
+    if (approvalFilter !== 'all') {
+      filtered = filtered.filter((product: any) => (product.approval_status ?? 'APPROVED') === approvalFilter);
+    } else {
+      // Active tab default-hides pending vendor products — those live in
+      // their own "Pending Review" tab now.
+      filtered = filtered.filter((product: any) => !(product.vendor_id && product.approval_status === 'PENDING'));
+    }
+
+    if (vendorFilter !== 'all') {
+      if (vendorFilter === 'autolab') {
+        filtered = filtered.filter((product: any) => !product.vendor_id);
+      } else {
+        filtered = filtered.filter((product: any) => product.vendor_id === vendorFilter);
+      }
+    }
+
     setFilteredProducts(filtered);
-  }, [products, productSearchTerm, brandFilter, screenSizeFilter, statusFilter]);
+  }, [products, productSearchTerm, brandFilter, screenSizeFilter, statusFilter, approvalFilter, vendorFilter]);
 
   // Debounced search for components
   useEffect(() => {
@@ -445,6 +457,10 @@ export default function ProductsPro() {
           ),
           product_components (
             id
+          ),
+          vendors:vendor_id (
+            id,
+            business_name
           )
         `)
         .order('updated_at', { ascending: false, nullsFirst: false });
@@ -457,6 +473,10 @@ export default function ProductsPro() {
             *,
             product_components (
               id
+            ),
+            vendors:vendor_id (
+              id,
+              business_name
             )
           `)
           .order('updated_at', { ascending: false, nullsFirst: false });
@@ -527,6 +547,137 @@ export default function ProductsPro() {
     }
   };
 
+  const handleApproveProduct = async (product: any) => {
+    try {
+      const { error } = await supabase
+        .from('products_new' as any)
+        .update({
+          approval_status: 'APPROVED',
+          rejection_reason: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', product.id);
+      if (error) throw error;
+
+      try {
+        await logAdminAction('product.approve', {
+          productId: product.id,
+          productName: product.name,
+          vendorId: product.vendor_id ?? null,
+          vendorName: product.vendors?.business_name ?? null,
+        });
+      } catch { /* audit failures should not block approval */ }
+
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, approval_status: 'APPROVED', rejection_reason: null } : p));
+      toast({ title: 'Approved', description: `${product.name} is now live in the catalog`, variant: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Approval failed', description: err.message ?? 'Please try again.', variant: 'destructive' });
+    }
+  };
+
+  const handleRejectProduct = async (product: any) => {
+    const reason = window.prompt(`Reject "${product.name}"?\nProvide a reason the vendor will see:`, '');
+    if (reason === null) return; // user cancelled
+    if (!reason.trim()) {
+      toast({ title: 'Reason required', description: 'Please give the vendor a clear reason.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('products_new' as any)
+        .update({
+          approval_status: 'REJECTED',
+          rejection_reason: reason.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', product.id);
+      if (error) throw error;
+
+      try {
+        await logAdminAction('product.reject', {
+          productId: product.id,
+          productName: product.name,
+          vendorId: product.vendor_id ?? null,
+          vendorName: product.vendors?.business_name ?? null,
+          reason: reason.trim(),
+        });
+      } catch { /* non-blocking */ }
+
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, approval_status: 'REJECTED', rejection_reason: reason.trim() } : p));
+      toast({ title: 'Rejected', description: `${product.name} hidden from catalog. Vendor will see your reason.` });
+    } catch (err: any) {
+      toast({ title: 'Reject failed', description: err.message ?? 'Please try again.', variant: 'destructive' });
+    }
+  };
+
+  // Admin moderation: temporarily hide a vendor's APPROVED product from
+  // the customer catalog. Different from reject — the product stays
+  // visible to the vendor (so they can edit and resubmit). Different
+  // from soft-delete (which moves it to the Recently Deleted tab).
+  const handleHideProduct = async (product: any) => {
+    if (!product.vendor_id) return;
+    const reason = window.prompt(
+      `Hide "${product.name}" from the customer catalog?\nOptional internal note (the vendor will see this):`,
+      ''
+    );
+    if (reason === null) return;
+    try {
+      const { error } = await supabase
+        .from('products_new' as any)
+        .update({
+          approval_status: 'HIDDEN',
+          rejection_reason: reason.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', product.id);
+      if (error) throw error;
+
+      try {
+        await logAdminAction('product.hide', {
+          productId: product.id,
+          productName: product.name,
+          vendorId: product.vendor_id,
+          vendorName: product.vendors?.business_name ?? null,
+          reason: reason.trim() || null,
+        });
+      } catch { /* non-blocking */ }
+
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, approval_status: 'HIDDEN', rejection_reason: reason.trim() || null } : p));
+      toast({ title: 'Product hidden', description: `${product.name} no longer shows in the catalog.` });
+    } catch (err: any) {
+      toast({ title: 'Hide failed', description: err.message ?? 'Please try again.', variant: 'destructive' });
+    }
+  };
+
+  const handleUnhideProduct = async (product: any) => {
+    if (!product.vendor_id) return;
+    try {
+      const { error } = await supabase
+        .from('products_new' as any)
+        .update({
+          approval_status: 'APPROVED',
+          rejection_reason: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', product.id);
+      if (error) throw error;
+
+      try {
+        await logAdminAction('product.unhide', {
+          productId: product.id,
+          productName: product.name,
+          vendorId: product.vendor_id,
+          vendorName: product.vendors?.business_name ?? null,
+        });
+      } catch { /* non-blocking */ }
+
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, approval_status: 'APPROVED', rejection_reason: null } : p));
+      toast({ title: 'Product visible again', description: `${product.name} is back in the catalog.`, variant: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Unhide failed', description: err.message ?? 'Please try again.', variant: 'destructive' });
+    }
+  };
+
   const handleRestoreProduct = async (product: any) => {
     try {
       const { error } = await supabase
@@ -540,46 +691,6 @@ export default function ProductsPro() {
       toast({ title: "Restored", description: `${product.name} has been restored` });
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Failed to restore", variant: "destructive" });
-    }
-  };
-
-  const handleScanOrphans = async () => {
-    setCleanupScanning(true);
-    setCleanupResult(null);
-    try {
-      const result = await findOrphanStorageFiles();
-      setCleanupResult(result);
-      toast({
-        title: 'Scan complete',
-        description: `Scanned ${result.totalScanned} files · ${result.orphans.length} orphan${result.orphans.length === 1 ? '' : 's'} found`,
-      });
-    } catch (err: any) {
-      toast({
-        title: 'Scan failed',
-        description: err?.message || 'Unable to list storage',
-        variant: 'destructive',
-      });
-    } finally {
-      setCleanupScanning(false);
-    }
-  };
-
-  const handleDeleteOrphans = async () => {
-    if (!cleanupResult || cleanupResult.orphans.length === 0) return;
-    if (!confirm(`Delete ${cleanupResult.orphans.length} orphaned file(s) from storage? This cannot be undone.`)) return;
-    setCleanupDeleting(true);
-    try {
-      const { deleted, failed } = await deleteOrphans(cleanupResult.orphans as any);
-      toast({
-        title: 'Cleanup complete',
-        description: `Deleted ${deleted} file${deleted === 1 ? '' : 's'}${failed > 0 ? ` · ${failed} failed` : ''}`,
-        variant: failed > 0 ? 'destructive' : 'default',
-      });
-      setCleanupResult(null);
-    } catch (err: any) {
-      toast({ title: 'Cleanup failed', description: err?.message || 'Unknown error', variant: 'destructive' });
-    } finally {
-      setCleanupDeleting(false);
     }
   };
 
@@ -1223,72 +1334,6 @@ export default function ProductsPro() {
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
-          <Dialog open={cleanupOpen} onOpenChange={(open) => { setCleanupOpen(open); if (!open) setCleanupResult(null); }}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" title="Find and delete orphaned media files in storage">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Storage Cleanup
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Storage Cleanup</DialogTitle>
-                <DialogDescription>
-                  Scan Supabase Storage for files in <code>product-videos/uploads</code> and <code>product-images/uploads</code> that are no longer referenced by any product, then delete them to reclaim storage space.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                {!cleanupResult ? (
-                  <div className="text-sm text-muted-foreground">
-                    This may take a minute on large storage. Safe to run anytime — only files not referenced by <code>product_images_new</code> are deleted.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="bg-gray-50 rounded p-3">
-                        <div className="text-2xl font-semibold">{cleanupResult.totalScanned}</div>
-                        <div className="text-xs text-muted-foreground">Files in storage</div>
-                      </div>
-                      <div className="bg-green-50 rounded p-3">
-                        <div className="text-2xl font-semibold text-green-700">{cleanupResult.referencedCount}</div>
-                        <div className="text-xs text-muted-foreground">In use</div>
-                      </div>
-                      <div className={cleanupResult.orphans.length > 0 ? 'bg-amber-50 rounded p-3' : 'bg-gray-50 rounded p-3'}>
-                        <div className={`text-2xl font-semibold ${cleanupResult.orphans.length > 0 ? 'text-amber-700' : ''}`}>{cleanupResult.orphans.length}</div>
-                        <div className="text-xs text-muted-foreground">Orphans</div>
-                      </div>
-                    </div>
-                    {cleanupResult.orphans.length > 0 && (
-                      <div className="max-h-40 overflow-y-auto border rounded text-xs">
-                        {cleanupResult.orphans.slice(0, 50).map((o, i) => (
-                          <div key={i} className="px-2 py-1 border-b last:border-b-0 truncate font-mono text-gray-600">
-                            {o.bucket}/{o.path}
-                          </div>
-                        ))}
-                        {cleanupResult.orphans.length > 50 && (
-                          <div className="px-2 py-1 text-gray-500 italic">...and {cleanupResult.orphans.length - 50} more</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button variant="outline" onClick={() => setCleanupOpen(false)} disabled={cleanupScanning || cleanupDeleting}>Close</Button>
-                  {!cleanupResult ? (
-                    <Button onClick={handleScanOrphans} disabled={cleanupScanning}>
-                      {cleanupScanning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Scanning...</> : 'Scan for orphans'}
-                    </Button>
-                  ) : cleanupResult.orphans.length > 0 ? (
-                    <Button variant="destructive" onClick={handleDeleteOrphans} disabled={cleanupDeleting}>
-                      {cleanupDeleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting...</> : `Delete ${cleanupResult.orphans.length} orphan${cleanupResult.orphans.length === 1 ? '' : 's'}`}
-                    </Button>
-                  ) : (
-                    <Button variant="outline" onClick={() => setCleanupResult(null)}>Scan again</Button>
-                  )}
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
@@ -2581,6 +2626,22 @@ export default function ProductsPro() {
       <Tabs value={productListTab} onValueChange={setProductListTab}>
         <TabsList>
           <TabsTrigger value="active">Active ({filteredProducts.length})</TabsTrigger>
+          {(() => {
+            const pendingCount = (products as any[]).filter(
+              (p) => p.vendor_id && p.approval_status === 'PENDING',
+            ).length;
+            return (
+              <TabsTrigger value="pending-review" className="gap-1.5 data-[state=active]:text-amber-700">
+                <Clock className="h-3.5 w-3.5" />
+                Pending Review
+                {pendingCount > 0 && (
+                  <span className="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-semibold px-1.5">
+                    {pendingCount}
+                  </span>
+                )}
+              </TabsTrigger>
+            );
+          })()}
           <TabsTrigger value="deleted" className="gap-1.5">
             <Trash2 className="h-3.5 w-3.5" />
             Recently Deleted ({deletedProducts.length})
@@ -2652,8 +2713,50 @@ export default function ProductsPro() {
                     <SelectItem value="featured">Featured Only</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={approvalFilter} onValueChange={(v) => setApprovalFilter(v as any)}>
+                  <SelectTrigger className="w-full sm:w-[160px]">
+                    <SelectValue placeholder="Approval" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Approval</SelectItem>
+                    <SelectItem value="PENDING">Pending Review</SelectItem>
+                    <SelectItem value="APPROVED">Approved</SelectItem>
+                    <SelectItem value="REJECTED">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={vendorFilter} onValueChange={setVendorFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Seller" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sellers</SelectItem>
+                    <SelectItem value="autolab">AutoLab (in-house)</SelectItem>
+                    {Array.from(new Map((products as any[])
+                      .filter(p => p.vendor_id && p.vendors)
+                      .map(p => [p.vendor_id, p.vendors])
+                    ).entries()).map(([id, v]: any) => (
+                      <SelectItem key={id} value={id}>{v.business_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+            {/* Pending review pointer — moved to its own dedicated tab */}
+            {(() => {
+              const pending = (products as any[]).filter(p => p.approval_status === 'PENDING' && p.vendor_id);
+              if (pending.length === 0) return null;
+              return (
+                <div className="mt-3 flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                  <div className="flex items-center gap-2 text-sm text-amber-900">
+                    <Clock className="h-4 w-4" />
+                    <span><strong>{pending.length}</strong> vendor product{pending.length === 1 ? '' : 's'} awaiting review</span>
+                  </div>
+                  <Button size="sm" variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-100" onClick={() => setProductListTab('pending-review')}>
+                    Open Pending Review
+                  </Button>
+                </div>
+              );
+            })()}
           </div>
           {loading ? (
             <div className="text-center py-8">Loading products...</div>
@@ -2666,91 +2769,153 @@ export default function ProductsPro() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Product Name</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Seller</TableHead>
                     <TableHead>Brand / Model</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Components</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last Edited</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">SKUs</TableHead>
+                    <TableHead className="whitespace-nowrap">Approval</TableHead>
+                    <TableHead className="whitespace-nowrap">Updated</TableHead>
+                    <TableHead className="text-right whitespace-nowrap w-[120px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredProducts.map((product) => (
                     <TableRow key={product.id}>
-                      <TableCell>
-                        <div className="font-medium">{product.name}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {product.brand} {product.model}
-                        </div>
-                        {product.year_from && product.year_to && (
-                          <div className="text-sm text-muted-foreground">
-                            {product.year_from}–{product.year_to}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {(product.categories || product.category) && (
-                          <Badge variant="secondary">
-                            {(product.categories?.name || product.category?.name || 'Category')}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {product.screen_size && product.screen_size.length > 0 &&
-                          product.screen_size.map((size: string) => (
-                            <Badge key={size} variant="outline">
-                              {size}"
-                            </Badge>
-                          ))
-                        }
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {product.product_components?.length || 0} SKU
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Badge variant={product.active ? 'default' : 'secondary'}>
-                            {product.active ? 'Active' : 'Inactive'}
-                          </Badge>
-                          {product.featured && <Badge variant="outline">Featured</Badge>}
+                      <TableCell className="max-w-[280px]">
+                        <div className="font-medium truncate" title={product.name}>{product.name}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          {(product.categories?.name || product.category?.name) && (
+                            <span className="text-[11px] text-muted-foreground truncate">
+                              {product.categories?.name || product.category?.name}
+                            </span>
+                          )}
+                          {!product.active && (
+                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 text-gray-500">Inactive</Badge>
+                          )}
+                          {product.featured && (
+                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 text-amber-700 border-amber-300">Featured</Badge>
+                          )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        {product.updated_at ? (
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground" title={new Date(product.updated_at).toLocaleString()}>
-                            <Clock className="h-3.5 w-3.5" />
-                            {formatTimeAgo(product.updated_at)}
-                          </div>
+                      <TableCell className="whitespace-nowrap">
+                        {product.vendor_id ? (
+                          <Badge variant="outline" className="bg-lime-50 text-lime-800 border-lime-300 max-w-[140px] truncate" title={product.vendors?.business_name || 'Vendor'}>
+                            {product.vendors?.business_name || 'Vendor'}
+                          </Badge>
                         ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
+                          <Badge variant="secondary" className="bg-gray-100 text-gray-700">AutoLab</Badge>
                         )}
                       </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        <div>{[product.brand, product.model].filter(Boolean).join(' ') || '—'}</div>
+                        {product.year_from && product.year_to && (
+                          <div className="text-xs text-muted-foreground">{product.year_from}–{product.year_to}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">
+                        {product.product_components?.length || 0}
+                      </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        {(() => {
+                          const status = (product as any).approval_status ?? 'APPROVED';
+                          if (status === 'PENDING') return <Badge className="bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200">Pending</Badge>;
+                          if (status === 'REJECTED') return <Badge className="bg-red-100 text-red-900 border-red-300 hover:bg-red-200">Rejected</Badge>;
+                          if (status === 'HIDDEN') return <Badge className="bg-gray-200 text-gray-700 border-gray-300">Hidden</Badge>;
+                          return <Badge className="bg-lime-100 text-lime-900 border-lime-300 hover:bg-lime-200">Approved</Badge>;
+                        })()}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {product.updated_at ? (
+                          <span className="text-xs text-muted-foreground" title={new Date(product.updated_at).toLocaleString()}>
+                            {formatTimeAgo(product.updated_at)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end items-center gap-0.5">
+                          {/* Approve / Reject icons — vendor-pending only (full queue lives on Pending Review tab) */}
+                          {product.vendor_id && (product as any).approval_status === 'PENDING' && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-lime-700 hover:bg-lime-50"
+                                onClick={() => handleApproveProduct(product)}
+                                title="Approve listing"
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-red-700 hover:bg-red-50"
+                                onClick={() => handleRejectProduct(product)}
+                                title="Reject listing"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          {product.vendor_id && (product as any).approval_status === 'REJECTED' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-lime-700 hover:bg-lime-50"
+                              onClick={() => handleApproveProduct(product)}
+                              title="Re-approve listing"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {/* Hide / Unhide — vendor APPROVED products only */}
+                          {product.vendor_id && (product as any).approval_status === 'APPROVED' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-orange-600 hover:bg-orange-50"
+                              onClick={() => handleHideProduct(product)}
+                              title="Hide from catalog"
+                            >
+                              <EyeOff className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {product.vendor_id && (product as any).approval_status === 'HIDDEN' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-lime-700 hover:bg-lime-50"
+                              onClick={() => handleUnhideProduct(product)}
+                              title="Restore to catalog"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="h-8 w-8 p-0"
                             onClick={() => handlePreviewProduct(product)}
+                            title="Preview"
                           >
-                            <Package className="h-4 w-4" />
+                            <Eye className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="h-8 w-8 p-0"
                             onClick={() => handleEditProduct(product)}
+                            title="Edit"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                             onClick={() => handleSoftDeleteProduct(product)}
+                            title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -2764,6 +2929,186 @@ export default function ProductsPro() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        {/* ===================== */}
+        {/* Pending Review Queue   */}
+        {/* ===================== */}
+        <TabsContent value="pending-review">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-amber-600" />
+                    Pending Review Queue
+                  </CardTitle>
+                  <CardDescription>Vendor-submitted products waiting for admin approval. Approve to publish to the catalog.</CardDescription>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by name, brand, model…"
+                    value={reviewSearch}
+                    onChange={(e) => setReviewSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <Select value={reviewVendorFilter} onValueChange={setReviewVendorFilter}>
+                  <SelectTrigger className="w-full sm:w-[220px]">
+                    <SelectValue placeholder="All vendors" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All vendors</SelectItem>
+                    {Array.from(new Map((products as any[])
+                      .filter(p => p.vendor_id && p.approval_status === 'PENDING' && p.vendors)
+                      .map(p => [p.vendor_id, p.vendors])
+                    ).entries()).map(([id, v]: any) => (
+                      <SelectItem key={id} value={id}>{v.business_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const reviewItems = (products as any[])
+                  .filter((p) => p.vendor_id && p.approval_status === 'PENDING')
+                  .filter((p) => reviewVendorFilter === 'all' ? true : p.vendor_id === reviewVendorFilter)
+                  .filter((p) => {
+                    if (!reviewSearch.trim()) return true;
+                    const q = reviewSearch.toLowerCase();
+                    return (
+                      p.name?.toLowerCase().includes(q) ||
+                      p.brand?.toLowerCase().includes(q) ||
+                      p.model?.toLowerCase().includes(q) ||
+                      p.vendors?.business_name?.toLowerCase().includes(q)
+                    );
+                  })
+                  .sort((a, b) => new Date(b.updated_at ?? b.created_at).getTime() - new Date(a.updated_at ?? a.created_at).getTime());
+
+                if (reviewItems.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <CheckCircle className="h-10 w-10 mx-auto mb-3 text-green-500 opacity-60" />
+                      <p className="font-medium text-gray-900">No pending listings</p>
+                      <p className="text-sm mt-1">All caught up. New vendor submissions will appear here.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    {reviewItems.map((product: any) => (
+                      <div key={product.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start gap-4">
+                          {/* Thumbnail */}
+                          <div className="flex-shrink-0">
+                            {(() => {
+                              const primary = (product.product_images_new as any[] | undefined)?.find((i) => i.is_primary)
+                                ?? (product.product_images_new as any[] | undefined)?.[0];
+                              return primary?.url ? (
+                                <img src={primary.url} alt={product.name} className="w-20 h-20 rounded-lg border object-cover" />
+                              ) : (
+                                <div className="w-20 h-20 rounded-lg border bg-gray-100 flex items-center justify-center">
+                                  <Package className="h-6 w-6 text-gray-400" />
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Body */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-semibold text-gray-900 truncate">{product.name}</h4>
+                                  {product.vendors?.business_name && (
+                                    <Badge variant="outline" className="bg-lime-50 text-lime-800 border-lime-300 text-[11px]">
+                                      {product.vendors.business_name}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-sm text-muted-foreground mt-0.5">
+                                  {[product.brand, product.model].filter(Boolean).join(' · ') || '—'}
+                                  {product.year_from && product.year_to && (
+                                    <span className="ml-1.5">({product.year_from}–{product.year_to})</span>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {product.categories?.name && (
+                                    <Badge variant="secondary" className="text-[10px]">{product.categories.name}</Badge>
+                                  )}
+                                  {(product.screen_size as string[] | undefined)?.map((s) => (
+                                    <Badge key={s} variant="outline" className="text-[10px]">{s}"</Badge>
+                                  ))}
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {product.product_components?.length || 0} SKU
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handlePreviewProduct(product)}
+                                  title="Preview"
+                                >
+                                  <Eye className="h-3.5 w-3.5 mr-1" />Preview
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleEditProduct(product)}
+                                  title="Open in editor"
+                                >
+                                  <Edit className="h-3.5 w-3.5 mr-1" />Edit
+                                </Button>
+                              </div>
+                            </div>
+
+                            {product.description && (
+                              <p className="text-xs text-muted-foreground mt-2 line-clamp-2 max-w-3xl">
+                                {product.description}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3" />
+                                Submitted {product.updated_at ? formatTimeAgo(product.updated_at) : '—'}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-red-300 text-red-700 hover:bg-red-50"
+                                  onClick={() => handleRejectProduct(product)}
+                                >
+                                  <X className="h-3.5 w-3.5 mr-1" />Reject
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="bg-lime-600 hover:bg-lime-700 text-white"
+                                  onClick={() => handleApproveProduct(product)}
+                                >
+                                  <Check className="h-3.5 w-3.5 mr-1" />Approve
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="deleted">
