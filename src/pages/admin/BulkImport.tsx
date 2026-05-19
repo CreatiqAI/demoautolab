@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { EntityPicker } from '@/components/admin/bulkImport/EntityPicker';
-import { TemplateDownloader } from '@/components/admin/bulkImport/TemplateDownloader';
-import { FileDropzone } from '@/components/admin/bulkImport/FileDropzone';
+import { ArrowLeft } from 'lucide-react';
+import { EntityColumn } from '@/components/admin/bulkImport/EntityColumn';
 import { PreviewTable } from '@/components/admin/bulkImport/PreviewTable';
 import { ModeSelector } from '@/components/admin/bulkImport/ModeSelector';
 import { ImportProgress } from '@/components/admin/bulkImport/ImportProgress';
@@ -16,17 +15,22 @@ import type { Entity, ValidationSummary, ImportMode, BatchResult } from '@/lib/b
 import { useToast } from '@/hooks/use-toast';
 
 type Phase = 'pick' | 'preview' | 'running' | 'done';
+type RunPhase = 'resolving' | 'writing';
 
 function getAdminId(): string | null {
   const raw = localStorage.getItem('admin_user');
   if (!raw) return null;
-  try { return (JSON.parse(raw) as { id?: string }).id ?? null; } catch { return null; }
+  try {
+    return (JSON.parse(raw) as { id?: string }).id ?? null;
+  } catch {
+    return null;
+  }
 }
-
-type RunPhase = 'resolving' | 'writing';
 
 export default function BulkImport() {
   const [phase, setPhase] = useState<Phase>('pick');
+  // `entity` is set when the admin drops a file in one of the two columns,
+  // then drives everything (parsing, validating, preview, import).
   const [entity, setEntity] = useState<Entity>('component');
   const [mode, setMode] = useState<ImportMode>('upsert');
   const [summary, setSummary] = useState<ValidationSummary | null>(null);
@@ -34,36 +38,42 @@ export default function BulkImport() {
   const [runPhase, setRunPhase] = useState<RunPhase>('resolving');
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [results, setResults] = useState<BatchResult[]>([]);
+  const [logsRefreshKey, setLogsRefreshKey] = useState(0);
   const { toast } = useToast();
-  const productsEnabled = true;
 
   const reset = () => {
-    setPhase('pick'); setSummary(null); setFileName(''); setResults([]); setProgress({ done: 0, total: 0 });
+    setPhase('pick');
+    setSummary(null);
+    setFileName('');
+    setResults([]);
+    setProgress({ done: 0, total: 0 });
   };
 
-  const handleFile = async (file: File) => {
+  const handleFile = (forEntity: Entity) => async (file: File) => {
     try {
-      const map = getColumnMap(entity);
+      setEntity(forEntity);
+      const map = getColumnMap(forEntity);
       const parsed = await parseExcelFile(file, map);
       if (parsed.headerErrors.length > 0) {
-        toast({ title: 'Header errors', description: parsed.headerErrors.join('; '), variant: 'destructive' });
+        toast({
+          title: 'Header errors',
+          description: parsed.headerErrors.join('; '),
+          variant: 'destructive',
+        });
         return;
       }
       const v = validateRows(parsed.rows, map);
 
-      // Products have cross-row DB lookups: each component_sku_N must exist in
-      // component_library, and the category name (if provided) should match an
-      // existing category. Annotate errors/warnings now so the preview reflects
-      // them before the admin confirms.
-      if (entity === 'product') {
+      if (forEntity === 'product') {
         await annotateProductRowsWithDbChecks(v.rows);
-        // Recompute summary counts after annotations.
         v.validRows = v.rows.filter(r => r.errors.length === 0).length;
         v.errorRows = v.rows.filter(r => r.errors.length > 0).length;
         v.warningRows = v.rows.filter(r => r.errors.length === 0 && r.warnings.length > 0).length;
       }
 
-      setSummary(v); setFileName(file.name); setPhase('preview');
+      setSummary(v);
+      setFileName(file.name);
+      setPhase('preview');
     } catch (e) {
       toast({ title: 'Parse failed', description: (e as Error).message, variant: 'destructive' });
     }
@@ -72,13 +82,19 @@ export default function BulkImport() {
   const handleConfirm = async () => {
     if (!summary) return;
     const adminId = getAdminId();
-    if (!adminId) { toast({ title: 'Not signed in', variant: 'destructive' }); return; }
+    if (!adminId) {
+      toast({ title: 'Not signed in', variant: 'destructive' });
+      return;
+    }
     setPhase('running');
     setRunPhase('resolving');
     setProgress({ done: 0, total: 0 });
     try {
       const out = await runImport({
-        entity, mode, adminId, rows: summary.rows,
+        entity,
+        mode,
+        adminId,
+        rows: summary.rows,
         onPhaseChange: (p) => {
           setRunPhase(p);
           setProgress({ done: 0, total: 0 });
@@ -86,7 +102,9 @@ export default function BulkImport() {
         onResolveProgress: (done, total) => setProgress({ done, total }),
         onWriteProgress: (done, total) => setProgress({ done, total }),
       });
-      setResults(out); setPhase('done');
+      setResults(out);
+      setPhase('done');
+      setLogsRefreshKey(k => k + 1);
     } catch (e) {
       toast({ title: 'Import failed', description: (e as Error).message, variant: 'destructive' });
       setPhase('preview');
@@ -94,46 +112,65 @@ export default function BulkImport() {
   };
 
   return (
-    <div className="p-6 max-w-6xl space-y-6">
+    <div className="p-6 max-w-7xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Bulk Import</h1>
         <p className="text-sm text-muted-foreground">
-          Upload a filled Excel template to create components in bulk.
+          Upload a filled Excel template to bulk-create components or products.
           Google Drive image URLs are downloaded and re-hosted automatically.
         </p>
       </div>
 
-      <div className="flex items-end gap-4">
-        <EntityPicker value={entity} onChange={setEntity} productsEnabled={productsEnabled} />
-        <TemplateDownloader entity={entity} />
-      </div>
-
-      {phase === 'pick' && <FileDropzone onFile={handleFile} />}
+      {phase === 'pick' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <EntityColumn
+            entity="component"
+            onFile={handleFile('component')}
+            logsRefreshKey={logsRefreshKey}
+          />
+          <EntityColumn
+            entity="product"
+            onFile={handleFile('product')}
+            logsRefreshKey={logsRefreshKey}
+          />
+        </div>
+      )}
 
       {phase === 'preview' && summary && (
         <div className="space-y-4">
+          <button
+            onClick={reset}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Back to import options
+          </button>
           <div className="p-4 border rounded-lg flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">{fileName}</p>
+              <p className="text-sm font-medium">
+                {fileName}
+                <span className="ml-2 text-xs uppercase text-muted-foreground">
+                  ({entity})
+                </span>
+              </p>
               <p className="text-sm">
                 ✓ {summary.validRows} valid · ✗ {summary.errorRows} errors · ⚠ {summary.warningRows} warnings
               </p>
             </div>
-            <button className="text-sm underline" onClick={reset}>Choose a different file</button>
+            <button className="text-sm underline" onClick={reset}>
+              Choose a different file
+            </button>
           </div>
           <PreviewTable summary={summary} entity={entity} />
           <ModeSelector value={mode} onChange={setMode} />
-          <Button
-            onClick={handleConfirm}
-            disabled={summary.validRows === 0}
-          >
+          <Button onClick={handleConfirm} disabled={summary.validRows === 0}>
             Confirm import: {summary.validRows} rows
           </Button>
         </div>
       )}
 
       {phase === 'running' && (
-        <div className="space-y-2">
+        <div className="space-y-2 max-w-xl">
           <p className="text-sm font-medium">
             {runPhase === 'resolving'
               ? 'Step 1 of 2 — Re-hosting media to storage…'
@@ -142,13 +179,17 @@ export default function BulkImport() {
           <p className="text-xs text-muted-foreground">
             {runPhase === 'resolving'
               ? 'Downloading from Google Drive / Dropbox / direct URLs and uploading to Supabase Storage. YouTube/Vimeo URLs are embedded as-is.'
-              : 'Inserting products, components, and media rows.'}
+              : 'Inserting rows and linking related records.'}
           </p>
           <ImportProgress done={progress.done} total={progress.total} />
         </div>
       )}
 
-      {phase === 'done' && <ResultSummary results={results} onReset={reset} />}
+      {phase === 'done' && (
+        <div className="space-y-4 max-w-3xl">
+          <ResultSummary results={results} onReset={reset} />
+        </div>
+      )}
     </div>
   );
 }
