@@ -1,14 +1,18 @@
 // supabase/functions/bulk-import-processor/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyAdmin } from "./auth.ts";
 import { processImageUrl } from "./imageProcessor.ts";
+import { processMediaUrl } from "./mediaProcessor.ts";
 import { writeRow, type Mode } from "./dbWriter.ts";
+import { writeProduct } from "./productWriter.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+type Entity = 'component' | 'product';
 
 interface RowPayload {
   rowIndex: number;
@@ -17,7 +21,7 @@ interface RowPayload {
 }
 
 interface Payload {
-  entity: 'component' | 'product';
+  entity: Entity;
   mode: Mode;
   admin_id: string;
   rows: RowPayload[];
@@ -32,23 +36,125 @@ interface RowResult {
   mediaErrors?: string[];
 }
 
-const TABLE_BY_ENTITY: Record<string, { table: string; uniqueKey: string }> = {
-  component: { table: 'component_library', uniqueKey: 'component_sku' },
-  product:   { table: 'products_new',      uniqueKey: 'sku' },
-};
-
-async function processWithLimit<T>(items: T[], limit: number, fn: (t: T) => Promise<RowResult>): Promise<RowResult[]> {
+async function processWithLimit<T>(
+  items: T[],
+  limit: number,
+  fn: (t: T) => Promise<RowResult>
+): Promise<RowResult[]> {
   const results: RowResult[] = new Array(items.length);
   let i = 0;
-  const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
-    while (true) {
-      const idx = i++;
-      if (idx >= items.length) return;
-      results[idx] = await fn(items[idx]);
-    }
-  });
+  const workers = new Array(Math.min(limit, items.length))
+    .fill(0)
+    .map(async () => {
+      while (true) {
+        const idx = i++;
+        if (idx >= items.length) return;
+        results[idx] = await fn(items[idx]);
+      }
+    });
   await Promise.all(workers);
   return results;
+}
+
+async function processComponentRow(
+  supabase: SupabaseClient,
+  row: RowPayload,
+  mode: Mode,
+  folder: string
+): Promise<RowResult> {
+  const sku = String(row.fields['component_sku'] ?? '');
+  const mediaErrors: string[] = [];
+
+  let defaultImg: string | null = null;
+  if (row.mediaUrls.default) {
+    const r = await processImageUrl(supabase, row.mediaUrls.default, folder, `${sku}-1`);
+    if (r.ok) defaultImg = r.publicUrl;
+    else mediaErrors.push(`image_url: ${r.error}`);
+  }
+
+  try {
+    const w = await writeRow(supabase, {
+      table: 'component_library',
+      uniqueKey: 'component_sku',
+      mode,
+      fields: row.fields,
+      defaultImageUrl: defaultImg,
+      galleryUrls: [],
+      videoUrl: null,
+    });
+    return {
+      rowIndex: row.rowIndex,
+      status: w.status,
+      sku,
+      recordId: w.recordId,
+      mediaErrors: mediaErrors.length ? mediaErrors : undefined,
+    };
+  } catch (e) {
+    return {
+      rowIndex: row.rowIndex,
+      status: 'error',
+      sku,
+      error: (e as Error).message,
+      mediaErrors: mediaErrors.length ? mediaErrors : undefined,
+    };
+  }
+}
+
+async function processProductRow(
+  supabase: SupabaseClient,
+  row: RowPayload,
+  mode: Mode,
+  folder: string
+): Promise<RowResult> {
+  const name = String(row.fields['name'] ?? '');
+  const filenameBase = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40) || `product-${Date.now()}`;
+  const mediaErrors: string[] = [];
+  const allMediaUrls: string[] = [];
+  if (row.mediaUrls.default) allMediaUrls.push(row.mediaUrls.default);
+  for (const u of row.mediaUrls.gallery) allMediaUrls.push(u);
+
+  const processedMedia: { url: string; mediaType: 'image' | 'video'; isPrimary: boolean; sortOrder: number }[] = [];
+
+  for (let i = 0; i < allMediaUrls.length; i++) {
+    const r = await processMediaUrl(supabase, allMediaUrls[i], folder, `${filenameBase}-${i + 1}`);
+    if (r.ok) {
+      processedMedia.push({
+        url: r.url,
+        mediaType: r.mediaType,
+        isPrimary: i === 0,
+        sortOrder: i,
+      });
+    } else {
+      mediaErrors.push(`media_${i + 1}: ${r.error}`);
+    }
+  }
+
+  try {
+    const w = await writeProduct(supabase, {
+      mode,
+      fields: row.fields,
+      media: processedMedia,
+    });
+    return {
+      rowIndex: row.rowIndex,
+      status: w.status,
+      sku: name,
+      recordId: w.recordId,
+      mediaErrors: mediaErrors.length ? mediaErrors : undefined,
+    };
+  } catch (e) {
+    return {
+      rowIndex: row.rowIndex,
+      status: 'error',
+      sku: name,
+      error: (e as Error).message,
+      mediaErrors: mediaErrors.length ? mediaErrors : undefined,
+    };
+  }
 }
 
 serve(async (req) => {
@@ -68,8 +174,7 @@ serve(async (req) => {
       });
     }
 
-    const entityCfg = TABLE_BY_ENTITY[body.entity];
-    if (!entityCfg) {
+    if (body.entity !== 'component' && body.entity !== 'product') {
       return new Response(JSON.stringify({ error: `unknown entity: ${body.entity}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -79,50 +184,10 @@ serve(async (req) => {
     const folder = `imports/admin/${dateFolder}`;
 
     const results = await processWithLimit(body.rows, 5, async (row) => {
-      const sku = String(row.fields[entityCfg.uniqueKey] ?? '');
-      const mediaErrors: string[] = [];
-
-      let defaultImg: string | null = null;
-      if (row.mediaUrls.default) {
-        const r = await processImageUrl(supabase, row.mediaUrls.default, folder, `${sku}-1`);
-        if (r.ok) defaultImg = r.publicUrl;
-        else mediaErrors.push(`image_1: ${r.error}`);
+      if (body.entity === 'product') {
+        return processProductRow(supabase, row, body.mode, folder);
       }
-
-      const gallery: string[] = [];
-      for (let i = 0; i < row.mediaUrls.gallery.length; i++) {
-        const url = row.mediaUrls.gallery[i];
-        const r = await processImageUrl(supabase, url, folder, `${sku}-${i + 2}`);
-        if (r.ok) gallery.push(r.publicUrl);
-        else mediaErrors.push(`image_${i + 2}: ${r.error}`);
-      }
-
-      try {
-        const w = await writeRow(supabase, {
-          table: entityCfg.table,
-          uniqueKey: entityCfg.uniqueKey,
-          mode: body.mode,
-          fields: row.fields,
-          defaultImageUrl: defaultImg,
-          galleryUrls: gallery,
-          videoUrl: row.mediaUrls.video,
-        });
-        return {
-          rowIndex: row.rowIndex,
-          status: w.status,
-          sku,
-          recordId: w.recordId,
-          mediaErrors: mediaErrors.length ? mediaErrors : undefined,
-        };
-      } catch (e) {
-        return {
-          rowIndex: row.rowIndex,
-          status: 'error',
-          sku,
-          error: (e as Error).message,
-          mediaErrors: mediaErrors.length ? mediaErrors : undefined,
-        };
-      }
+      return processComponentRow(supabase, row, body.mode, folder);
     });
 
     const succeeded = results.filter(r => r.status !== 'error').length;

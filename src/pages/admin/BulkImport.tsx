@@ -11,6 +11,7 @@ import { parseExcelFile } from '@/lib/bulkImport/parser';
 import { validateRows } from '@/lib/bulkImport/validators';
 import { getColumnMap } from '@/lib/bulkImport/columnMaps';
 import { runImport } from '@/lib/bulkImport/api';
+import { annotateProductRowsWithDbChecks } from '@/lib/bulkImport/crossRowChecks';
 import type { Entity, ValidationSummary, ImportMode, BatchResult } from '@/lib/bulkImport/types';
 import { useToast } from '@/hooks/use-toast';
 
@@ -46,6 +47,19 @@ export default function BulkImport() {
         return;
       }
       const v = validateRows(parsed.rows, map);
+
+      // Products have cross-row DB lookups: each component_sku_N must exist in
+      // component_library, and the category name (if provided) should match an
+      // existing category. Annotate errors/warnings now so the preview reflects
+      // them before the admin confirms.
+      if (entity === 'product') {
+        await annotateProductRowsWithDbChecks(v.rows);
+        // Recompute summary counts after annotations.
+        v.validRows = v.rows.filter(r => r.errors.length === 0).length;
+        v.errorRows = v.rows.filter(r => r.errors.length > 0).length;
+        v.warningRows = v.rows.filter(r => r.errors.length === 0 && r.warnings.length > 0).length;
+      }
+
       setSummary(v); setFileName(file.name); setPhase('preview');
     } catch (e) {
       toast({ title: 'Parse failed', description: (e as Error).message, variant: 'destructive' });
@@ -98,7 +112,7 @@ export default function BulkImport() {
             </div>
             <button className="text-sm underline" onClick={reset}>Choose a different file</button>
           </div>
-          <PreviewTable summary={summary} />
+          <PreviewTable summary={summary} entity={entity} />
           <ModeSelector value={mode} onChange={setMode} />
           <Button
             onClick={handleConfirm}
