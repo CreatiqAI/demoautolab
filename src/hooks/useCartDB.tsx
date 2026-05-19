@@ -10,6 +10,10 @@ interface CartItem {
   quantity: number;
   product_name: string;
   component_image?: string;
+  /** Seller of this item. NULL means AutoLab in-house. */
+  vendor_id?: string | null;
+  /** Display name of seller. NULL/undefined means "AutoLab". */
+  vendor_name?: string | null;
 }
 
 interface CartContextType {
@@ -71,38 +75,59 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data && data.length > 0) {
-        // Get unique component SKUs to fetch images
+        // Get unique component SKUs to fetch images + vendor info
         const componentSkus = [...new Set(data.map((item: any) => item.component_sku))];
 
-        // Fetch ALL component images to avoid special character issues with .in() operator
+        // Fetch ALL components (image + vendor_id) to avoid special character issues with .in() operator
         const { data: allComponentsData } = await supabase
-          .from('component_library')
-          .select('component_sku, default_image_url');
+          .from('component_library' as any)
+          .select('component_sku, default_image_url, vendor_id');
 
-        // Create a map of component_sku to image URL
-        // Filter to only components we need (to avoid memory issues with large datasets)
+        // Create maps from component_sku to image URL and vendor_id
         const componentSkusSet = new Set(componentSkus);
         const imageMap = new Map<string, string>();
+        const vendorIdMap = new Map<string, string | null>();
         if (allComponentsData) {
-          allComponentsData
+          (allComponentsData as any[])
             .filter((comp: any) => componentSkusSet.has(comp.component_sku))
             .forEach((comp: any) => {
               if (comp.default_image_url) {
                 imageMap.set(comp.component_sku, comp.default_image_url);
               }
+              vendorIdMap.set(comp.component_sku, comp.vendor_id ?? null);
             });
         }
 
-        // Transform database items to match CartItem interface with images
-        const transformedItems: CartItem[] = data.map((item: any) => ({
-          id: `${item.component_sku}_${item.product_context}`,
-          component_sku: item.component_sku,
-          name: item.component_name,
-          normal_price: item.unit_price,
-          quantity: item.quantity,
-          product_name: item.product_context || 'Unknown Product',
-          component_image: imageMap.get(item.component_sku) || item.default_image_url || undefined
-        })).sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
+        // Resolve vendor display names for any vendor_ids we found
+        const vendorIds = [...new Set(
+          Array.from(vendorIdMap.values()).filter((v): v is string => !!v)
+        )];
+        const vendorNameMap = new Map<string, string>();
+        if (vendorIds.length > 0) {
+          const { data: vendorRows } = await supabase
+            .from('vendors' as any)
+            .select('id, business_name')
+            .in('id', vendorIds);
+          (vendorRows as any[] | null)?.forEach((v: any) => {
+            vendorNameMap.set(v.id, v.business_name);
+          });
+        }
+
+        // Transform database items to match CartItem interface with images + seller info
+        const transformedItems: CartItem[] = data.map((item: any) => {
+          const vendorId = vendorIdMap.get(item.component_sku) ?? null;
+          return {
+            id: `${item.component_sku}_${item.product_context}`,
+            component_sku: item.component_sku,
+            name: item.component_name,
+            normal_price: item.unit_price,
+            quantity: item.quantity,
+            product_name: item.product_context || 'Unknown Product',
+            component_image: imageMap.get(item.component_sku) || item.default_image_url || undefined,
+            vendor_id: vendorId,
+            vendor_name: vendorId ? (vendorNameMap.get(vendorId) || null) : null,
+          };
+        }).sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
 
         setCartItems(transformedItems);
 

@@ -55,6 +55,8 @@ interface Product {
     is_primary: boolean;
     media_type?: 'image' | 'video';
   }>;
+  vendor_id?: string | null;
+  vendor?: { id: string; business_name: string } | null;
 }
 
 const ProductDetails = () => {
@@ -159,10 +161,15 @@ const ProductDetails = () => {
             is_primary,
             sort_order,
             media_type
+          ),
+          vendors:vendor_id (
+            id,
+            business_name
           )
         `)
         .eq('id', id)
         .eq('active', true)
+        .eq('approval_status', 'APPROVED')
         .single();
 
       if (error) {
@@ -173,6 +180,7 @@ const ProductDetails = () => {
       const productData: Product = {
         ...(data as any),
         product_images: (data as any).product_images_new || [],
+        vendor: (data as any).vendors || null,
       };
 
       setProduct(productData);
@@ -512,6 +520,16 @@ const ProductDetails = () => {
                 <h1 className="text-xl sm:text-2xl md:text-4xl font-heading font-bold text-[#0f172a] mb-2 sm:mb-3 uppercase tracking-wide leading-tight">
                   {product.name}
                 </h1>
+
+                {/* Sold by partner badge */}
+                {product.vendor?.business_name && (
+                  <div className="mb-3 sm:mb-4">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-lime-50 border border-lime-200 text-xs font-medium text-lime-800">
+                      <span className="h-1.5 w-1.5 rounded-full bg-lime-500" />
+                      Sold by {product.vendor.business_name}
+                    </span>
+                  </div>
+                )}
 
                 {/* Brand/Model/Year */}
                 <p className="text-sm sm:text-base text-slate-500 mb-3 sm:mb-5 font-normal">

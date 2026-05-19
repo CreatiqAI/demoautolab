@@ -90,6 +90,7 @@ serve(async (req) => {
     // Try both formats to handle any inconsistency
     let isNewUser = true;
     let existingUserEmail: string | null = null;
+    let existingUserId: string | null = null;
 
     const phoneWithPlus = normalizedPhone.startsWith('+') ? normalizedPhone : `+${normalizedPhone}`;
     const phoneWithoutPlus = normalizedPhone.replace(/^\+/, '');
@@ -101,27 +102,46 @@ serve(async (req) => {
       .maybeSingle();
 
     if (existingCustomer?.user_id) {
-      isNewUser = false;
+      existingUserId = existingCustomer.user_id;
       existingUserEmail = existingCustomer.email || null;
+    } else {
+      // Fallback: a partner (vendor) may have signed up before we started
+      // creating customer_profiles for them. Look them up via the vendors
+      // table directly so they can still log in.
+      const { data: existingVendor } = await supabase
+        .from('vendors')
+        .select('user_id, contact_email')
+        .or(`contact_phone.eq.${phoneWithPlus},contact_phone.eq.${phoneWithoutPlus}`)
+        .maybeSingle();
+
+      if (existingVendor?.user_id) {
+        existingUserId = existingVendor.user_id;
+        // Prefer the auth.users email (auth identity) over vendors.contact_email
+        // which is just a notification address.
+        const { data: authUserData } = await supabase.auth.admin.getUserById(existingVendor.user_id);
+        existingUserEmail = authUserData?.user?.email || existingVendor.contact_email || null;
+      }
+    }
+
+    if (existingUserId && existingUserEmail) {
+      isNewUser = false;
 
       // Generate a magic link token for passwordless sign-in
-      if (existingUserEmail) {
-        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-          type: 'magiclink',
-          email: existingUserEmail,
-        });
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: existingUserEmail,
+      });
 
-        if (!linkError && linkData?.properties?.hashed_token) {
-          return new Response(
-            JSON.stringify({
-              valid: true,
-              isNewUser: false,
-              existingUserEmail,
-              tokenHash: linkData.properties.hashed_token,
-            }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+      if (!linkError && linkData?.properties?.hashed_token) {
+        return new Response(
+          JSON.stringify({
+            valid: true,
+            isNewUser: false,
+            existingUserEmail,
+            tokenHash: linkData.properties.hashed_token,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
     }
 

@@ -32,6 +32,8 @@ interface Product {
   manufacturer_id?: string;
   manufacturer?: Manufacturer;
   manufacturer_brand?: string;
+  vendor_id?: string | null;
+  vendor?: { id: string; business_name: string } | null;
   product_images: Array<{
     url: string;
     alt_text: string;
@@ -82,9 +84,15 @@ const Catalog = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, [isMobile]);
 
-  // Fetch products with pricing based on customer type
+  // Fetch products with pricing based on customer type.
+  // staleTime:0 + refetchOnMount:'always' + refetchOnWindowFocus ensure
+  // admin moderation actions (hide/reject/approve) reflect on the catalog
+  // the next time the customer returns to this page.
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ['products', searchTerm, selectedBrand, selectedCategory],
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       // Direct query to get products with categories and manufacturers
       const { data: directData, error: directError } = await supabase
@@ -110,9 +118,14 @@ const Catalog = () => {
             description,
             country,
             is_active
+          ),
+          vendors:vendor_id (
+            id,
+            business_name
           )
         `)
         .eq('active', true)
+        .eq('approval_status', 'APPROVED')
         .order('created_at', { ascending: false });
 
       if (directError) {
@@ -125,6 +138,7 @@ const Catalog = () => {
         product_images: item.product_images_new || [],
         category: item.categories,
         manufacturer: item.manufacturers,
+        vendor: item.vendors || null,
         price: item.normal_price || 299, // Fallback price
         normal_price: item.normal_price || 299,
         merchant_price: item.merchant_price || 249,
@@ -642,6 +656,15 @@ const Catalog = () => {
                             <div className="absolute top-1.5 left-1.5">
                               <span className="px-1.5 py-0.5 bg-amber-600 text-white text-[9px] font-bold rounded shadow-lg">
                                 Premium
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Sold by badge — only when product belongs to a vendor partner */}
+                          {product.vendor?.business_name && (
+                            <div className="absolute top-1.5 right-1.5">
+                              <span className="px-1.5 py-0.5 bg-white/90 backdrop-blur-sm text-gray-700 text-[9px] font-medium rounded shadow-sm border border-gray-200 max-w-[110px] truncate inline-block" title={`Sold by ${product.vendor.business_name}`}>
+                                Sold by {product.vendor.business_name}
                               </span>
                             </div>
                           )}

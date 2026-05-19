@@ -17,8 +17,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Briefcase, Search, Loader2, CheckCircle2, Ban, RotateCcw, Mail, Phone, MapPin,
-  Building2, CreditCard, FileText, AlertTriangle, Clock,
+  Building2, CreditCard, FileText, AlertTriangle, Clock, Plus, Copy, Eye, EyeOff,
+  KeyRound, AtSign, Trash2,
 } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { getCurrentAdmin } from '@/lib/adminAudit';
 
 interface VendorRow {
   id: string;
@@ -69,7 +74,7 @@ export default function Vendors() {
   const [vendors, setVendors] = useState<VendorRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'all' | 'pending' | 'approved' | 'inactive'>('pending');
+  const [tab, setTab] = useState<'all' | 'approved' | 'inactive'>('approved');
 
   // Drawer
   const [drawerVendor, setDrawerVendor] = useState<VendorRow | null>(null);
@@ -86,6 +91,128 @@ export default function Vendors() {
   const [suspending, setSuspending] = useState(false);
 
   const [actionInProgress, setActionInProgress] = useState(false);
+
+  // Delete dialog
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Create-vendor dialog state
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    username: '',
+    password: '',
+    business_name: '',
+    contact_person: '',
+    contact_email: '',
+    contact_phone: '',
+    business_registration_no: '',
+    description: '',
+    commission_rate: '8',
+  });
+  // After successful creation, show credentials once for admin to copy
+  const [createdCreds, setCreatedCreds] = useState<{ username: string; password: string } | null>(null);
+
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let out = '';
+    const arr = new Uint32Array(12);
+    crypto.getRandomValues(arr);
+    for (let i = 0; i < arr.length; i++) out += chars[arr[i] % chars.length];
+    setCreateForm((f) => ({ ...f, password: out }));
+  };
+
+  const resetCreateForm = () => {
+    setCreateForm({
+      username: '',
+      password: '',
+      business_name: '',
+      contact_person: '',
+      contact_email: '',
+      contact_phone: '',
+      business_registration_no: '',
+      description: '',
+      commission_rate: '8',
+    });
+    setShowPwd(false);
+  };
+
+  const handleCreateVendor = async () => {
+    const admin = getCurrentAdmin();
+    if (!admin) {
+      toast({ title: 'Not signed in', description: 'Admin session missing — please re-login.', variant: 'destructive' });
+      return;
+    }
+    if (!/^[a-z0-9][a-z0-9_-]{2,31}$/.test(createForm.username.trim().toLowerCase())) {
+      toast({ title: 'Invalid username', description: '3–32 chars; lowercase letters, digits, _ or -; must start with a letter or digit.', variant: 'destructive' });
+      return;
+    }
+    if (createForm.password.length < 8) {
+      toast({ title: 'Password too short', description: 'Use at least 8 characters.', variant: 'destructive' });
+      return;
+    }
+    if (!createForm.business_name.trim() || !createForm.contact_person.trim() || !createForm.contact_email.trim()) {
+      toast({ title: 'Missing fields', description: 'Business name, contact person and contact email are required.', variant: 'destructive' });
+      return;
+    }
+
+    setCreateBusy(true);
+    try {
+      const commission = Number(createForm.commission_rate);
+      const { data, error } = await supabase.functions.invoke('admin-create-vendor', {
+        body: {
+          admin_id: admin.id,
+          username: createForm.username.trim().toLowerCase(),
+          password: createForm.password,
+          business_name: createForm.business_name.trim(),
+          contact_person: createForm.contact_person.trim(),
+          contact_email: createForm.contact_email.trim(),
+          contact_phone: createForm.contact_phone.trim() || null,
+          business_registration_no: createForm.business_registration_no.trim() || null,
+          description: createForm.description.trim() || null,
+          commission_rate: isNaN(commission) ? 8 : commission,
+        },
+      });
+      if (error || !(data as any)?.success) {
+        const msg = (data as any)?.message ?? error?.message ?? 'Could not create vendor.';
+        toast({ title: 'Create failed', description: msg, variant: 'destructive' });
+        setCreateBusy(false);
+        return;
+      }
+
+      // Audit log (non-blocking)
+      try {
+        await logAdminAction({
+          action: 'vendor.create',
+          entityType: 'vendor',
+          entityId: (data as any).vendor_id,
+          entityLabel: createForm.business_name.trim(),
+          after: {
+            username: createForm.username.trim().toLowerCase(),
+            commission_rate: Number(createForm.commission_rate),
+          },
+        });
+      } catch { /* swallow */ }
+
+      // Show credentials once for admin to copy & share manually
+      setCreatedCreds({
+        username: createForm.username.trim().toLowerCase(),
+        password: createForm.password,
+      });
+      void load();
+    } catch (err: any) {
+      toast({ title: 'Create failed', description: err?.message ?? 'Unexpected error.', variant: 'destructive' });
+    } finally {
+      setCreateBusy(false);
+    }
+  };
+
+  const closeCreateDialog = () => {
+    setCreateOpen(false);
+    setCreatedCreds(null);
+    resetCreateForm();
+  };
 
   useEffect(() => {
     void load();
@@ -111,7 +238,6 @@ export default function Vendors() {
   };
 
   const filtered = vendors.filter((v) => {
-    if (tab === 'pending' && v.status !== 'PENDING') return false;
     if (tab === 'approved' && v.status !== 'APPROVED') return false;
     if (tab === 'inactive' && v.status !== 'SUSPENDED' && v.status !== 'REJECTED') return false;
     if (search) {
@@ -127,7 +253,6 @@ export default function Vendors() {
   });
 
   const counts = {
-    pending: vendors.filter((v) => v.status === 'PENDING').length,
     approved: vendors.filter((v) => v.status === 'APPROVED').length,
     inactive: vendors.filter((v) => v.status === 'SUSPENDED' || v.status === 'REJECTED').length,
   };
@@ -203,6 +328,50 @@ export default function Vendors() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!drawerVendor) return;
+    const admin = getCurrentAdmin();
+    if (!admin) {
+      toast({ title: 'Not signed in', description: 'Admin session missing — please re-login.', variant: 'destructive' });
+      return;
+    }
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-delete-vendor', {
+        body: { admin_id: admin.id, vendor_id: drawerVendor.id },
+      });
+      if (error || !(data as any)?.success) {
+        const msg = (data as any)?.message ?? error?.message ?? 'Could not delete vendor.';
+        toast({ title: 'Delete failed', description: msg, variant: 'destructive' });
+        setDeleting(false);
+        return;
+      }
+
+      void logAdminAction({
+        action: 'vendor.delete',
+        entityType: 'vendor',
+        entityId: drawerVendor.id,
+        entityLabel: drawerVendor.business_name,
+        before: { status: drawerVendor.status, username: (drawerVendor as any).username ?? null },
+        after: null,
+      });
+
+      toast({
+        title: 'Vendor deleted',
+        description: `${drawerVendor.business_name} and its login have been removed.`,
+        variant: 'success',
+      });
+      setVendors((prev) => prev.filter((v) => v.id !== drawerVendor.id));
+      setDeleteOpen(false);
+      setDrawerOpen(false);
+      setDrawerVendor(null);
+    } catch (err: any) {
+      toast({ title: 'Delete failed', description: err?.message ?? 'Unexpected error.', variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSuspend = async () => {
     if (!drawerVendor) return;
     setSuspending(true);
@@ -259,21 +428,26 @@ export default function Vendors() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Briefcase className="h-7 w-7" />
-          Vendors
-        </h2>
-        <p className="text-muted-foreground">External business partners selling on the platform.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Briefcase className="h-7 w-7" />
+            Vendors
+          </h2>
+          <p className="text-muted-foreground">External business partners selling on the platform.</p>
+        </div>
+        <Button onClick={() => { setCreateOpen(true); setCreatedCreds(null); }}>
+          <Plus className="h-4 w-4 mr-2" />
+          New vendor
+        </Button>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Vendor directory</CardTitle>
-          <CardDescription>Approve applications, manage active vendors, view sales.</CardDescription>
+          <CardDescription>Manage admin-issued partner accounts.</CardDescription>
           <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="mt-2">
             <TabsList>
-              <TabsTrigger value="pending">Pending<Badge variant="secondary" className="ml-2">{counts.pending}</Badge></TabsTrigger>
               <TabsTrigger value="approved">Active<Badge variant="secondary" className="ml-2">{counts.approved}</Badge></TabsTrigger>
               <TabsTrigger value="inactive">Inactive<Badge variant="secondary" className="ml-2">{counts.inactive}</Badge></TabsTrigger>
               <TabsTrigger value="all">All<Badge variant="secondary" className="ml-2">{vendors.length}</Badge></TabsTrigger>
@@ -291,8 +465,7 @@ export default function Vendors() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
-              {tab === 'pending' && 'No pending applications.'}
-              {tab === 'approved' && 'No active vendors yet.'}
+              {tab === 'approved' && 'No active vendors yet. Click "New vendor" to issue your first partner account.'}
               {tab === 'inactive' && 'No suspended or rejected vendors.'}
               {tab === 'all' && (search ? 'No vendors match your search.' : 'No vendors yet.')}
             </div>
@@ -302,9 +475,10 @@ export default function Vendors() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Business</TableHead>
+                    <TableHead>Username</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Applied</TableHead>
+                    <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -318,6 +492,13 @@ export default function Vendors() {
                         )}
                       </TableCell>
                       <TableCell>
+                        {(v as any).username ? (
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{(v as any).username}</code>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="space-y-1 text-sm">
                           {v.contact_person && <div>{v.contact_person}</div>}
                           {v.contact_email && <div className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{v.contact_email}</div>}
@@ -325,13 +506,26 @@ export default function Vendors() {
                         </div>
                       </TableCell>
                       <TableCell>{statusBadge(v.status)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{formatDate(v.applied_at)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatDate(v.created_at)}</TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        {(v.status === 'SUSPENDED' || v.status === 'REJECTED') && (
-                          <Button variant="ghost" size="sm" onClick={() => handleReactivate(v)} title="Reactivate" className="text-green-600 hover:bg-green-50">
-                            <RotateCcw className="h-4 w-4" />
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button variant="ghost" size="sm" onClick={() => openDrawer(v)} title="View / edit" className="h-8 w-8 p-0">
+                            <Eye className="h-4 w-4" />
                           </Button>
-                        )}
+                          {(v.status === 'SUSPENDED' || v.status === 'REJECTED') && (
+                            <Button variant="ghost" size="sm" onClick={() => handleReactivate(v)} title="Reactivate" className="h-8 w-8 p-0 text-green-600 hover:bg-green-50">
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {v.status === 'APPROVED' && (
+                            <Button variant="ghost" size="sm" onClick={() => { setDrawerVendor(v); setSuspendOpen(true); }} title="Suspend" className="h-8 w-8 p-0 text-orange-600 hover:bg-orange-50">
+                              <Ban className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" onClick={() => { setDrawerVendor(v); setDeleteOpen(true); }} title="Delete" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -448,6 +642,16 @@ export default function Vendors() {
                       <RotateCcw className="h-4 w-4 mr-2" />Reactivate
                     </Button>
                   )}
+                  {/* Permanent delete — pushed to the right; only available if no
+                      ledger / payout / active fulfilment history exists. */}
+                  <div className="flex-1" />
+                  <Button
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />Delete account
+                  </Button>
                 </div>
               </div>
             </>
@@ -501,6 +705,198 @@ export default function Vendors() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Permanently delete vendor */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this vendor account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes <strong>{drawerVendor?.business_name ?? 'this vendor'}</strong>:
+              their login credentials, components, and vendor record. Their products will remain in the
+              catalog with no seller attached (admin can clean those up separately).
+              <br /><br />
+              <strong className="text-red-700">This cannot be undone.</strong> If they have any sales
+              history or payouts, suspend them instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); void handleDelete(); }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Create vendor dialog */}
+      <Dialog open={createOpen} onOpenChange={(o) => { if (!o) closeCreateDialog(); else setCreateOpen(true); }}>
+        <DialogContent className="max-w-2xl">
+          {createdCreds ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  Vendor account created
+                </DialogTitle>
+                <DialogDescription>
+                  Share these credentials with the partner. We can't show the password again — copy it now.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+                  <CredentialRow label="Username" value={createdCreds.username} />
+                  <CredentialRow label="Password" value={createdCreds.password} mono />
+                  <CredentialRow label="Login URL" value={`${window.location.origin}/auth?tab=partner`} />
+                </div>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
+                  <strong>Important:</strong> Save these credentials before closing. The password won't be visible again.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button onClick={closeCreateDialog}>Done</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Create new vendor
+                </DialogTitle>
+                <DialogDescription>
+                  Issue a partner account. They'll log in at /auth → Partner tab with the username and password you set here.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-1">
+                {/* Credentials */}
+                <div className="rounded-lg border p-4 space-y-3 bg-muted/20">
+                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <KeyRound className="h-3 w-3" /> Login credentials
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cv-username">Username <span className="text-red-500">*</span></Label>
+                      <div className="relative">
+                        <AtSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          id="cv-username"
+                          value={createForm.username}
+                          onChange={(e) => setCreateForm({ ...createForm, username: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
+                          placeholder="soundstream"
+                          className="pl-7 font-mono text-sm"
+                          maxLength={32}
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">Lowercase letters, digits, _ or -. 3–32 chars.</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="cv-password">Password <span className="text-red-500">*</span></Label>
+                        <button type="button" onClick={generatePassword} className="text-[11px] text-primary hover:underline">
+                          Generate
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          id="cv-password"
+                          type={showPwd ? 'text' : 'password'}
+                          value={createForm.password}
+                          onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                          placeholder="Minimum 8 characters"
+                          className="pr-9 font-mono text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPwd((v) => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showPwd ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Business identity */}
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Building2 className="h-3 w-3" /> Business
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cv-biz">Business name <span className="text-red-500">*</span></Label>
+                    <Input id="cv-biz" value={createForm.business_name} onChange={(e) => setCreateForm({ ...createForm, business_name: e.target.value })} placeholder="e.g. SoundStream Auto Sdn Bhd" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cv-cp">Contact person <span className="text-red-500">*</span></Label>
+                      <Input id="cv-cp" value={createForm.contact_person} onChange={(e) => setCreateForm({ ...createForm, contact_person: e.target.value })} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cv-comm">Commission %</Label>
+                      <Input id="cv-comm" type="number" min={0} max={100} step={0.01} value={createForm.commission_rate} onChange={(e) => setCreateForm({ ...createForm, commission_rate: e.target.value })} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cv-email">Contact email <span className="text-red-500">*</span></Label>
+                      <Input id="cv-email" type="email" value={createForm.contact_email} onChange={(e) => setCreateForm({ ...createForm, contact_email: e.target.value })} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cv-phone">Contact phone</Label>
+                      <Input id="cv-phone" type="tel" value={createForm.contact_phone} onChange={(e) => setCreateForm({ ...createForm, contact_phone: e.target.value })} placeholder="+60 12-345 6789" />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="cv-ssm">SSM / Registration no.</Label>
+                      <Input id="cv-ssm" value={createForm.business_registration_no} onChange={(e) => setCreateForm({ ...createForm, business_registration_no: e.target.value })} />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="cv-desc">Notes / description</Label>
+                      <Textarea id="cv-desc" rows={2} value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} placeholder="Anything internal admin should know about this partner." />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Vendor will start as <strong>APPROVED</strong>. Address and bank details can be filled later in vendor settings.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeCreateDialog} disabled={createBusy}>Cancel</Button>
+                <Button onClick={handleCreateVendor} disabled={createBusy}>
+                  {createBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+                  Create vendor
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function CredentialRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  const { toast } = useToast();
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ title: 'Copied', description: label, variant: 'success' });
+    } catch {
+      toast({ title: 'Copy failed', description: 'Select and copy manually.', variant: 'destructive' });
+    }
+  };
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className={`text-sm break-all ${mono ? 'font-mono' : ''}`}>{value}</div>
+      </div>
+      <Button variant="ghost" size="sm" onClick={copy} className="flex-shrink-0">
+        <Copy className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 }

@@ -114,72 +114,41 @@ export default function PaymentGateway() {
 
       // Skip order processing for subscription renewals
       if (!isSubscriptionRenewal) {
-        const { data: rpcData, error } = await (supabase.rpc as any)('process_payment_response', {
+        const gatewayResponse = {
+          timestamp: new Date().toISOString(),
+          method: orderData.paymentMethod,
+          amount: orderData.total,
+          reference: `PAY-${Date.now()}`,
+          success,
+          message: success ? 'Payment processed successfully' : 'Payment processing failed',
+        };
+
+        // Use the new RPC that handles split orders. If the order has an
+        // order_group_id, every sibling sub-order is flipped atomically AND
+        // vendor sales-ledger entries are recorded server-side. For
+        // single-order checkouts it just updates the one order. Idempotent
+        // and safe to call repeatedly.
+        const { error: confirmErr } = await (supabase.rpc as any)('confirm_payment_for_order_group', {
           p_order_id: orderData.orderId,
-          p_status: success ? 'SUCCESS' : 'FAILED',
-          p_payment_details: {
-            timestamp: new Date().toISOString(),
-            method: orderData.paymentMethod,
-            amount: orderData.total,
-            reference: `PAY-${Date.now()}`,
-            success: success,
-            message: success ? 'Payment processed successfully' : 'Payment processing failed'
-          }
+          p_state: success ? 'SUCCESS' : 'FAILED',
+          p_gateway_response: gatewayResponse,
         });
 
-
-        // If function doesn't exist, fall back to direct order update
-        if (error?.code === '42883') { // Function does not exist
-
-          if (success) {
-            // For successful payment, update to SUCCESS and PROCESSING status
-            const { data: updateData, error: updateError } = await supabase
+        if (confirmErr) {
+          // Fallback to direct UPDATE if the RPC isn't deployed yet
+          if (confirmErr.code === '42883') {
+            await supabase
               .from('orders')
               .update({
-                payment_state: 'SUCCESS',
-                status: 'PROCESSING', // Order moves to processing after successful payment
-                payment_gateway_response: {
-                  timestamp: new Date().toISOString(),
-                  method: orderData.paymentMethod,
-                  amount: orderData.total,
-                  reference: `PAY-${Date.now()}`,
-                  success: true,
-                  message: 'Payment processed successfully'
-                },
-                updated_at: new Date().toISOString()
+                payment_state: success ? 'SUCCESS' : 'FAILED',
+                ...(success ? { status: 'PROCESSING' } : {}),
+                payment_gateway_response: gatewayResponse,
+                updated_at: new Date().toISOString(),
               })
-              .eq('id', orderData.orderId)
-              .select();
-
-            if (updateError) {
-              throw updateError;
-            }
-
+              .eq('id', orderData.orderId);
           } else {
-            // For failed payment, update to FAILED
-            const { data: updateData, error: updateError } = await supabase
-              .from('orders')
-              .update({
-                payment_state: 'FAILED',
-                payment_gateway_response: {
-                  timestamp: new Date().toISOString(),
-                  method: orderData.paymentMethod,
-                  amount: orderData.total,
-                  reference: `PAY-${Date.now()}`,
-                  success: false
-                },
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', orderData.orderId)
-              .select();
-
-            if (updateError) {
-            }
-
+            throw confirmErr;
           }
-        } else if (error && success) {
-          throw error;
-        } else if (!error && success) {
         }
 
         // Verify the update was successful before proceeding
@@ -190,16 +159,13 @@ export default function PaymentGateway() {
             .eq('id', orderData.orderId)
             .single();
 
-
           if (verifyError) {
             throw new Error('Failed to verify payment update');
           }
 
-          // Check if payment_state was actually updated to SUCCESS
           if (verifyData.payment_state !== 'SUCCESS') {
             throw new Error(`Payment update failed - payment state is still ${verifyData.payment_state}`);
           }
-
         }
       }
 

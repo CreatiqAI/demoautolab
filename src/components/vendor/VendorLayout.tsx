@@ -4,9 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useCurrentVendor } from '@/lib/vendorAuth';
+import { UploadQueueProvider } from '@/hooks/useUploadQueue';
+import UploadQueueIndicator from '@/components/admin/UploadQueueIndicator';
 import {
   LayoutDashboard,
   Package,
+  Layers,
   ShoppingBag,
   Wallet,
   Settings,
@@ -18,6 +21,7 @@ import { cn } from '@/lib/utils';
 
 const NAV = [
   { name: 'Dashboard', href: '/vendor/dashboard', icon: LayoutDashboard, exact: true },
+  { name: 'Components', href: '/vendor/components', icon: Layers },
   { name: 'Products', href: '/vendor/products', icon: Package },
   { name: 'Orders', href: '/vendor/orders', icon: ShoppingBag },
   { name: 'Payouts', href: '/vendor/payouts', icon: Wallet },
@@ -84,34 +88,38 @@ export default function VendorLayout() {
   );
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Desktop sidebar */}
-      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 z-30">
-        <div className="flex flex-col flex-grow bg-white border-r overflow-y-auto">
-          <SidebarContent />
-        </div>
-      </div>
-
-      {/* Mobile sidebar */}
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetTrigger asChild>
-          <Button variant="outline" size="icon" className="lg:hidden fixed top-4 left-4 z-50">
-            <Menu className="h-4 w-4" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
-          <SidebarContent />
-        </SheetContent>
-      </Sheet>
-
-      {/* Main */}
-      <div className="flex flex-1 flex-col lg:pl-64">
-        <main className="flex-1 overflow-auto">
-          <div className="p-4 sm:p-6 lg:p-8">
-            <Outlet />
+    <UploadQueueProvider>
+      <div className="flex h-screen bg-gray-50">
+        {/* Desktop sidebar */}
+        <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 z-30">
+          <div className="flex flex-col flex-grow bg-white border-r overflow-y-auto">
+            <SidebarContent />
           </div>
-        </main>
+        </div>
+
+        {/* Mobile sidebar */}
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="icon" className="lg:hidden fixed top-4 left-4 z-50">
+              <Menu className="h-4 w-4" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64 p-0">
+            <SidebarContent />
+          </SheetContent>
+        </Sheet>
+
+        {/* Main */}
+        <div className="flex flex-1 flex-col lg:pl-64">
+          <main className="flex-1 overflow-auto">
+            <div className="p-4 sm:p-6 lg:p-8">
+              <Outlet />
+            </div>
+          </main>
+        </div>
+
+        <UploadQueueIndicator />
       </div>
-    </div>
+    </UploadQueueProvider>
   );
 }

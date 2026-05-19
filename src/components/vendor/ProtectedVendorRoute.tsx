@@ -33,14 +33,14 @@ export default function ProtectedVendorRoute({ children }: ProtectedVendorRouteP
     );
   }
 
-  // Not signed in -> regular auth flow
+  // Not signed in -> partner tab on the unified auth page
   if (!user) {
-    return <Navigate to="/auth" replace state={{ from: '/vendor/dashboard' }} />;
+    return <Navigate to="/auth?tab=partner" replace state={{ from: '/vendor/dashboard' }} />;
   }
 
-  // Signed in but no vendor record -> route them to apply
+  // Signed in but no vendor record -> not a partner. Bounce out.
   if (!vendor) {
-    return <Navigate to="/vendor/apply" replace />;
+    return <Navigate to="/auth?tab=partner" replace />;
   }
 
   // Has vendor record but not approved -> status page

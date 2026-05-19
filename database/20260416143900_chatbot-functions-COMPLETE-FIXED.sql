@@ -46,8 +46,6 @@ DECLARE
   v_customer_id UUID;
   v_customer_name TEXT;
   v_customer_type TEXT;
-  v_user_id UUID;
-  v_role TEXT;
 BEGIN
   v_normalized_phone := regexp_replace(COALESCE(p_phone, ''), '\D', '', 'g');
   v_phone_variants := ARRAY[
@@ -69,22 +67,6 @@ BEGIN
       v_customer_id, v_customer_name,
       COALESCE(v_customer_type, 'normal'),
       CASE WHEN v_customer_type = 'merchant' THEN 'B2B Merchant' ELSE 'Retail' END,
-      true;
-    RETURN;
-  END IF;
-
-  SELECT pr.id, COALESCE(pr.full_name, 'Customer'), pr.role
-  INTO v_user_id, v_customer_name, v_role
-  FROM profiles pr
-  WHERE pr.phone_e164 = ANY(v_phone_variants)
-     OR regexp_replace(COALESCE(pr.phone_e164, ''), '\D', '', 'g') = v_normalized_phone
-  LIMIT 1;
-
-  IF v_user_id IS NOT NULL THEN
-    RETURN QUERY SELECT
-      v_user_id, v_customer_name,
-      CASE WHEN v_role = 'merchant' THEN 'merchant' ELSE 'normal' END,
-      CASE WHEN v_role = 'merchant' THEN 'B2B Merchant' ELSE 'Retail' END,
       true;
     RETURN;
   END IF;

@@ -22,7 +22,8 @@ import {
   Settings,
   Package,
   RotateCcw,
-  Gift
+  Gift,
+  Briefcase
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -41,6 +42,7 @@ const Header = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isMerchant, setIsMerchant] = useState<boolean | null>(null);
   const [partnership, setPartnership] = useState<any>(null);
+  const [isApprovedVendor, setIsApprovedVendor] = useState<boolean>(false);
   const [showExpiryBanner, setShowExpiryBanner] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [isHoveringNavbar, setIsHoveringNavbar] = useState(false);
@@ -108,7 +110,29 @@ const Header = () => {
       if (!user) {
         setIsMerchant(false);
         setPartnership(null);
+        setIsApprovedVendor(false);
         return;
+      }
+
+      // Vendor (partner) check — only for partner-authenticated sessions.
+      // Partners log in with @partner.autolab.local synthetic emails;
+      // customers/merchants use phone-based ones. Without this guard, a
+      // user who is BOTH a customer and a partner would see the Vendor
+      // Console link even when signed in via the customer/merchant flow.
+      try {
+        const isPartnerSession = (user.email ?? '').toLowerCase().endsWith('@partner.autolab.local');
+        if (!isPartnerSession) {
+          setIsApprovedVendor(false);
+        } else {
+          const { data: vendorRow } = await supabase
+            .from('vendors' as any)
+            .select('status')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          setIsApprovedVendor((vendorRow as any)?.status === 'APPROVED');
+        }
+      } catch {
+        setIsApprovedVendor(false);
       }
 
       const cachedStatus = localStorage.getItem(`merchant_status_${user.id}`);
@@ -121,7 +145,7 @@ const Header = () => {
           .from('customer_profiles')
           .select('customer_type, id')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
         const isMerchantUser = profile?.customer_type === 'merchant';
         setIsMerchant(isMerchantUser);
@@ -363,6 +387,14 @@ const Header = () => {
                           </Link>
                         </DropdownMenuItem>
                       )}
+                      {isApprovedVendor && (
+                        <DropdownMenuItem asChild>
+                          <Link to="/vendor/dashboard" className="flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:bg-gray-50 focus:text-gray-900">
+                            <Briefcase className="h-4 w-4 text-lime-600" />
+                            <span className="text-sm font-medium">Vendor Console</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator className="my-1" />
                       <DropdownMenuItem
                         onClick={handleSignOut}
@@ -436,6 +468,12 @@ const Header = () => {
                             <Link to="/merchant-console" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 py-2.5 text-gray-700 hover:text-gray-900 transition-colors">
                               <Store className="h-4 w-4" />
                               <span className="text-sm font-medium">Merchant Console</span>
+                            </Link>
+                          )}
+                          {isApprovedVendor && (
+                            <Link to="/vendor/dashboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 py-2.5 text-gray-700 hover:text-gray-900 transition-colors">
+                              <Briefcase className="h-4 w-4 text-lime-600" />
+                              <span className="text-sm font-medium">Vendor Console</span>
                             </Link>
                           )}
                         </nav>

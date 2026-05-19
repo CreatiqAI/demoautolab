@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/hooks/useCartDB';
 import { useAuth } from '@/hooks/useAuth';
@@ -7,8 +7,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Minus, Plus, Trash2, ShoppingBag, X, ArrowRight } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, X, ArrowRight, Store, Building2 } from 'lucide-react';
 import CheckoutModal from '@/components/CheckoutModal';
+import { groupCartItemsBySeller } from '@/lib/cartGrouping';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -16,12 +17,15 @@ interface CartDrawerProps {
 }
 
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
-  const { cartItems, updateQuantity, removeFromCart, getTotalPrice, getTotalItems, clearCart } = useCart();
+  const { cartItems, updateQuantity, removeFromCart, getTotalItems, clearCart } = useCart();
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const navigate = useNavigate();
+
+  // Group cart items by seller for the Shopee-style layout
+  const sellerGroups = useMemo(() => groupCartItemsBySeller(cartItems), [cartItems]);
 
   // Handle cart clearing after successful payment
   useEffect(() => {
@@ -72,6 +76,17 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
   const handleSelectAll = (checked: boolean) => {
     setSelectedItems(checked ? cartItems.map(item => item.id) : []);
+  };
+
+  const handleSelectGroup = (groupItemIds: string[], checked: boolean) => {
+    setSelectedItems(prev => {
+      if (checked) {
+        const merged = new Set([...prev, ...groupItemIds]);
+        return Array.from(merged);
+      }
+      const drop = new Set(groupItemIds);
+      return prev.filter(id => !drop.has(id));
+    });
   };
 
   const getSelectedItems = () => {
@@ -192,84 +207,120 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
               </button>
             </div>
 
-            {/* Items List */}
+            {/* Items List grouped by seller */}
             <div className="flex-1 overflow-y-auto h-[calc(100%-280px)]">
               <div className="divide-y divide-gray-100">
-                {cartItems.map((item) => (
-                  <div key={item.id} className="p-4">
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={selectedItems.includes(item.id)}
-                        onCheckedChange={(checked) => handleItemSelection(item.id, checked as boolean)}
-                        className="mt-1 flex-shrink-0"
-                      />
+                {sellerGroups.map((group) => {
+                  const groupItemIds = group.items.map(i => i.id);
+                  const groupSelectedCount = groupItemIds.filter(id => selectedItems.includes(id)).length;
+                  const allInGroupSelected = groupSelectedCount === groupItemIds.length && groupItemIds.length > 0;
 
-                      {/* Clickable area - Image and Title */}
-                      <div
-                        onClick={() => handleItemClick(item)}
-                        className="flex items-start gap-3 flex-1 min-w-0 cursor-pointer group/item"
-                      >
-                        <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-transparent group-hover/item:ring-lime-500 transition-all">
-                          {item.component_image ? (
-                            <img
-                              src={item.component_image}
-                              alt={item.name}
-                              className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-300"
+                  return (
+                    <div key={group.sellerKey}>
+                      {/* Seller header */}
+                      <div className="flex items-center justify-between gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Checkbox
+                            checked={allInGroupSelected}
+                            onCheckedChange={(checked) =>
+                              handleSelectGroup(groupItemIds, checked as boolean)
+                            }
+                            className="flex-shrink-0"
+                          />
+                          <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${
+                            group.isVendor ? 'bg-lime-100 text-lime-700' : 'bg-gray-200 text-gray-700'
+                          }`}>
+                            {group.isVendor ? <Store className="h-3 w-3" /> : <Building2 className="h-3 w-3" />}
+                          </div>
+                          <span className="text-[13px] font-semibold text-gray-900 truncate">
+                            {group.sellerName}
+                          </span>
+                          {group.isVendor ? (
+                            <Badge variant="outline" className="text-[10px] border-lime-300 text-lime-700 px-1.5 py-0">Vendor</Badge>
+                          ) : null}
+                        </div>
+                        <span className="text-[11px] text-gray-500 flex-shrink-0">{formatPrice(group.subtotal)}</span>
+                      </div>
+
+                      {/* Items in this group */}
+                      {group.items.map((item) => (
+                        <div key={item.id} className="px-4 py-3 border-b border-gray-100 last:border-b-0">
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={selectedItems.includes(item.id)}
+                              onCheckedChange={(checked) => handleItemSelection(item.id, checked as boolean)}
+                              className="mt-1 flex-shrink-0"
                             />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <ShoppingBag className="h-6 w-6 text-gray-300" />
+
+                            {/* Clickable area - Image and Title */}
+                            <div
+                              onClick={() => handleItemClick(item)}
+                              className="flex items-start gap-3 flex-1 min-w-0 cursor-pointer group/item"
+                            >
+                              <div className="w-14 h-14 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-transparent group-hover/item:ring-lime-500 transition-all">
+                                {item.component_image ? (
+                                  <img
+                                    src={item.component_image}
+                                    alt={item.name}
+                                    className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <ShoppingBag className="h-5 w-5 text-gray-300" />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-[14px] font-medium text-gray-900 line-clamp-2 mb-0.5 group-hover/item:text-lime-600 transition-colors">{item.name}</h3>
+                                <p className="text-[11px] text-gray-500 mb-1">{item.component_sku}</p>
+                              </div>
                             </div>
-                          )}
+
+                            {/* Action buttons - NOT clickable for navigation */}
+                            <div className="flex-shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeFromCart(item.id);
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Quantity controls and price - Below the clickable area */}
+                          <div className="flex items-center justify-between gap-2 mt-2 ml-[44px]">
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                disabled={item.quantity <= 1}
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-700"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className="w-9 text-center text-sm font-medium text-gray-900">
+                                {item.quantity}
+                              </span>
+                              <button
+                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors text-gray-700"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+
+                            <span className="text-[14px] font-bold text-gray-900">
+                              {formatPrice(item.normal_price * item.quantity)}
+                            </span>
+                          </div>
                         </div>
-
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-[15px] font-medium text-gray-900 line-clamp-2 mb-1 group-hover/item:text-lime-600 transition-colors">{item.name}</h3>
-                          <p className="text-xs text-gray-500 mb-2">{item.component_sku}</p>
-                        </div>
-                      </div>
-
-                      {/* Action buttons - NOT clickable for navigation */}
-                      <div className="flex-shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeFromCart(item.id);
-                          }}
-                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
+                      ))}
                     </div>
-
-                    {/* Quantity controls and price - Below the clickable area */}
-                    <div className="flex items-center justify-between gap-2 mt-2 ml-[52px]">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          disabled={item.quantity <= 1}
-                          className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-700"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="w-9 text-center text-sm font-medium text-gray-900">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors text-gray-700"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </div>
-
-                      <span className="text-[15px] font-bold text-gray-900">
-                        {formatPrice(item.normal_price * item.quantity)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

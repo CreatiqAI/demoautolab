@@ -9,11 +9,14 @@ import { Eye, ArrowLeft, Package, Truck, CheckCircle, Clock, XCircle, CreditCard
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/hooks/useCartDB';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import SellerInvoice from '@/components/invoice/SellerInvoice';
+import { splitOrderBySeller, type InvoiceSlice } from '@/lib/orderInvoices';
 
 declare global {
   interface Window {
@@ -46,6 +49,10 @@ interface CustomerOrder {
   // Courier tracking fields
   courier_provider: string | null;
   courier_tracking_number: string | null;
+  // Multi-seller cart sibling marker. When two or more orders share the same
+  // order_group_id, they were created from a single multi-seller checkout.
+  order_group_id?: string | null;
+  seller_letter?: string | null;
   order_items: Array<{
     id: string;
     component_sku: string;
@@ -55,6 +62,17 @@ interface CustomerOrder {
     quantity: number;
     unit_price: number;
     total_price: number;
+    vendor_id?: string | null;
+  }>;
+  vendor_fulfilments?: Array<{
+    id: string;
+    vendor_id: string;
+    status: 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
+    tracking_number: string | null;
+    tracking_provider: string | null;
+    shipped_at: string | null;
+    delivered_at: string | null;
+    vendors?: { id: string; business_name: string } | null;
   }>;
 }
 
@@ -88,6 +106,9 @@ export default function MyOrders() {
   const [cancellingOrder, setCancellingOrder] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<CustomerOrder | null>(null);
+  // For multi-seller orders, this holds the seller slice being previewed.
+  // When `null`, the modal renders the legacy combined invoice.
+  const [invoiceSlice, setInvoiceSlice] = useState<InvoiceSlice | null>(null);
   const [timeFilter, setTimeFilter] = useState('6months');
   const { toast } = useToast();
 
@@ -106,6 +127,18 @@ export default function MyOrders() {
 
   // Cancellable statuses - before shipment
   const CANCELLABLE_STATUSES = ['PROCESSING', 'PACKING'];
+
+  // Map of order_group_id -> count of sibling orders sharing that group.
+  // Used to render a "Part of cart" pill on rows that came from a single
+  // multi-seller checkout (i.e. when the same group_id has 2+ rows).
+  const orderGroupSizes = (() => {
+    const map = new Map<string, number>();
+    for (const o of orders) {
+      if (!o.order_group_id) continue;
+      map.set(o.order_group_id, (map.get(o.order_group_id) || 0) + 1);
+    }
+    return map;
+  })();
 
   // Time-filtered orders
   const filteredRecentOrders = (() => {
@@ -208,14 +241,16 @@ export default function MyOrders() {
     return result.trim() || 'ZERO';
   };
 
-  const openInvoiceModal = (order: CustomerOrder) => {
+  const openInvoiceModal = (order: CustomerOrder, slice: InvoiceSlice | null = null) => {
     setSelectedOrderForInvoice(order);
+    setInvoiceSlice(slice);
     setIsInvoiceModalOpen(true);
   };
 
   const closeInvoiceModal = () => {
     setIsInvoiceModalOpen(false);
     setSelectedOrderForInvoice(null);
+    setInvoiceSlice(null);
   };
 
   const printInvoice = () => {
@@ -226,9 +261,10 @@ export default function MyOrders() {
     if (!selectedOrderForInvoice) return;
 
     const invoiceBody = document.getElementById('customerInvoiceBody');
+    const sellerSuffix = invoiceSlice ? `-${invoiceSlice.sellerKey === 'autolab' ? 'autolab' : (invoiceSlice.sellerName.replace(/\s+/g, '-').toLowerCase())}` : '';
     const opt = {
       margin: 0.1,
-      filename: `invoice-${selectedOrderForInvoice.order_no}.pdf`,
+      filename: `invoice-${selectedOrderForInvoice.order_no}${sellerSuffix}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
@@ -320,7 +356,18 @@ export default function MyOrders() {
             product_context,
             quantity,
             unit_price,
-            total_price
+            total_price,
+            vendor_id
+          ),
+          vendor_fulfilments (
+            id,
+            vendor_id,
+            status,
+            tracking_number,
+            tracking_provider,
+            shipped_at,
+            delivered_at,
+            vendors:vendor_id (id, business_name)
           )
         `)
         .eq('user_id', user.id)
@@ -412,7 +459,10 @@ export default function MyOrders() {
         voucher_discount: order.voucher_discount || null,
         courier_provider: order.courier_provider || null,
         courier_tracking_number: order.courier_tracking_number || null,
-        order_items: order.order_items || []
+        order_group_id: order.order_group_id ?? null,
+        seller_letter: order.seller_letter ?? null,
+        order_items: order.order_items || [],
+        vendor_fulfilments: order.vendor_fulfilments || []
       }));
 
       setOrders(transformedOrders);
@@ -794,7 +844,11 @@ export default function MyOrders() {
                   <Badge variant="secondary" className="text-xs">{filteredRecentOrders.length}</Badge>
                 </div>
                 <div className="space-y-2">
-                  {filteredRecentOrders.map((order) => (
+                  {filteredRecentOrders.map((order) => {
+                    const groupSize = order.order_group_id
+                      ? orderGroupSizes.get(order.order_group_id) || 0
+                      : 0;
+                    return (
                     <div
                       key={order.id}
                       className="bg-white border rounded-lg px-3 sm:px-5 py-3 sm:py-4 hover:shadow-sm transition-all cursor-pointer"
@@ -811,6 +865,14 @@ export default function MyOrders() {
                             <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[11px] sm:text-xs font-medium border ${getPaymentColor(order.payment_state)}`}>
                               {order.payment_state.toLowerCase().replace('_', ' ')}
                             </span>
+                            {groupSize > 1 && (
+                              <span
+                                className="px-1.5 sm:px-2 py-0.5 rounded text-[11px] sm:text-xs font-medium border bg-indigo-50 text-indigo-700 border-indigo-200"
+                                title={`Part of a multi-seller checkout (${groupSize} orders)`}
+                              >
+                                {order.seller_letter ? `Seller ${order.seller_letter} · ` : ''}1 of {groupSize}
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1 sm:gap-1.5">
                             <Clock className="h-3 sm:h-3.5 w-3 sm:w-3.5 flex-shrink-0" />
@@ -841,7 +903,8 @@ export default function MyOrders() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : recentOrders.length > 0 ? (
@@ -1192,28 +1255,98 @@ export default function MyOrders() {
                 </div>
               </div>
 
-              {/* Items */}
+              {/* Items — grouped by seller (AutoLab vs vendor partners) */}
               <div className="px-4 sm:px-6 py-4 sm:py-6 border-t">
                 <p className="text-[11px] text-muted-foreground mb-3">Items ({selectedOrder.order_items.length})</p>
-                <div className="space-y-4">
-                  {selectedOrder.order_items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3">
-                      {item.component_image ? (
-                        <img src={item.component_image} alt={item.component_name} className="w-11 h-11 rounded-lg border object-cover flex-shrink-0" />
-                      ) : (
-                        <div className="w-11 h-11 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                          <Package className="h-4 w-4 text-gray-400" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900 leading-tight">{item.component_name}</p>
-                        <p className="text-xs text-muted-foreground">{item.product_context || item.component_sku}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground flex-shrink-0">{item.quantity}x</p>
-                      <p className="text-xs sm:text-sm text-gray-900 flex-shrink-0 w-16 sm:w-20 text-right">{formatCurrency(item.total_price)}</p>
+                {(() => {
+                  // Group items by vendor_id (null = AutoLab in-house)
+                  const groups = new Map<string, typeof selectedOrder.order_items>();
+                  for (const item of selectedOrder.order_items) {
+                    const key = item.vendor_id || '__autolab__';
+                    if (!groups.has(key)) groups.set(key, []);
+                    groups.get(key)!.push(item);
+                  }
+                  const fulfilmentByVendor = new Map(
+                    (selectedOrder.vendor_fulfilments ?? []).map(f => [f.vendor_id, f])
+                  );
+                  // Render AutoLab group first, then vendor groups
+                  const sortedKeys = Array.from(groups.keys()).sort((a, b) =>
+                    a === '__autolab__' ? -1 : b === '__autolab__' ? 1 : 0
+                  );
+                  return (
+                    <div className="space-y-5">
+                      {sortedKeys.map((key) => {
+                        const items = groups.get(key)!;
+                        const fulfilment = key !== '__autolab__' ? fulfilmentByVendor.get(key) : null;
+                        const sellerName = key === '__autolab__'
+                          ? 'AutoLab (in-house)'
+                          : (fulfilment?.vendors?.business_name || 'Partner');
+                        const subtotal = items.reduce((s, i) => s + (i.total_price || 0), 0);
+                        return (
+                          <div key={key} className="space-y-3">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Sold by</span>
+                                <span className={`text-xs font-medium truncate ${key === '__autolab__' ? 'text-gray-700' : 'text-lime-800'}`}>{sellerName}</span>
+                              </div>
+                              {fulfilment && (() => {
+                                // Display labels match admin's pipeline so the
+                                // customer sees consistent terminology across
+                                // the platform. PENDING (DB) → "Processing"
+                                // (just received), PROCESSING (DB) → "Packing"
+                                // (active prep).
+                                const meta = {
+                                  PENDING:    { label: 'Processing', cls: 'bg-amber-100 text-amber-800' },
+                                  PROCESSING: { label: 'Packing',    cls: 'bg-blue-100 text-blue-800' },
+                                  SHIPPED:    { label: 'Shipped',    cls: 'bg-lime-100 text-lime-800' },
+                                  DELIVERED:  { label: 'Delivered',  cls: 'bg-green-100 text-green-800' },
+                                  CANCELLED:  { label: 'Cancelled',  cls: 'bg-gray-100 text-gray-700' },
+                                }[fulfilment.status as 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED'];
+                                return (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${meta?.cls ?? 'bg-gray-100 text-gray-700'}`}>
+                                    {meta?.label ?? fulfilment.status}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="space-y-3 pl-1 border-l-2 border-gray-100 pl-3">
+                              {items.map((item) => (
+                                <div key={item.id} className="flex items-center gap-3">
+                                  {item.component_image ? (
+                                    <img src={item.component_image} alt={item.component_name} className="w-11 h-11 rounded-lg border object-cover flex-shrink-0" />
+                                  ) : (
+                                    <div className="w-11 h-11 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                      <Package className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-gray-900 leading-tight">{item.component_name}</p>
+                                    <p className="text-xs text-muted-foreground">{item.product_context || item.component_sku}</p>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground flex-shrink-0">{item.quantity}x</p>
+                                  <p className="text-xs sm:text-sm text-gray-900 flex-shrink-0 w-16 sm:w-20 text-right">{formatCurrency(item.total_price)}</p>
+                                </div>
+                              ))}
+                              {fulfilment?.tracking_number && (
+                                <div className="text-[11px] text-gray-600 mt-2">
+                                  <span className="text-muted-foreground">Tracking:</span>{' '}
+                                  <span className="font-mono">{fulfilment.tracking_number}</span>
+                                  {fulfilment.tracking_provider && <span className="text-muted-foreground"> · {fulfilment.tracking_provider}</span>}
+                                </div>
+                              )}
+                              {sortedKeys.length > 1 && (
+                                <div className="flex justify-between text-[11px] text-muted-foreground pt-1">
+                                  <span>Subtotal for this seller</span>
+                                  <span>{formatCurrency(subtotal)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
               </div>
 
               {/* Payment */}
@@ -1257,11 +1390,46 @@ export default function MyOrders() {
                 )}
                 Reorder
               </Button>
-              {selectedOrder.payment_state === 'SUCCESS' && (
-                <Button variant="outline" size="sm" onClick={() => openInvoiceModal(selectedOrder)}>
-                  <FileDown className="h-3.5 w-3.5 mr-1.5" /> Invoice
-                </Button>
-              )}
+              {selectedOrder.payment_state === 'SUCCESS' && (() => {
+                const slices = splitOrderBySeller(selectedOrder as any);
+                if (slices.length <= 1) {
+                  return (
+                    <Button variant="outline" size="sm" onClick={() => openInvoiceModal(selectedOrder)}>
+                      <FileDown className="h-3.5 w-3.5 mr-1.5" /> Invoice
+                    </Button>
+                  );
+                }
+                return (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <FileDown className="h-3.5 w-3.5 mr-1.5" /> Invoices
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-1" align="start">
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground border-b mb-1">
+                        This order has {slices.length} sellers
+                      </div>
+                      {slices.map((s) => (
+                        <button
+                          key={s.sellerKey}
+                          type="button"
+                          className="w-full flex items-center justify-between gap-2 px-2 py-2 text-sm rounded hover:bg-accent text-left"
+                          onClick={() => openInvoiceModal(selectedOrder, s)}
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <FileDown className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                            <span className="truncate font-medium">{s.sellerName}</span>
+                          </span>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">
+                            RM {s.total.toFixed(2)}
+                          </span>
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                );
+              })()}
               {(selectedOrder.payment_state === 'PENDING' || selectedOrder.payment_state === 'FAILED') && (
                 <Button size="sm" onClick={() => { setIsViewDialogOpen(false); navigate('/payment-gateway', { state: { orderData: { orderId: selectedOrder.id, orderNumber: selectedOrder.order_no, total: selectedOrder.total, paymentMethod: selectedOrder.payment_method, customerName: selectedOrder.customer_name, customerEmail: selectedOrder.customer_email || '' } } }); }}>
                   <CreditCard className="h-3.5 w-3.5 mr-1.5" /> {selectedOrder.payment_state === 'FAILED' ? 'Retry Payment' : 'Pay Now'}
@@ -1323,106 +1491,20 @@ export default function MyOrders() {
         >
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto shadow-xl mx-2 sm:mx-0">
             <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
-              <h2 className="text-base font-semibold">Invoice Preview</h2>
+              <h2 className="text-base font-semibold">
+                Invoice Preview
+                {invoiceSlice && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    · {invoiceSlice.sellerName}
+                  </span>
+                )}
+              </h2>
               <button onClick={closeInvoiceModal} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
             </div>
 
             <div id="customer-invoice-content">
               <div id="customerInvoiceBody" className="p-3 sm:p-5 bg-white">
-                <div style={{ padding: '10px', fontFamily: 'Arial, sans-serif', width: '100%', margin: '0 auto', fontSize: '9px', display: 'flex', flexDirection: 'column', minHeight: '95vh' }}>
-                  <div style={{ flex: '0 0 auto' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                      <div>
-                        <h2 style={{ margin: '0', fontSize: '16px' }}>AUTO LABS SDN BHD</h2>
-                        <p style={{ margin: '2px 0', fontSize: '9px' }}>17, Jalan 7/95B, Cheras Utama</p>
-                        <p style={{ margin: '2px 0', fontSize: '9px' }}>56100 Cheras, Wilayah Persekutuan Kuala Lumpur</p>
-                        <p style={{ margin: '2px 0', fontSize: '9px' }}>Tel: 03-4297 7668</p>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ border: '1px solid #000', padding: '5px 15px', display: 'inline-block' }}>
-                          <h2 style={{ margin: '0', textAlign: 'center', fontSize: '14px' }}>INVOICE</h2>
-                          <p style={{ margin: '3px 0', fontSize: '9px' }}><strong>Order ID: </strong>{selectedOrderForInvoice.order_no}</p>
-                        </div>
-                        <p style={{ margin: '5px 0 2px', fontSize: '9px' }}><strong>Date: </strong>{new Date(selectedOrderForInvoice.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                        <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>A/C Code: </strong>DMKT78C</p>
-                        <p style={{ margin: '2px 0', fontSize: '9px' }}>
-                          {selectedOrderForInvoice.payment_state === 'SUCCESS'
-                            ? <><strong>Term: </strong>Cash / <span style={{ textDecoration: 'line-through' }}>Credit</span></>
-                            : <><strong>Term: </strong><span style={{ textDecoration: 'line-through' }}>Cash</span> / Credit</>
-                          }
-                        </p>
-                        <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>Salesman: </strong>TECH</p>
-                        <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>Served By: </strong>HTL</p>
-                      </div>
-                    </div>
-                    <div style={{ marginBottom: '10px' }}>
-                      <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>Bill To: </strong>{selectedOrderForInvoice.customer_name}</p>
-                      <p style={{ margin: '2px 0', fontSize: '9px' }}>{selectedOrderForInvoice.delivery_address?.address || 'No address provided'}</p>
-                      <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>Attention: </strong>{selectedOrderForInvoice.customer_name}</p>
-                      <p style={{ margin: '2px 0', fontSize: '9px' }}><strong>Tel: </strong>{selectedOrderForInvoice.customer_phone || 'N/A'}</p>
-                    </div>
-                  </div>
-                  <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5px' }}>
-                      <thead>
-                        <tr><td colSpan={8} style={{ borderTop: '1px solid #000', padding: '0' }} /></tr>
-                        <tr>
-                          <th style={{ padding: '3px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold' }}>No.</th>
-                          <th style={{ padding: '3px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold' }}>Stock Code</th>
-                          <th style={{ padding: '3px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold' }}>Description</th>
-                          <th style={{ padding: '3px', textAlign: 'center', fontSize: '9px', fontWeight: 'bold' }}>Qty</th>
-                          <th style={{ padding: '3px', textAlign: 'center', fontSize: '9px', fontWeight: 'bold' }}>U.O.M</th>
-                          <th style={{ padding: '3px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold' }}>Unit Price</th>
-                          <th style={{ padding: '3px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold' }}>Discount</th>
-                          <th style={{ padding: '3px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold' }}>Amount</th>
-                        </tr>
-                        <tr><td colSpan={8} style={{ borderBottom: '1px solid #000', padding: '0' }} /></tr>
-                      </thead>
-                      <tbody>
-                        {selectedOrderForInvoice.order_items.map((item, index) => (
-                          <tr key={item.id}>
-                            <td style={{ fontSize: '9px', padding: '2px 3px' }}>{index + 1}</td>
-                            <td style={{ fontSize: '9px', padding: '2px 3px' }}>{item.component_sku}</td>
-                            <td style={{ fontSize: '9px', padding: '2px 3px' }}>{item.component_name}</td>
-                            <td style={{ fontSize: '9px', textAlign: 'center', padding: '2px 3px' }}>{item.quantity}</td>
-                            <td style={{ fontSize: '9px', textAlign: 'center', padding: '2px 3px' }}>Unit</td>
-                            <td style={{ fontSize: '9px', textAlign: 'right', padding: '2px 3px' }}>RM {item.unit_price.toFixed(2)}</td>
-                            <td style={{ fontSize: '9px', textAlign: 'center', padding: '2px 3px' }} />
-                            <td style={{ fontSize: '9px', textAlign: 'right', padding: '2px 3px' }}>RM {item.total_price.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                        {Array.from({ length: Math.max(0, 12 - selectedOrderForInvoice.order_items.length) }, (_, i) => (
-                          <tr key={`filler-${i}`}><td colSpan={8} style={{ fontSize: '9px', padding: '2px 3px' }}>&nbsp;</td></tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div style={{ flex: '0 0 auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5px' }}>
-                      <tbody><tr>
-                        <td colSpan={7} style={{ textAlign: 'right', padding: '3px', fontSize: '9px', fontWeight: 'bold' }}>TOTAL</td>
-                        <td style={{ textAlign: 'right', padding: '3px', fontSize: '9px', fontWeight: 'bold', borderTop: '1px solid #000' }}>RM {selectedOrderForInvoice.total.toFixed(2)}</td>
-                      </tr></tbody>
-                    </table>
-                    <div style={{ marginTop: '5px' }}>
-                      <hr style={{ borderTop: '1px solid #000', borderBottom: 'none', margin: '0' }} />
-                      <p style={{ fontSize: '10px', margin: '5px 0', fontWeight: 'bold' }}>RINGGIT MALAYSIA {convertToWords(selectedOrderForInvoice.total)} ONLY</p>
-                      <p style={{ fontSize: '9px', marginTop: '5px' }}>Note:</p>
-                      <ol style={{ margin: '0', paddingLeft: '20px', fontSize: '8px' }}>
-                        <li>Please issue all payment in the name of <strong>AUTO LABS SDN BHD</strong></li>
-                        <li>All items remain the property of the company until fully paid</li>
-                        <li>No return or exchange of goods after inspection</li>
-                        <li>All prices are subject to 10% service tax</li>
-                        <li>Stock borrowed for more than seven (7) days will be billed in full of <strong>AUTO LABS SDN BHD</strong></li>
-                      </ol>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
-                      <div><p style={{ borderTop: '1px solid #000', display: 'inline-block', paddingTop: '3px', fontSize: '9px' }}>Received By</p></div>
-                      <div><p style={{ borderTop: '1px solid #000', display: 'inline-block', paddingTop: '3px', fontSize: '9px' }}>Company Chop & Signature</p></div>
-                    </div>
-                    <div style={{ textAlign: 'center', marginTop: '10px', fontStyle: 'italic', fontSize: '8px' }}><p>This is a computer generated copy.<br />No signature is required.</p></div>
-                  </div>
-                </div>
+                <SellerInvoice order={selectedOrderForInvoice as any} slice={invoiceSlice ?? undefined} />
               </div>
             </div>
 

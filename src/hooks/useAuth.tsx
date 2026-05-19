@@ -100,8 +100,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Deactivate device session before signing out
     await deactivateDeviceSession();
     clearDeviceFingerprint();
-    // Clear any stored OTP data
+    // Clear any stored OTP data + per-user role caches so the next user
+    // on this browser doesn't inherit stale flags
     localStorage.removeItem('pending_phone_auth');
+    if (user?.id) {
+      localStorage.removeItem(`vendor_approved_${user.id}`);
+      localStorage.removeItem(`merchant_status_${user.id}`);
+    }
 
     // Force clear local state first — this guarantees logout even if the API call fails
     setUser(null);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -14,10 +14,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AddressAutocompleteSimple from './AddressAutocompleteSimple';
+import { groupCartItemsBySeller } from '@/lib/cartGrouping';
 import {
   Truck,
   MapPin,
-  Car,
   Package,
   CreditCard,
   Smartphone,
@@ -26,7 +26,9 @@ import {
   Tag,
   Check,
   X,
-  Loader2 as LoaderIcon
+  Store,
+  AlertTriangle,
+  Banknote,
 } from 'lucide-react';
 
 interface CartItem {
@@ -37,15 +39,23 @@ interface CartItem {
   quantity: number;
   product_name: string;
   component_image?: string;
+  vendor_id?: string | null;
+  vendor_name?: string | null;
 }
 
-interface DeliveryMethod {
-  id: string;
+interface AutoLabDeliveryMethod {
+  id: 'self-pickup' | 'jt' | 'lalamove';
   name: string;
   description: string;
   price: number;
   icon: any;
-  areas?: string;
+}
+
+interface VendorDeliveryMethod {
+  id: 'jt' | 'lalamove';
+  name: string;
+  description: string;
+  icon: any;
 }
 
 interface PaymentMethod {
@@ -60,10 +70,21 @@ interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedItems: CartItem[];
-  onOrderSuccess?: (orderId?: string) => void; // Callback after successful order - now includes orderId
+  onOrderSuccess?: (orderId?: string) => void; // Callback after successful order
 }
 
-const deliveryMethods: DeliveryMethod[] = [
+/**
+ * AutoLab delivery options — DFOD (Delivery Fee on Delivery) for J&T and
+ * Lalamove. Customer pays the courier on arrival, nothing added to the
+ * online order total. Self Pickup is free (no shipping involved).
+ *
+ *   - Self Pickup: customer collects from store; no fee.
+ *   - J&T Express: J&T's native DFOD service — receiver settles delivery fee.
+ *   - Lalamove: booked with cash + driver-collects-from-recipient remark
+ *     (Lalamove MY supports this manual flow today; API integration in
+ *     Phase B will quote a live rate to display here).
+ */
+const autoLabDeliveryMethods: AutoLabDeliveryMethod[] = [
   {
     id: 'self-pickup',
     name: 'Self Pickup',
@@ -72,19 +93,39 @@ const deliveryMethods: DeliveryMethod[] = [
     icon: MapPin,
   },
   {
-    id: 'jnt-express',
+    id: 'jt',
     name: 'J&T Express',
-    description: 'Standard delivery - Estimated 5 days delivery time',
+    description: 'Standard delivery — pay courier on arrival (DFOD)',
     price: 0,
     icon: Truck,
   },
   {
     id: 'lalamove',
     name: 'Lalamove',
-    description: 'Urgent delivery - Collect within 1-2 days (Extra RM10 charge)',
-    price: 10,
+    description: 'Urgent delivery — pay courier on arrival',
+    price: 0,
     icon: Package,
-  }
+  },
+];
+
+/**
+ * Vendor delivery options — Cash on Delivery (COD).
+ * Customer pays the courier directly on arrival; nothing is collected
+ * via the order. No self-pickup option for vendor sub-orders.
+ */
+const vendorDeliveryMethods: VendorDeliveryMethod[] = [
+  {
+    id: 'jt',
+    name: 'J&T Express',
+    description: 'Standard delivery — pay courier on arrival (DFOD)',
+    icon: Truck,
+  },
+  {
+    id: 'lalamove',
+    name: 'Lalamove',
+    description: 'Urgent delivery — pay courier on arrival',
+    icon: Package,
+  },
 ];
 
 const paymentMethods: PaymentMethod[] = [
@@ -123,11 +164,19 @@ const paymentMethods: PaymentMethod[] = [
     name: 'ShopeePay',
     description: 'Pay with ShopeePay Wallet',
     icon: Wallet,
-  }
+  },
 ];
 
-const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: CheckoutModalProps) => {
-  const [selectedDelivery, setSelectedDelivery] = useState('self-pickup');
+type AutoLabMethodId = AutoLabDeliveryMethod['id'];
+type VendorMethodId = VendorDeliveryMethod['id'];
+
+const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess: _onOrderSuccess }: CheckoutModalProps) => {
+  // AutoLab shipping selection (paid online as part of the order)
+  const [autoLabMethod, setAutoLabMethod] = useState<AutoLabMethodId>('jt');
+
+  // Per-vendor shipping selection (COD — fee paid to courier on delivery)
+  const [vendorMethods, setVendorMethods] = useState<Record<string, VendorMethodId>>({});
+
   const [selectedPayment, setSelectedPayment] = useState('fpx');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [customerProfile, setCustomerProfile] = useState<any>(null);
@@ -136,7 +185,7 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
   const navigate = useNavigate();
   const [deliveryAddress, setDeliveryAddress] = useState({
     address: '',
-    notes: ''
+    notes: '',
   });
 
   // Voucher state
@@ -147,35 +196,117 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
   const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
   const [availableVouchers, setAvailableVouchers] = useState<any[]>([]);
 
+  // Vendors with blank pickup addresses — checkout is blocked while this is non-empty.
+  const [vendorAddressIssues, setVendorAddressIssues] = useState<{ vendorId: string; businessName: string }[]>([]);
+  const [isCheckingVendorAddresses, setIsCheckingVendorAddresses] = useState(false);
+
+  // Group items by seller
+  const sellerGroups = useMemo(() => groupCartItemsBySeller(selectedItems), [selectedItems]);
+  const vendorGroups = useMemo(() => sellerGroups.filter(g => g.isVendor), [sellerGroups]);
+  const autolabGroup = useMemo(() => sellerGroups.find(g => !g.isVendor) ?? null, [sellerGroups]);
+  const hasAutoLabItems = !!autolabGroup;
+
+  // Stable join key over the vendor IDs in the cart
+  const vendorIdsKey = useMemo(
+    () => vendorGroups.map(g => g.vendorId).filter(Boolean).join(','),
+    [vendorGroups]
+  );
+
+  // Initialise default vendor shipping method ('jt') for any vendor in the cart
+  // that doesn't yet have a selection. Drop selections for vendors no longer in the cart.
+  useEffect(() => {
+    setVendorMethods(prev => {
+      const next: Record<string, VendorMethodId> = {};
+      for (const g of vendorGroups) {
+        if (!g.vendorId) continue;
+        next[g.vendorId] = prev[g.vendorId] ?? 'jt';
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorIdsKey]);
+
+  // Validate vendor pickup addresses upfront. Any vendor with a blank/null
+  // `address` field blocks checkout — they need to set it before we can ship.
+  useEffect(() => {
+    const validateVendorAddresses = async () => {
+      const vendorIds = vendorGroups
+        .map(g => g.vendorId)
+        .filter((id): id is string => !!id);
+
+      if (vendorIds.length === 0) {
+        setVendorAddressIssues([]);
+        return;
+      }
+
+      setIsCheckingVendorAddresses(true);
+      try {
+        const { data, error } = await supabase
+          .from('vendors' as any)
+          .select('id, business_name, address')
+          .in('id', vendorIds);
+
+        if (error) {
+          // Fail open: don't block checkout on a fetch error, but log nothing
+          // to console (per project convention) and treat as no issues.
+          setVendorAddressIssues([]);
+          return;
+        }
+
+        const issues = (data as any[] | null ?? [])
+          .filter(row => {
+            const addr = typeof row.address === 'string' ? row.address.trim() : '';
+            return addr.length === 0;
+          })
+          .map(row => ({
+            vendorId: row.id as string,
+            businessName: (row.business_name as string) || 'Vendor',
+          }));
+
+        setVendorAddressIssues(issues);
+      } catch {
+        setVendorAddressIssues([]);
+      } finally {
+        setIsCheckingVendorAddresses(false);
+      }
+    };
+
+    if (isOpen) {
+      validateVendorAddresses();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, vendorIdsKey]);
+
   // Fetch customer profile when modal opens
   useEffect(() => {
     const fetchCustomerProfile = async () => {
       if (!isOpen || !user) return;
-      
+
       try {
         const { data: profile, error } = await supabase
           .from('customer_profiles')
           .select('*')
           .eq('user_id', user.id)
-          .single();
-          
+          .maybeSingle();
+
         if (error) {
           return;
         }
-        
+
         setCustomerProfile(profile);
 
-        // Fetch available vouchers for this customer and order amount
+        // Fetch available vouchers for this customer and order amount.
+        // Voucher applies to AutoLab portion only; we still surface vouchers
+        // based on the AutoLab-side amount.
         if (profile?.id) {
           try {
-            // Calculate order amount (subtotal + delivery fee)
-            const subtotal = selectedItems.reduce((total, item) => total + (item.normal_price * item.quantity), 0);
-            const deliveryFee = deliveryMethods.find(m => m.id === selectedDelivery)?.price || 0;
-            const orderAmount = subtotal + deliveryFee;
+            const autolabSubtotal = autolabGroup?.subtotal ?? 0;
+            const deliveryFee = getAutoLabFeeFor(autoLabMethod);
+            const orderAmount = autolabSubtotal + deliveryFee;
 
             const { data: vouchers } = await supabase.rpc('get_available_vouchers_for_checkout', {
               p_customer_id: profile.id,
-              p_order_amount: orderAmount
+              p_order_amount: orderAmount,
             });
             setAvailableVouchers(vouchers || []);
           } catch (voucherError) {
@@ -187,15 +318,18 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
         if (profile) {
           setDeliveryAddress({
             address: '',
-            notes: ''
+            notes: '',
           });
         }
       } catch (error) {
+        // swallow — handled by toast in placeOrder if profile is missing
       }
     };
-    
+
     fetchCustomerProfile();
-  }, [isOpen, user, selectedDelivery]); // Re-fetch vouchers when delivery method changes
+    // Re-fetch vouchers when AutoLab delivery method or AutoLab subtotal changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, user, autoLabMethod, autolabGroup?.subtotal]);
 
   const formatPrice = (amount: number) => {
     return new Intl.NumberFormat('en-MY', {
@@ -204,38 +338,55 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
     }).format(amount);
   };
 
+  // ---------- Totals ----------
+
+  const getAutoLabFeeFor = (methodId: AutoLabMethodId): number => {
+    return autoLabDeliveryMethods.find(m => m.id === methodId)?.price ?? 0;
+  };
+
   const getSubtotal = () => {
     return selectedItems.reduce((total, item) => total + (item.normal_price * item.quantity), 0);
   };
 
-  const getDeliveryFee = () => {
-    const method = deliveryMethods.find(m => m.id === selectedDelivery);
-    return method?.price || 0;
+  /** AutoLab shipping fee — the only shipping the customer pays online. */
+  const getAutoLabFee = () => {
+    if (!hasAutoLabItems) return 0;
+    return getAutoLabFeeFor(autoLabMethod);
+  };
+
+  /**
+   * Combined shipping fee that the customer pays online.
+   * Vendor shipping is COD (paid to driver), so it is NOT included here.
+   */
+  const getOnlineShippingFee = () => {
+    return getAutoLabFee();
   };
 
   const getTax = () => {
-    // 6% SST for Malaysia
-    return (getSubtotal() + getDeliveryFee()) * 0.06;
+    // 6% SST on (subtotal + AutoLab shipping). Vendor COD fees are not in the order.
+    return (getSubtotal() + getOnlineShippingFee()) * 0.06;
   };
 
   const getTotal = () => {
-    const baseTotal = getSubtotal() + getDeliveryFee() + getTax();
-    return baseTotal - voucherDiscount;
+    const baseTotal = getSubtotal() + getOnlineShippingFee() + getTax();
+    return Math.max(0, baseTotal - voucherDiscount);
   };
 
-  const needsDeliveryAddress = selectedDelivery !== 'self-pickup';
+  // Customer always needs an address: AutoLab couriers ship to it (unless
+  // self-pickup), and vendors will also ship to the same address.
+  const needsDeliveryAddress = autoLabMethod !== 'self-pickup' || vendorGroups.length > 0;
 
-  const handleAddressChange = (address: string, components?: any) => {
+  const handleAddressChange = (address: string) => {
     setDeliveryAddress(prev => ({
       ...prev,
-      address: address
+      address: address,
     }));
   };
 
   const handleNotesChange = (value: string) => {
     setDeliveryAddress(prev => ({
       ...prev,
-      notes: value
+      notes: value,
     }));
   };
 
@@ -247,7 +398,10 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
     return deliveryAddress.address.trim().length > 0;
   };
 
-  // Voucher validation function
+  const hasVendorAddressBlockers = vendorAddressIssues.length > 0;
+
+  // ---------- Voucher ----------
+
   const handleValidateVoucher = async (code?: string) => {
     const codeToValidate = code || voucherCode;
 
@@ -265,12 +419,17 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
     setVoucherValidationMsg('');
 
     try {
-      const orderAmount = getSubtotal() + getDeliveryFee() + getTax();
+      // Voucher only applies to the AutoLab slice (per platform rule).
+      // If there's no AutoLab portion, vouchers cannot be used.
+      const autolabSubtotal = autolabGroup?.subtotal ?? 0;
+      const autolabShipping = getAutoLabFee();
+      const autolabTax = (autolabSubtotal + autolabShipping) * 0.06;
+      const orderAmount = autolabSubtotal + autolabShipping + autolabTax;
 
       const { data, error } = await supabase.rpc('validate_voucher', {
         p_voucher_code: codeToValidate.trim(),
         p_customer_id: customerProfile.id,
-        p_order_amount: orderAmount
+        p_order_amount: orderAmount,
       });
 
       if (error) throw error;
@@ -280,34 +439,33 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
       if (result.valid) {
         setVoucherDiscount(result.discount_amount);
         setAppliedVoucherId(result.voucher_id);
-        setVoucherValidationMsg(`✓ Voucher applied! You save ${formatPrice(result.discount_amount)}`);
+        setVoucherValidationMsg(`Voucher applied. You save ${formatPrice(result.discount_amount)}`);
         toast({
-          title: "Voucher Applied!",
+          title: 'Voucher Applied!',
           description: `You save ${formatPrice(result.discount_amount)}`,
         });
       } else {
         setVoucherDiscount(0);
         setAppliedVoucherId(null);
-        setVoucherValidationMsg(`✗ ${result.message}`);
+        setVoucherValidationMsg(result.message);
         toast({
-          title: "Invalid Voucher",
+          title: 'Invalid Voucher',
           description: result.message,
-          variant: "destructive"
+          variant: 'destructive',
         });
       }
     } catch (error: any) {
       setVoucherValidationMsg('Error validating voucher');
       toast({
-        title: "Validation Error",
-        description: "Failed to validate voucher code",
-        variant: "destructive"
+        title: 'Validation Error',
+        description: 'Failed to validate voucher code',
+        variant: 'destructive',
       });
     } finally {
       setIsValidatingVoucher(false);
     }
   };
 
-  // Remove applied voucher
   const handleRemoveVoucher = () => {
     setVoucherCode('');
     setVoucherDiscount(0);
@@ -315,122 +473,150 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
     setVoucherValidationMsg('');
   };
 
+  // ---------- Place order ----------
+
   const handlePlaceOrder = async () => {
     if (!customerProfile) {
       toast({
-        title: "Profile Required",
-        description: "Please complete your profile with phone number before placing order",
-        variant: "destructive"
+        title: 'Profile Required',
+        description: 'Please complete your profile with phone number before placing order',
+        variant: 'destructive',
       });
       return;
     }
 
     if (!isAddressComplete()) {
-      const message = needsDeliveryAddress 
-        ? "Please fill in all required delivery address fields"
-        : "Phone number is required from your profile";
+      const message = needsDeliveryAddress
+        ? 'Please fill in all required delivery address fields'
+        : 'Phone number is required from your profile';
       toast({
-        title: "Information Required",
+        title: 'Information Required',
         description: message,
-        variant: "destructive"
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (hasVendorAddressBlockers) {
+      const first = vendorAddressIssues[0];
+      toast({
+        title: 'Vendor pickup address missing',
+        description: `${first.businessName} needs to set their pickup address before they can ship. Please contact AutoLab support.`,
+        variant: 'destructive',
       });
       return;
     }
 
     setIsPlacingOrder(true);
-    
+
     try {
       const subtotal = getSubtotal();
-      const deliveryFee = getDeliveryFee();
+      const onlineShipping = getOnlineShippingFee(); // AutoLab only
       const tax = getTax();
       const total = getTotal();
 
-      // Use customer profile information
       const customerName = customerProfile.full_name;
       const customerPhone = customerProfile.phone || customerProfile.phone_e164;
       const customerEmail = customerProfile.email || user?.email || '';
 
-      // Prepare order data - user_id will be used to link with customer_profiles in the database function
+      // Build the per-seller shipping_methods map. AutoLab fee is the only
+      // shipping fee collected in the order; every vendor entry has fee=0
+      // because vendor shipping is paid COD to the courier on delivery.
+      const shippingMethods: Record<string, { method: string; fee: number }> = {};
+
+      if (hasAutoLabItems) {
+        shippingMethods.autolab = {
+          method: autoLabMethod,
+          fee: getAutoLabFee(),
+        };
+      }
+
+      for (const group of vendorGroups) {
+        if (!group.vendorId) continue;
+        shippingMethods[group.vendorId] = {
+          method: vendorMethods[group.vendorId] ?? 'jt',
+          fee: 0, // COD — not collected in the order
+        };
+      }
+
       const orderData = {
-        user_id: user?.id || null,  // This will be used to find customer_profile_id in the SQL function
+        user_id: user?.id || null,
         customer_name: customerName,
         customer_phone: customerPhone,
         customer_email: customerEmail,
-        delivery_method: selectedDelivery,
+        // Backwards-compat: top-level delivery_method/fee mirrors the AutoLab slice.
+        delivery_method: hasAutoLabItems ? autoLabMethod : 'jt',
         delivery_address: needsDeliveryAddress ? {
           fullName: customerName,
           phoneNumber: customerPhone,
           address: deliveryAddress.address,
-          notes: deliveryAddress.notes
+          notes: deliveryAddress.notes,
         } : null,
-        delivery_fee: deliveryFee,
+        delivery_fee: onlineShipping,
         payment_method: selectedPayment,
-        payment_state: 'PENDING', // Will be updated to SUCCESS after payment gateway verification
+        payment_state: 'PENDING',
         subtotal: subtotal,
         tax: tax,
         discount: 0,
-        shipping_fee: deliveryFee,
+        shipping_fee: onlineShipping,
         total: total,
-        status: 'PROCESSING', // Automated order flow - will auto-approve when payment succeeds
+        status: 'PROCESSING',
         voucher_id: appliedVoucherId,
         voucher_code: voucherCode || null,
-        voucher_discount: voucherDiscount
+        voucher_discount: voucherDiscount,
+        // New per-seller shipping map consumed by create_order_with_items.
+        shipping_methods: shippingMethods,
       };
 
-      // Prepare order items - the SQL function will look up component_id by SKU
       const orderItems = selectedItems.map(item => ({
         component_sku: item.component_sku,
         component_name: item.name,
         product_context: item.product_name,
         quantity: item.quantity,
         unit_price: item.normal_price,
-        total_price: item.normal_price * item.quantity
+        total_price: item.normal_price * item.quantity,
       }));
 
-      // Use the database function to create order with automatic inventory deduction
+      // The RPC handles the multi-seller split internally and returns either
+      // the legacy `{ success, order_id, order_number }` shape or the newer
+      // `{ success, order_id, order_number, order_group_id, orders, split }`.
       const { data: orderResult, error: orderError } = await supabase
         .rpc('create_order_with_items', {
           order_data: orderData,
-          items_data: orderItems
+          items_data: orderItems,
         });
 
       if (orderError) throw orderError;
 
-      // Check if order creation was successful
       if (!orderResult?.success) {
         throw new Error(orderResult?.message || 'Order creation failed');
       }
 
-      // Success! Order created, now redirect to payment gateway
       const orderNumber = orderResult?.order_number || 'N/A';
       const orderId = orderResult?.order_id;
 
-      // Apply voucher if one was used
+      // Apply voucher if one was used (against the AutoLab-side order)
       if (appliedVoucherId && voucherCode && voucherDiscount > 0) {
         try {
-          const { error: voucherError } = await supabase.rpc('apply_voucher_to_order', {
+          await supabase.rpc('apply_voucher_to_order', {
             p_order_id: orderId,
             p_voucher_code: voucherCode,
             p_customer_id: customerProfile.id,
-            p_order_amount: subtotal + deliveryFee + tax,
-            p_discount_amount: voucherDiscount
+            p_order_amount: subtotal + onlineShipping + tax,
+            p_discount_amount: voucherDiscount,
           });
-
-          if (voucherError) {
-          }
-        } catch (voucherErr) {
+        } catch {
+          // Non-fatal — payment can still proceed.
         }
       }
 
       toast({
-        title: "Order Created!",
-        description: `Your order ${orderNumber} has been created. Please complete payment to confirm your order.`
+        title: 'Order Created!',
+        description: `Your order ${orderNumber} has been created. Please complete payment to confirm your order.`,
       });
 
-      // Close modal (but DON'T clear cart yet - only clear after successful payment)
       onClose();
 
-      // Redirect to payment gateway with order data
       // Cart will be cleared via localStorage flag when payment succeeds
       navigate('/payment-gateway', {
         state: {
@@ -440,134 +626,103 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
             total: total,
             paymentMethod: selectedPayment,
             customerName: customerName,
-            customerEmail: customerEmail
-          }
-        }
+            customerEmail: customerEmail,
+          },
+        },
       });
-
     } catch (error: any) {
       toast({
-        title: "Order Failed",
-        description: error.message || "Failed to place order. Please try again.",
-        variant: "destructive"
+        title: 'Order Failed',
+        description: error.message || 'Failed to place order. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setIsPlacingOrder(false);
     }
   };
 
+  // ---------- Render helpers ----------
+
+  /**
+   * Sum of all vendor COD shipping fees the customer will pay on delivery.
+   * NOTE: this is presentational only — it is NOT collected in the order.
+   * Phase B will replace this with live J&T/Lalamove API quotes per vendor.
+   */
+  const codFeesSummary = vendorGroups.length;
+
+  // ---------- Render ----------
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[95vh] w-[95vw] max-w-none sm:max-w-lg md:max-w-2xl lg:max-w-4xl overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[95vh] w-[95vw] sm:max-w-2xl lg:max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl md:text-2xl">Checkout</DialogTitle>
           <DialogDescription className="text-sm md:text-base">
-            Complete your purchase by providing delivery and payment information
+            Review your order, choose how each seller ships their items, and place a single order.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
-          {/* Left Column - Order Summary & Forms */}
-          <div className="space-y-6">
-            {/* Order Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 md:space-y-4">
-                {selectedItems.map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 md:gap-3">
-                    {item.component_image && (
-                      <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                        <img
-                          src={item.component_image}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-xs md:text-sm truncate">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">{item.component_sku}</p>
-                      <p className="text-xs text-muted-foreground hidden sm:block">From: {item.product_name}</p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-xs md:text-sm">×{item.quantity}</p>
-                      <p className="font-medium text-sm md:text-base">{formatPrice(item.normal_price * item.quantity)}</p>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+        <div className="space-y-4 md:space-y-5">
+          {/* 0. Vendor address blocker banner — surfaced as soon as we know */}
+          {hasVendorAddressBlockers && (
+            <div className="border border-red-300 bg-red-50 rounded-lg p-3 md:p-4 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1 text-sm">
+                <p className="font-semibold text-red-800">
+                  {vendorAddressIssues.length === 1
+                    ? `${vendorAddressIssues[0].businessName} needs to set their pickup address before they can ship.`
+                    : `${vendorAddressIssues.length} vendors haven't set their pickup address yet.`}
+                </p>
+                <p className="text-red-700">
+                  Please contact AutoLab support so they can finish setup. We can't place this order until then.
+                </p>
+                {vendorAddressIssues.length > 1 && (
+                  <ul className="text-xs text-red-700 list-disc list-inside mt-1">
+                    {vendorAddressIssues.map(v => (
+                      <li key={v.vendorId}>{v.businessName}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
 
-            {/* Delivery Method */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Delivery Method</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup value={selectedDelivery} onValueChange={setSelectedDelivery}>
-                  {deliveryMethods.map((method) => {
-                    const Icon = method.icon;
-                    return (
-                      <div key={method.id} className="flex items-start space-x-2 md:space-x-3 p-2 md:p-3 border rounded-lg hover:bg-gray-50">
-                        <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
-                        <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <Label htmlFor={method.id} className="font-medium cursor-pointer text-sm md:text-base">
-                            {method.name}
-                          </Label>
-                          <p className="text-xs md:text-sm text-muted-foreground">{method.description}</p>
-                          {method.areas && (
-                            <Badge variant="outline" className="text-xs mt-1">
-                              {method.areas}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          {method.price === 0 ? (
-                            <Badge variant="secondary" className="text-xs">FREE</Badge>
-                          ) : (
-                            <p className="font-medium text-sm">+{formatPrice(method.price)}</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </RadioGroup>
-              </CardContent>
-            </Card>
+          {/* 1. Delivery address — single global section */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                <MapPin className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+                Delivery Address
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 md:space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+                <div>
+                  <Label htmlFor="fullName" className="text-sm">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    value={customerProfile?.full_name || 'Not set'}
+                    readOnly
+                    className="bg-muted cursor-not-allowed text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">From your profile (fixed)</p>
+                </div>
+                <div>
+                  <Label htmlFor="phoneNumber" className="text-sm">Phone Number</Label>
+                  <Input
+                    id="phoneNumber"
+                    value={customerProfile?.phone || customerProfile?.phone_e164 || 'Not set'}
+                    readOnly
+                    className="bg-muted cursor-not-allowed text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">From your profile (fixed)</p>
+                </div>
+              </div>
 
-            {/* Delivery Address */}
-            {needsDeliveryAddress && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Delivery Address</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 md:space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-                    <div>
-                      <Label htmlFor="fullName" className="text-sm">Full Name</Label>
-                      <Input
-                        id="fullName"
-                        value={customerProfile?.full_name || 'Not set'}
-                        readOnly
-                        className="bg-muted cursor-not-allowed text-sm"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">From your profile (fixed)</p>
-                    </div>
-                    <div>
-                      <Label htmlFor="phoneNumber" className="text-sm">Phone Number</Label>
-                      <Input
-                        id="phoneNumber"
-                        value={customerProfile?.phone || customerProfile?.phone_e164 || 'Not set'}
-                        readOnly
-                        className="bg-muted cursor-not-allowed text-sm"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">From your profile (fixed)</p>
-                    </div>
-                  </div>
+              {needsDeliveryAddress ? (
+                <>
                   <div>
+                    <Label className="text-sm">Address</Label>
                     <AddressAutocompleteSimple
                       value={deliveryAddress.address}
                       onChange={handleAddressChange}
@@ -575,7 +730,7 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
                       required
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Search will find Malaysian addresses automatically. Try typing building names, areas, or landmarks.
+                      Search will find Malaysian addresses automatically.
                     </p>
                   </div>
                   <div>
@@ -589,199 +744,424 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess }: Check
                       className="text-sm"
                     />
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                </>
+              ) : (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-sm font-medium text-blue-900">Self-pickup selected</p>
+                  <p className="text-xs text-blue-700">
+                    Your phone number above will be used for pickup coordination.
+                  </p>
+                  {!customerProfile?.phone && (
+                    <p className="text-xs text-red-600 mt-1">Please update your profile with a phone number before checkout.</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Self-pickup note */}
-            {selectedDelivery === 'self-pickup' && (
-              <Card className="bg-blue-50 border-blue-200">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-blue-800">
-                    <MapPin className="h-4 w-4" />
-                    <div>
-                      <p className="font-medium text-sm">Self Pickup Information</p>
-                      <p className="text-xs">Your profile phone number ({customerProfile?.phone || 'not set'}) will be used for pickup coordination.</p>
-                      {!customerProfile?.phone && (
-                        <p className="text-xs text-red-600 mt-1">⚠️ Please update your profile with phone number before checkout.</p>
-                      )}
+          {/* 2. Per-seller cards */}
+          {sellerGroups.map((group) => {
+            const isAutolab = !group.isVendor;
+            const vendorId = group.vendorId;
+            const isVendorBlocked = !isAutolab && vendorId
+              ? vendorAddressIssues.some(v => v.vendorId === vendorId)
+              : false;
+
+            // For AutoLab, the seller shipping fee is what customer pays online.
+            // For vendors, the in-order fee is always 0 (COD), so the per-seller
+            // total is just the items subtotal.
+            const sellerShippingFee = isAutolab ? getAutoLabFee() : 0;
+            const sellerTotal = group.subtotal + sellerShippingFee;
+
+            return (
+              <Card key={group.sellerKey} className="overflow-hidden">
+                {/* Seller header strip */}
+                <div className={`flex items-center justify-between gap-3 px-4 py-3 border-b ${
+                  isAutolab ? 'bg-gray-50' : 'bg-lime-50 border-lime-200'
+                }`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
+                      isAutolab ? 'bg-gray-200 text-gray-700' : 'bg-lime-200 text-lime-800'
+                    }`}>
+                      {isAutolab ? <Building2 className="h-4 w-4" /> : <Store className="h-4 w-4" />}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Right Column - Payment & Total */}
-          <div className="space-y-6">
-            {/* Payment Method */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Method</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup value={selectedPayment} onValueChange={setSelectedPayment}>
-                  {paymentMethods.map((method) => {
-                    const Icon = method.icon;
-                    return (
-                      <div key={method.id} className="flex items-start space-x-2 md:space-x-3 p-2 md:p-3 border rounded-lg hover:bg-gray-50">
-                        <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
-                        <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <Label htmlFor={method.id} className="font-medium cursor-pointer text-sm md:text-base">
-                            {method.name}
-                          </Label>
-                          <p className="text-xs md:text-sm text-muted-foreground">{method.description}</p>
-                        </div>
-                        {method.fee && (
-                          <p className="text-sm font-medium flex-shrink-0">+{formatPrice(method.fee)}</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </RadioGroup>
-              </CardContent>
-            </Card>
-
-            {/* Voucher Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Tag className="h-5 w-5" />
-                  Apply Voucher
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {!appliedVoucherId ? (
-                  <>
-                    {availableVouchers.length > 0 ? (
+                    <span className={`font-semibold text-sm md:text-base truncate ${
+                      isAutolab ? 'text-gray-700' : 'text-lime-800'
+                    }`}>
+                      {group.sellerName}
+                    </span>
+                    {isAutolab ? (
+                      <Badge variant="outline" className="text-[10px] border-gray-300 text-gray-600">In-house</Badge>
+                    ) : (
                       <>
-                        <Select
-                          value={voucherCode}
-                          onValueChange={(value) => {
-                            setVoucherCode(value);
-                            // Auto-validate immediately with the selected code
-                            handleValidateVoucher(value);
-                          }}
+                        <Badge variant="outline" className="text-[10px] border-lime-300 text-lime-700">Vendor</Badge>
+                        <Badge className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-100 border border-amber-200">
+                          <Banknote className="h-3 w-3 mr-1" />
+                          Cash on Delivery
+                        </Badge>
+                      </>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground flex-shrink-0">
+                    {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                <CardContent className="p-0">
+                  {/* Items list (compact) */}
+                  <div className="divide-y">
+                    {group.items.map((item) => (
+                      <div key={item.id} className="flex items-center gap-3 p-3 md:p-4">
+                        {item.component_image && (
+                          <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                            <img
+                              src={item.component_image}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-xs md:text-sm line-clamp-1">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">{item.component_sku}</p>
+                          <p className="text-xs text-muted-foreground">{formatPrice(item.normal_price)} each</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-xs md:text-sm">×{item.quantity}</p>
+                          <p className="font-semibold text-sm md:text-base">
+                            {formatPrice(item.normal_price * item.quantity)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Shipping section per seller */}
+                  <div className="px-4 py-3 bg-gray-50 border-t space-y-2">
+                    {isAutolab ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Delivery method
+                        </p>
+                        <RadioGroup
+                          value={autoLabMethod}
+                          onValueChange={(v) => setAutoLabMethod(v as AutoLabMethodId)}
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a voucher to apply" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableVouchers.map((voucher) => (
-                              <SelectItem key={voucher.id} value={voucher.code}>
-                                <div className="flex items-center justify-between gap-4 w-full">
-                                  <div>
-                                    <span className="font-medium">{voucher.code}</span>
-                                    <span className="text-xs text-muted-foreground ml-2">
-                                      {voucher.discount_type === 'PERCENTAGE'
-                                        ? `${voucher.discount_value}% OFF`
-                                        : `RM ${voucher.discount_value} OFF`}
-                                    </span>
-                                  </div>
-                                  {voucher.min_purchase_amount > 0 && (
-                                    <span className="text-xs text-muted-foreground">
-                                      Min RM {voucher.min_purchase_amount}
-                                    </span>
+                          {autoLabDeliveryMethods.map((method) => {
+                            const Icon = method.icon;
+                            return (
+                              <div key={method.id} className="flex items-start space-x-2 md:space-x-3 p-2 md:p-3 border rounded-lg bg-white hover:bg-gray-50">
+                                <RadioGroupItem value={method.id} id={`autolab-${method.id}`} className="mt-1" />
+                                <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <Label htmlFor={`autolab-${method.id}`} className="font-medium cursor-pointer text-sm md:text-base">
+                                    {method.name}
+                                  </Label>
+                                  <p className="text-xs md:text-sm text-muted-foreground">{method.description}</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  {method.id === 'self-pickup' ? (
+                                    <Badge variant="secondary" className="text-xs">FREE</Badge>
+                                  ) : method.price === 0 ? (
+                                    <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-800 bg-amber-50 whitespace-nowrap">
+                                      Pay on delivery
+                                    </Badge>
+                                  ) : (
+                                    <p className="font-medium text-sm">+{formatPrice(method.price)}</p>
                                   )}
                                 </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {voucherValidationMsg && (
-                          <p className={`text-sm ${voucherValidationMsg.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>
-                            {voucherValidationMsg}
+                              </div>
+                            );
+                          })}
+                        </RadioGroup>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Delivery method
+                          </p>
+                          <span className="text-[10px] uppercase tracking-wide text-amber-700 font-semibold">
+                            COD
+                          </span>
+                        </div>
+                        <RadioGroup
+                          value={vendorMethods[vendorId ?? ''] ?? 'jt'}
+                          onValueChange={(v) =>
+                            vendorId &&
+                            setVendorMethods(prev => ({ ...prev, [vendorId]: v as VendorMethodId }))
+                          }
+                        >
+                          {vendorDeliveryMethods.map((method) => {
+                            const Icon = method.icon;
+                            const radioId = `vendor-${vendorId}-${method.id}`;
+                            return (
+                              <div key={method.id} className="flex items-start space-x-2 md:space-x-3 p-2 md:p-3 border rounded-lg bg-white hover:bg-gray-50">
+                                <RadioGroupItem value={method.id} id={radioId} className="mt-1" />
+                                <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <Label htmlFor={radioId} className="font-medium cursor-pointer text-sm md:text-base">
+                                    {method.name}
+                                  </Label>
+                                  <p className="text-xs md:text-sm text-muted-foreground">{method.description}</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-800 bg-amber-50">
+                                    Pay on delivery
+                                  </Badge>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </RadioGroup>
+                        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                          <span className="font-semibold">Pay on delivery (COD)</span> — the driver collects the
+                          shipping fee from you on arrival. Nothing extra is added to your online payment for this seller.
+                        </p>
+                        {isVendorBlocked && (
+                          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 flex items-start gap-2">
+                            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                            <span>
+                              This vendor hasn't set their pickup address yet. We can't place the order until AutoLab support resolves this.
+                            </span>
                           </p>
                         )}
-                      </>
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No vouchers available for this order
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-600" />
-                        <span className="font-medium text-green-800">Voucher Applied</span>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleRemoveVoucher}
-                        className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-green-700">Code: <Badge variant="outline" className="ml-1">{voucherCode}</Badge></span>
-                      <span className="text-sm font-medium text-green-800">-{formatPrice(voucherDiscount)}</span>
-                    </div>
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
 
-            {/* Order Total */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Total</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 md:space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal ({selectedItems.length} items)</span>
-                  <span className="font-medium">{formatPrice(getSubtotal())}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Delivery Fee</span>
-                  <span className="font-medium">{getDeliveryFee() === 0 ? 'FREE' : formatPrice(getDeliveryFee())}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>SST (6%)</span>
-                  <span className="font-medium">{formatPrice(getTax())}</span>
-                </div>
-
-                {voucherDiscount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600">
-                    <span className="flex items-center gap-1">
-                      <Tag className="h-3 w-3" />
-                      Voucher Discount
+                  {/* Per-seller subtotal */}
+                  <div className="flex items-center justify-between px-4 py-3 bg-white border-t">
+                    <span className="text-xs sm:text-sm text-muted-foreground">
+                      {isAutolab ? 'Items + shipping' : 'Items (shipping paid on delivery)'}
                     </span>
-                    <span className="font-medium">-{formatPrice(voucherDiscount)}</span>
+                    <span className="text-sm md:text-base font-bold text-gray-900">
+                      {formatPrice(sellerTotal)}
+                    </span>
                   </div>
-                )}
+                </CardContent>
+              </Card>
+            );
+          })}
 
-                <Separator />
-
-                <div className="flex justify-between text-base md:text-lg font-semibold">
-                  <span>Total</span>
-                  <span>{formatPrice(getTotal())}</span>
+          {/* 3. Voucher */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                <Tag className="h-4 w-4 md:h-5 md:w-5" />
+                Apply Voucher
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {vendorGroups.length > 0 && (
+                <p className="text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  Vouchers apply to AutoLab items only. Vendor items are billed at the vendor's listed price.
+                </p>
+              )}
+              {!autolabGroup && (
+                <p className="text-xs text-muted-foreground">
+                  No AutoLab items in this cart, so no vouchers can be applied.
+                </p>
+              )}
+              {autolabGroup && !appliedVoucherId && (
+                <>
+                  {availableVouchers.length > 0 ? (
+                    <>
+                      <Select
+                        value={voucherCode}
+                        onValueChange={(value) => {
+                          setVoucherCode(value);
+                          handleValidateVoucher(value);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={isValidatingVoucher ? 'Validating...' : 'Select a voucher to apply'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableVouchers.map((voucher) => (
+                            <SelectItem key={voucher.id} value={voucher.code}>
+                              <div className="flex items-center justify-between gap-4 w-full">
+                                <div>
+                                  <span className="font-medium">{voucher.code}</span>
+                                  <span className="text-xs text-muted-foreground ml-2">
+                                    {voucher.discount_type === 'PERCENTAGE'
+                                      ? `${voucher.discount_value}% OFF`
+                                      : `RM ${voucher.discount_value} OFF`}
+                                  </span>
+                                </div>
+                                {voucher.min_purchase_amount > 0 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    Min RM {voucher.min_purchase_amount}
+                                  </span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {voucherValidationMsg && (
+                        <p className={`text-sm ${voucherDiscount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {voucherValidationMsg}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      No vouchers available for this order
+                    </p>
+                  )}
+                </>
+              )}
+              {appliedVoucherId && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-600" />
+                      <span className="font-medium text-green-800">Voucher Applied</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveVoucher}
+                      className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-green-700">Code: <Badge variant="outline" className="ml-1">{voucherCode}</Badge></span>
+                    <span className="text-sm font-medium text-green-800">-{formatPrice(voucherDiscount)}</span>
+                  </div>
                 </div>
+              )}
+            </CardContent>
+          </Card>
 
-                <Button
-                  className="w-full mt-3 md:mt-4 text-sm md:text-base"
-                  size="lg"
-                  onClick={handlePlaceOrder}
-                  disabled={!isAddressComplete() || isPlacingOrder}
-                >
-                  {isPlacingOrder ? 'Placing Order...' : `Place Order - ${formatPrice(getTotal())}`}
-                </Button>
+          {/* 4. Payment method */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base md:text-lg">Payment Method</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup value={selectedPayment} onValueChange={setSelectedPayment}>
+                {paymentMethods.map((method) => {
+                  const Icon = method.icon;
+                  return (
+                    <div key={method.id} className="flex items-start space-x-2 md:space-x-3 p-2 md:p-3 border rounded-lg hover:bg-gray-50">
+                      <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
+                      <Icon className="h-4 w-4 md:h-5 md:w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <Label htmlFor={method.id} className="font-medium cursor-pointer text-sm md:text-base">
+                          {method.name}
+                        </Label>
+                        <p className="text-xs md:text-sm text-muted-foreground">{method.description}</p>
+                      </div>
+                      {method.fee && (
+                        <p className="text-sm font-medium flex-shrink-0">+{formatPrice(method.fee)}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </RadioGroup>
+            </CardContent>
+          </Card>
 
-                <div className="text-center mt-3 md:mt-4">
-                  <p className="text-xs text-muted-foreground">
-                    🔒 Secure payment processing
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    SSL encrypted & PCI compliant
-                  </p>
+          {/* 5. Combined order summary */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base md:text-lg">Order Total</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 md:space-y-3">
+              <div className="flex justify-between text-sm">
+                <span>Items subtotal ({selectedItems.length})</span>
+                <span className="font-medium">{formatPrice(getSubtotal())}</span>
+              </div>
+              {hasAutoLabItems && (
+                <div className="flex justify-between text-sm">
+                  <span>AutoLab shipping</span>
+                  <span className="font-medium">
+                    {autoLabMethod === 'self-pickup' ? (
+                      'FREE'
+                    ) : getOnlineShippingFee() > 0 ? (
+                      formatPrice(getOnlineShippingFee())
+                    ) : (
+                      <span className="text-amber-700 text-xs">Pay on delivery</span>
+                    )}
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span>SST (6%)</span>
+                <span className="font-medium">{formatPrice(getTax())}</span>
+              </div>
+
+              {voucherDiscount > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span className="flex items-center gap-1">
+                    <Tag className="h-3 w-3" />
+                    Voucher Discount
+                  </span>
+                  <span className="font-medium">-{formatPrice(voucherDiscount)}</span>
+                </div>
+              )}
+
+              <Separator />
+
+              <div className="flex justify-between text-base md:text-lg font-semibold">
+                <span>You pay online</span>
+                <span>{formatPrice(getTotal())}</span>
+              </div>
+
+              {codFeesSummary > 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-start gap-2">
+                  <Banknote className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                  <span>
+                    <span className="font-semibold">Plus vendor shipping paid on delivery</span> — see each seller's section above.
+                    {' '}The driver collects the shipping fee from you in cash; it is not added to this online payment.
+                  </span>
+                </div>
+              )}
+
+              {sellerGroups.length > 1 && (
+                <p className="text-xs text-muted-foreground">
+                  You'll receive {sellerGroups.length} separate orders, one per seller. Pay once, ship from each seller independently.
+                </p>
+              )}
+
+              <Button
+                className="w-full mt-3 md:mt-4 text-sm md:text-base"
+                size="lg"
+                onClick={handlePlaceOrder}
+                disabled={
+                  !isAddressComplete() ||
+                  isPlacingOrder ||
+                  hasVendorAddressBlockers ||
+                  isCheckingVendorAddresses
+                }
+                title={
+                  hasVendorAddressBlockers
+                    ? 'A vendor in this cart has not set their pickup address yet — please contact AutoLab support.'
+                    : isCheckingVendorAddresses
+                      ? 'Checking vendor pickup addresses...'
+                      : undefined
+                }
+              >
+                {isPlacingOrder
+                  ? 'Placing Order...'
+                  : hasVendorAddressBlockers
+                    ? 'Vendor pickup address missing'
+                    : isCheckingVendorAddresses
+                      ? 'Checking vendor addresses...'
+                      : `Place Order - ${formatPrice(getTotal())}`}
+              </Button>
+
+              <div className="text-center mt-2 md:mt-3">
+                <p className="text-xs text-muted-foreground">
+                  Secure payment processing — SSL encrypted &amp; PCI compliant
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </DialogContent>
     </Dialog>

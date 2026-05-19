@@ -2,15 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useCurrentVendor } from '@/lib/vendorAuth';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Package,
   ShoppingBag,
   Wallet,
   TrendingUp,
-  CheckCircle2,
   Clock,
   Loader2,
   ArrowRight,
@@ -104,47 +102,72 @@ export default function VendorDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
           Welcome, {vendor?.business_name}
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-1.5">
           Manage your products, fulfil orders, and track your earnings.
         </p>
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard
-          icon={Package}
-          label="Active products"
-          value={stats.approvedProducts.toString()}
-          hint={stats.pendingProducts > 0 ? `${stats.pendingProducts} pending review` : 'All approved'}
-        />
-        <StatCard
-          icon={ShoppingBag}
-          label="Awaiting shipment"
-          value={stats.pendingFulfilments.toString()}
-          hint={stats.shippedFulfilments > 0 ? `${stats.shippedFulfilments} shipped lifetime` : 'No pending'}
-          highlight={stats.pendingFulfilments > 0}
-        />
-        <StatCard
-          icon={TrendingUp}
-          label="Sales (30 days)"
-          value={formatRM(stats.last30Sales)}
-        />
-        <StatCard
-          icon={Wallet}
-          label="Pending payout"
-          value={formatRM(stats.pendingPayoutBalance)}
-          hint={`Net of ${vendor?.commission_rate ?? 8}% platform fee`}
-        />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active products</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.approvedProducts}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.pendingProducts > 0 ? `${stats.pendingProducts} pending review` : 'All approved'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Awaiting shipment</CardTitle>
+            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.pendingFulfilments}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.shippedFulfilments > 0 ? `${stats.shippedFulfilments} shipped lifetime` : 'No pending'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Sales (30 days)</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatRM(stats.last30Sales)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Last 30 days gross</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending payout</CardTitle>
+            <Wallet className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatRM(stats.pendingPayoutBalance)}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Net of {vendor?.commission_rate ?? 8}% platform fee
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Pending product warning */}
       {stats.pendingProducts > 0 && (
-        <Card className="border-amber-200 bg-amber-50/60">
+        <Card className="border-amber-200 bg-amber-50">
           <CardContent className="pt-6">
             <div className="flex items-start gap-3">
               <Clock className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
@@ -183,37 +206,6 @@ export default function VendorDashboard() {
   );
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  highlight,
-}: {
-  icon: any;
-  label: string;
-  value: string;
-  hint?: string;
-  highlight?: boolean;
-}) {
-  return (
-    <Card className={highlight ? 'border-amber-200 bg-amber-50/40' : ''}>
-      <CardHeader className="pb-2">
-        <CardDescription className="text-xs flex items-center gap-1.5">
-          <Icon className="h-3.5 w-3.5" />
-          {label}
-        </CardDescription>
-        <CardTitle className="text-xl sm:text-2xl">{value}</CardTitle>
-      </CardHeader>
-      {hint && (
-        <CardContent className="pt-0">
-          <p className="text-xs text-gray-500">{hint}</p>
-        </CardContent>
-      )}
-    </Card>
-  );
-}
-
 function QuickAction({
   to,
   icon: Icon,
@@ -229,15 +221,13 @@ function QuickAction({
     <Link to={to} className="block group">
       <Card className="hover:shadow-md transition-shadow">
         <CardContent className="pt-6 flex items-start gap-3">
-          <div className="w-10 h-10 rounded-md bg-lime-50 flex items-center justify-center flex-shrink-0">
-            <Icon className="h-5 w-5 text-lime-700" />
-          </div>
+          <Icon className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
           <div className="flex-1">
-            <div className="text-sm font-semibold text-gray-900 group-hover:text-lime-700 flex items-center gap-1">
+            <div className="text-sm font-semibold flex items-center gap-1">
               {title}
               <ArrowRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
           </div>
         </CardContent>
       </Card>

@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Eye, EyeOff, ArrowLeft, Shield, Phone, User, Calendar, Loader2, ArrowRight, Store } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Shield, Phone, Loader2, ArrowRight, Store, Briefcase } from 'lucide-react';
 import OTPInput from '@/components/OTPInput';
 import { registerDeviceSession } from '@/hooks/useSessionEnforcement';
+import { getVendorByUserId } from '@/lib/vendorAuth';
 
 type AuthStep = 'contact' | 'otp' | 'details' | 'merchant-otp';
 
@@ -69,6 +70,12 @@ const Auth = () => {
     password: ''
   });
 
+  // Partner (vendor) login — admin-issued username + password.
+  const [partnerForm, setPartnerForm] = useState({
+    username: '',
+    password: ''
+  });
+
   // Resend timer countdown
   useEffect(() => {
     if (resendTimer > 0) {
@@ -85,10 +92,6 @@ const Auth = () => {
   const validatePhone = (phone: string) => {
     const digits = phone.replace(/\D/g, '');
     return digits.length >= 8 && digits.length <= 11;
-  };
-
-  const validateEmail = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
   // ==========================================
@@ -248,40 +251,81 @@ const Auth = () => {
     setLoading(false);
   };
 
-  // Admin login
+  // Reset to contact entry step
+  // Admin login — custom localStorage-based, no Supabase Auth
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!adminForm.username || !adminForm.password) {
       toast.error('Please enter both username and password');
       return;
     }
-
     setLoading(true);
-
     try {
       const { data, error } = await (supabase.rpc as any)('admin_login', {
         p_username: adminForm.username,
-        p_password: adminForm.password
+        p_password: adminForm.password,
       });
-
       if (error || !data?.success) {
         toast.error(data?.message || 'Invalid credentials');
         setLoading(false);
         return;
       }
-
       localStorage.setItem('admin_user', JSON.stringify(data.admin));
       toast.success(`Welcome back, ${data.admin.full_name}!`);
       navigate('/admin');
     } catch {
       toast.error('An error occurred. Please try again.');
     }
-
     setLoading(false);
   };
 
-  // Reset to contact entry step
+  // Partner login — admin-issued username + password.
+  // Username maps to a synthetic email: <username>@partner.autolab.local
+  const handlePartnerLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const username = partnerForm.username.trim().toLowerCase();
+    if (!username) {
+      toast.error('Enter your partner username.');
+      return;
+    }
+    if (!partnerForm.password) {
+      toast.error('Enter your partner password.');
+      return;
+    }
+    setLoading(true);
+    const email = `${username}@partner.autolab.local`;
+    const { error } = await signInWithPassword(email, partnerForm.password);
+    if (error) {
+      toast.error(
+        error.message?.includes('Invalid login credentials')
+          ? 'Incorrect username or password.'
+          : error.message || 'Sign-in failed. Please try again.'
+      );
+      setLoading(false);
+      return;
+    }
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) {
+      toast.error('Sign-in succeeded but session is missing. Please retry.');
+      setLoading(false);
+      return;
+    }
+    const vendor = await getVendorByUserId(authUser.id);
+    if (!vendor) {
+      toast.error('No partner profile linked to this account. Contact AutoLab admin.');
+      await supabase.auth.signOut();
+      setLoading(false);
+      return;
+    }
+    if (vendor.status !== 'APPROVED') {
+      navigate('/vendor/dashboard'); // ProtectedVendorRoute renders the status page
+    } else {
+      toast.success(`Welcome back, ${vendor.business_name}!`);
+      navigate('/vendor/dashboard');
+    }
+    setLoading(false);
+  };
+
   const handleBackToContact = () => {
     setAuthStep('contact');
     setOtpSent(false);
@@ -349,12 +393,12 @@ const Auth = () => {
           {/* Header */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {authStep === 'merchant-otp' ? 'Enter Verification Code' :
-               'Welcome'}
+              {authStep === 'merchant-otp' ? 'Enter Verification Code' : 'Welcome'}
             </h2>
             <p className="text-gray-500">
-              {authStep === 'merchant-otp' ? `We sent a code to +60${merchantOtpForm.phone}` :
-               'Sign in to your account'}
+              {authStep === 'merchant-otp'
+                ? `We sent a code to +60${merchantOtpForm.phone}`
+                : 'Sign in to your account'}
             </p>
           </div>
 
@@ -406,16 +450,20 @@ const Auth = () => {
           {/* Contact Entry & Tabs (Initial Step) */}
           {authStep === 'contact' && (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-6 bg-gray-100 p-1 rounded-lg h-11">
-                <TabsTrigger value="customer" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-xs text-gray-600">
+              <TabsList className="grid w-full grid-cols-4 mb-6 bg-gray-100 p-1 rounded-lg h-11">
+                <TabsTrigger value="customer" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] text-gray-600 px-1">
                   <Phone className="h-3.5 w-3.5 mr-1" />
                   Customer
                 </TabsTrigger>
-                <TabsTrigger value="merchant" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-xs text-gray-600">
+                <TabsTrigger value="merchant" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] text-gray-600 px-1">
                   <Store className="h-3.5 w-3.5 mr-1" />
                   Merchant
                 </TabsTrigger>
-                <TabsTrigger value="admin" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-xs text-gray-600">
+                <TabsTrigger value="partner" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] text-gray-600 px-1">
+                  <Briefcase className="h-3.5 w-3.5 mr-1" />
+                  Partner
+                </TabsTrigger>
+                <TabsTrigger value="admin" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] text-gray-600 px-1">
                   <Shield className="h-3.5 w-3.5 mr-1" />
                   Admin
                 </TabsTrigger>
@@ -599,6 +647,83 @@ const Auth = () => {
               </TabsContent>
 
               {/* ===================== */}
+              {/* Partner Login Tab     */}
+              {/* Username + password (admin-issued) */}
+              {/* ===================== */}
+              <TabsContent value="partner">
+                <div className="space-y-5">
+                  <div className="p-3 bg-lime-50 border border-lime-200 rounded-lg">
+                    <p className="text-xs text-lime-900 font-medium">
+                      Partner accounts are issued by AutoLab admin. Use the username & password your admin shared with you.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handlePartnerLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="partner-username" className="text-gray-700 text-sm font-medium">Username</Label>
+                      <Input
+                        id="partner-username"
+                        type="text"
+                        autoComplete="username"
+                        placeholder="e.g. soundstream"
+                        value={partnerForm.username}
+                        onChange={(e) => setPartnerForm({ ...partnerForm, username: e.target.value })}
+                        required
+                        className="border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="partner-password" className="text-gray-700 text-sm font-medium">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="partner-password"
+                          type={showPassword ? 'text' : 'password'}
+                          autoComplete="current-password"
+                          placeholder="Enter your password"
+                          value={partnerForm.password}
+                          onChange={(e) => setPartnerForm({ ...partnerForm, password: e.target.value })}
+                          required
+                          className="pr-10 border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-gray-400"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors"
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Signing in...
+                        </>
+                      ) : (
+                        <>
+                          Sign In
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </>
+                      )}
+                    </Button>
+                  </form>
+
+                  <div className="text-center text-xs text-gray-500">
+                    Want to become a partner? Email AutoLab support.
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* ===================== */}
               {/* Admin Login Tab       */}
               {/* ===================== */}
               <TabsContent value="admin">
@@ -660,6 +785,7 @@ const Auth = () => {
                   </p>
                 </form>
               </TabsContent>
+
             </Tabs>
           )}
         </div>
