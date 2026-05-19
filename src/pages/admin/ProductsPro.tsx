@@ -154,6 +154,9 @@ export default function ProductsPro() {
   const [originalMediaUrls, setOriginalMediaUrls] = useState<string[]>([]);
   const [originalInstallationVideoUrls, setOriginalInstallationVideoUrls] = useState<string[]>([]);
 
+  // True while a pasted URL is being re-hosted via the edge function.
+  const [pastingUrl, setPastingUrl] = useState(false);
+
   const { toast } = useToast();
   const { enqueueVideoUpload, cancelUpload } = useUploadQueue();
 
@@ -2282,27 +2285,67 @@ export default function ProductsPro() {
                         <Input
                           placeholder="Paste image/video URL and press Enter..."
                           className="text-xs h-8 border-gray-900"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const url = (e.target as HTMLInputElement).value.trim();
-                              if (!url) return;
-                              if (formData.images.length >= 15) {
-                                toast({ title: 'All slots full', description: 'Remove a media item first', variant: 'destructive' });
-                                return;
-                              }
-                              const isVideoUrl = isEmbeddableUrl(url) || /\.(mp4|webm|mov|avi)(\?|$)/i.test(url);
+                          disabled={pastingUrl}
+                          onKeyDown={async (e) => {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            const input = e.target as HTMLInputElement;
+                            const url = input.value.trim();
+                            if (!url) return;
+                            if (formData.images.length >= 15) {
+                              toast({ title: 'All slots full', description: 'Remove a media item first', variant: 'destructive' });
+                              return;
+                            }
+
+                            // YouTube/Vimeo URLs are embedded as-is (no re-host).
+                            if (isEmbeddableUrl(url)) {
                               setFormData(prev => ({
                                 ...prev,
                                 images: [...prev.images, {
                                   url,
                                   is_primary: prev.images.length === 0,
-                                  alt_text: `${prev.name} - ${isVideoUrl ? 'Video' : 'Image'}`,
-                                  media_type: isVideoUrl ? 'video' : 'image'
-                                }]
+                                  alt_text: `${prev.name} - Video`,
+                                  media_type: 'video' as const,
+                                }],
                               }));
-                              (e.target as HTMLInputElement).value = '';
-                              if (isVideoUrl) toast({ title: 'Video added', description: isEmbeddableUrl(url) ? 'YouTube/Vimeo video added' : 'Video URL added' });
+                              input.value = '';
+                              toast({ title: 'Video added', description: 'YouTube/Vimeo video embedded' });
+                              return;
+                            }
+
+                            // Everything else (Drive, Dropbox, direct CDN, direct mp4/etc.) is
+                            // downloaded and re-hosted to Supabase Storage so the browser can
+                            // actually render it. The function auto-detects image vs video by
+                            // the response content-type.
+                            setPastingUrl(true);
+                            try {
+                              const { data, error } = await supabase.functions.invoke<{ url: string; mediaType: 'image' | 'video' }>(
+                                'rehost-media-url',
+                                { body: { url, folder: 'uploads' } }
+                              );
+                              if (error || !data?.url) throw new Error(error?.message ?? 'Failed to import URL');
+                              setFormData(prev => ({
+                                ...prev,
+                                images: [...prev.images, {
+                                  url: data.url,
+                                  is_primary: prev.images.length === 0,
+                                  alt_text: `${prev.name} - ${data.mediaType === 'video' ? 'Video' : 'Image'}`,
+                                  media_type: data.mediaType,
+                                }],
+                              }));
+                              input.value = '';
+                              toast({
+                                title: data.mediaType === 'video' ? 'Video imported' : 'Image imported',
+                                description: 'Downloaded and saved to storage',
+                              });
+                            } catch (err) {
+                              toast({
+                                title: 'Failed to import URL',
+                                description: (err as Error).message,
+                                variant: 'destructive',
+                              });
+                            } finally {
+                              setPastingUrl(false);
                             }
                           }}
                         />
