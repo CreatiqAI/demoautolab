@@ -9,7 +9,7 @@ import { PricingProvider } from '@/hooks/usePricing';
 import { CartProvider } from '@/hooks/useCartDB';
 import { useSessionEnforcement } from '@/hooks/useSessionEnforcement';
 import ScrollToTop from './components/ScrollToTop';
-import ChatBot from './components/ChatBot';
+import WhatsAppButton from './components/WhatsAppButton';
 
 import Home from './pages/Home';
 import About from './pages/About';
@@ -94,16 +94,16 @@ function SessionEnforcer() {
   return null;
 }
 
-function CustomerChatBot() {
+function CustomerWhatsApp() {
   const { pathname } = useLocation();
   // Hide on admin, warehouse and vendor pages — those audiences don't
-  // need the customer chat surface.
+  // need the customer contact surface.
   if (
     pathname.startsWith('/admin') ||
     pathname.startsWith('/warehouse') ||
     pathname.startsWith('/vendor')
   ) return null;
-  return <ChatBot />;
+  return <WhatsAppButton />;
 }
 
 const App = () => (
@@ -119,7 +119,7 @@ const App = () => (
               <BrowserRouter>
                 <ScrollToTop />
                 <VendorRedirector />
-                <CustomerChatBot />
+                <CustomerWhatsApp />
                 <Routes>
                   <Route path="/" element={<Home />} />
                   <Route path="/about" element={<About />} />
