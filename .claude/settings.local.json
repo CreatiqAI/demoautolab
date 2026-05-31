@@ -64,7 +64,13 @@
       "Bash(node -e \"const fs=require\\(''fs''\\); const data=JSON.parse\\(fs.readFileSync\\(''C:/Users/USER/.claude/projects/c--Users-USER-OneDrive-Desktop-AutoLab-autolab-website/e8a692f8-9acd-4cae-9240-a24217c77240/tool-results/toolu_01T4KwQBLBGk9tioLLJYi8dh.json'',''utf8''\\)\\); console.log\\(data[0].text.substring\\(20000,40000\\)\\)\")",
       "Bash(node -e \"const fs=require\\(''fs''\\); const data=JSON.parse\\(fs.readFileSync\\(''C:/Users/USER/.claude/projects/c--Users-USER-OneDrive-Desktop-AutoLab-autolab-website/e8a692f8-9acd-4cae-9240-a24217c77240/tool-results/toolu_01T4KwQBLBGk9tioLLJYi8dh.json'',''utf8''\\)\\); console.log\\(data[0].text.substring\\(40000\\)\\)\")",
       "Read(//c/Users/USER/OneDrive/Desktop/AutoLab/autolab-website/**)",
-      "Bash(node scripts/remove-console.js)"
+      "Bash(node scripts/remove-console.js)",
+      "Bash(node n8n/fix-extract.cjs)",
+      "Bash(node -e ' *)",
+      "Bash(node n8n/rename-sql.cjs)",
+      "Bash(node n8n/rename-sql.cjs --apply)",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__apply_migration"
     ],
     "deny": [],
     "ask": []
