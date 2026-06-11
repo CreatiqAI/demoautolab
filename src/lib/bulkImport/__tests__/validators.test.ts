@@ -25,9 +25,23 @@ describe('validateRows', () => {
   });
 
   it('flags bad SKU pattern', () => {
-    const row = { ...baseRow, sku: 'bad sku with spaces!!' };
+    const row = { ...baseRow, sku: 'bad*sku?with!chars' };
     const summary = validateRows([{ rowIndex: 2, raw: row }], componentsColumnMap);
     expect(summary.rows[0].errors.some(e => e.toLowerCase().includes('sku'))).toBe(true);
+  });
+
+  it('accepts SKUs with # / ( ) . and spaces', () => {
+    const skus = [
+      'LHL-1284#EH-800 (LZ)(NTG5.5/6.0)',
+      'LHL-272#/BZ01.10',
+      'LHL-1382/RZ-SAIC08',
+      'CB-14#/RZ-02',
+      'LHL-1088#',
+    ];
+    for (const sku of skus) {
+      const summary = validateRows([{ rowIndex: 2, raw: { ...baseRow, sku } }], componentsColumnMap);
+      expect(summary.rows[0].errors, `SKU "${sku}" should be valid`).toEqual([]);
+    }
   });
 
   it('flags duplicate SKUs within file', () => {

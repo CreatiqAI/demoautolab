@@ -6,7 +6,8 @@ export const componentsColumnMap: ColumnMap = {
   uniqueKey: 'component_sku',
   fields: [
     { excelColumn: 'sku', dbColumn: 'component_sku', required: true, type: 'text',
-      pattern: /^[A-Z0-9-]{3,40}$/i },
+      // Allow letters, digits, and common SKU punctuation: - # / ( ) . and spaces
+      pattern: /^[A-Z0-9 #/().-]{3,60}$/i },
     { excelColumn: 'name', dbColumn: 'name', required: true, type: 'text', max: 200 },
     { excelColumn: 'type', dbColumn: 'component_type', required: true, type: 'text' },
     { excelColumn: 'description', dbColumn: 'description', required: false, type: 'text' },
