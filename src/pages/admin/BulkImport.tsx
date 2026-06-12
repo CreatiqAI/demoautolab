@@ -9,7 +9,7 @@ import { ResultSummary } from '@/components/admin/bulkImport/ResultSummary';
 import { parseExcelFile } from '@/lib/bulkImport/parser';
 import { validateRows, recomputeDuplicates, summarize } from '@/lib/bulkImport/validators';
 import { getColumnMap } from '@/lib/bulkImport/columnMaps';
-import { runImport } from '@/lib/bulkImport/api';
+import { runImport, checkMediaUrls } from '@/lib/bulkImport/api';
 import { annotateProductRowsWithDbChecks } from '@/lib/bulkImport/crossRowChecks';
 import type { Entity, ValidationSummary, ImportMode, BatchResult } from '@/lib/bulkImport/types';
 import { useToast } from '@/hooks/use-toast';
@@ -39,6 +39,15 @@ export default function BulkImport() {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [results, setResults] = useState<BatchResult[]>([]);
   const [logsRefreshKey, setLogsRefreshKey] = useState(0);
+  // Pre-flight media-accessibility check results (null = not run for current file).
+  const [mediaCheck, setMediaCheck] = useState<{
+    running: boolean;
+    done: number;
+    total: number;
+    ran: boolean;
+    okCount: number;
+    broken: Array<{ rowIndex: number; sku: string; url: string; error: string }>;
+  } | null>(null);
   const { toast } = useToast();
 
   const reset = () => {
@@ -47,6 +56,7 @@ export default function BulkImport() {
     setFileName('');
     setResults([]);
     setProgress({ done: 0, total: 0 });
+    setMediaCheck(null);
   };
 
   const handleFile = (forEntity: Entity) => async (file: File) => {
@@ -73,6 +83,7 @@ export default function BulkImport() {
 
       setSummary(v);
       setFileName(file.name);
+      setMediaCheck(null);
       setPhase('preview');
     } catch (e) {
       toast({ title: 'Parse failed', description: (e as Error).message, variant: 'destructive' });
@@ -89,6 +100,48 @@ export default function BulkImport() {
       const uniqueKey = getColumnMap(entity).uniqueKey;
       return summarize(recomputeDuplicates(remaining, uniqueKey), prev.headerErrors);
     });
+    setMediaCheck(null); // row set changed — prior check is stale
+  };
+
+  // Pre-flight: verify every image/video URL in the importable rows is reachable
+  // and is real media, WITHOUT writing anything. Lets the admin fix broken links
+  // in the sheet before committing instead of ending up with image-less rows.
+  const handleCheckMedia = async () => {
+    if (!summary) return;
+    const uniqueKey = getColumnMap(entity).uniqueKey;
+    const entries: Array<{ rowIndex: number; sku: string; url: string }> = [];
+    for (const r of summary.rows) {
+      if (r.errors.length > 0) continue; // only rows that will actually import
+      const sku = String(r.fields[uniqueKey] ?? r.rowIndex);
+      const urls = [r.mediaUrls.default, ...r.mediaUrls.gallery, r.mediaUrls.video]
+        .filter((u): u is string => !!u);
+      for (const url of urls) entries.push({ rowIndex: r.rowIndex, sku, url });
+    }
+    if (entries.length === 0) {
+      toast({ title: 'No media URLs to check', description: 'None of the importable rows have an image or video URL.' });
+      return;
+    }
+    const uniqueUrls = Array.from(new Set(entries.map(e => e.url)));
+    setMediaCheck({ running: true, done: 0, total: uniqueUrls.length, ran: false, okCount: 0, broken: [] });
+    try {
+      const checkResults = await checkMediaUrls(uniqueUrls, (done, total) =>
+        setMediaCheck(prev => (prev ? { ...prev, done, total } : prev)));
+      const byUrl = new Map(checkResults.map(r => [r.url, r]));
+      const okCount = checkResults.filter(r => r.ok).length;
+      // One entry per (row, url) so the admin sees exactly which rows to fix.
+      const broken = entries
+        .filter(e => byUrl.get(e.url)?.ok === false)
+        .map(e => ({ rowIndex: e.rowIndex, sku: e.sku, url: e.url, error: byUrl.get(e.url)?.error ?? 'failed' }));
+      setMediaCheck({ running: false, done: checkResults.length, total: checkResults.length, ran: true, okCount, broken });
+      toast(
+        broken.length === 0
+          ? { title: 'All media URLs OK', description: `${okCount} URL(s) verified accessible.` }
+          : { title: `${broken.length} media URL(s) need attention`, description: 'See the list below — fix them in your sheet and re-upload.', variant: 'destructive' },
+      );
+    } catch (e) {
+      setMediaCheck(null);
+      toast({ title: 'Media check failed', description: (e as Error).message, variant: 'destructive' });
+    }
   };
 
   const handleConfirm = async () => {
@@ -174,6 +227,51 @@ export default function BulkImport() {
             </button>
           </div>
           <PreviewTable summary={summary} entity={entity} onRemoveRow={handleRemoveRow} />
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCheckMedia}
+                disabled={mediaCheck?.running}
+              >
+                {mediaCheck?.running
+                  ? `Checking media… ${mediaCheck.done}/${mediaCheck.total}`
+                  : 'Check image URLs'}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Verifies every image/video URL is reachable before importing — nothing is written.
+              </span>
+            </div>
+            {mediaCheck?.ran && (
+              mediaCheck.broken.length === 0 ? (
+                <p className="text-sm text-green-700 dark:text-green-400">
+                  ✓ All {mediaCheck.okCount} media URL(s) are accessible.
+                </p>
+              ) : (
+                <div className="border border-red-300 rounded-lg p-3 bg-red-50 dark:bg-red-950/30 space-y-1">
+                  <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                    ✗ {mediaCheck.broken.length} media URL(s) not accessible · ✓ {mediaCheck.okCount} OK
+                  </p>
+                  <div className="max-h-48 overflow-auto text-xs space-y-1">
+                    {mediaCheck.broken.map((b, i) => (
+                      <div key={i} className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-mono text-muted-foreground">row {b.rowIndex}</span>
+                        <span className="font-mono">{b.sku}</span>
+                        <span className="text-red-600 dark:text-red-400">{b.error}</span>
+                        <span className="text-muted-foreground truncate max-w-md">{b.url}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Fix these in your sheet and re-upload, or import anyway — those rows will be created without their image.
+                  </p>
+                </div>
+              )
+            )}
+          </div>
+
           <ModeSelector value={mode} onChange={setMode} />
           <Button onClick={handleConfirm} disabled={summary.validRows === 0}>
             Confirm import: {summary.validRows} rows

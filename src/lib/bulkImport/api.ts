@@ -10,6 +10,8 @@ import type {
 
 const BATCH_SIZE = 20;
 const REHOST_CONCURRENCY = 3;
+// Pre-flight checks are lightweight (no download/upload), so run more in parallel.
+const CHECK_CONCURRENCY = 6;
 
 function isEmbeddableUrl(url: string): boolean {
   return /youtube\.com\/watch|youtu\.be\/|vimeo\.com\//i.test(url);
@@ -64,6 +66,55 @@ async function extractFunctionError(error: { message: string; context?: unknown 
     }
   }
   return error.message;
+}
+
+export interface MediaUrlCheck {
+  url: string;
+  ok: boolean;
+  mediaType?: 'image' | 'video';
+  error?: string;
+}
+
+// Pre-flight check for ONE url: is it reachable and actually image/video?
+// Uses the edge function's `check` mode — no bytes downloaded, nothing written.
+async function checkOneUrl(url: string): Promise<MediaUrlCheck> {
+  if (isEmbeddableUrl(url)) return { url, ok: true, mediaType: 'video' };
+  const { data, error } = await supabase.functions.invoke<{ ok: boolean; mediaType: 'image' | 'video' }>(
+    'rehost-media-url',
+    { body: { url, check: true } },
+  );
+  if (error) return { url, ok: false, error: await extractFunctionError(error) };
+  if (!data?.ok) return { url, ok: false, error: 'not accessible' };
+  return { url, ok: true, mediaType: data.mediaType };
+}
+
+// Verify a list of media URLs up front (deduped), with bounded concurrency.
+// Returns one result per UNIQUE url, in input order of first appearance.
+export async function checkMediaUrls(
+  urls: string[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<MediaUrlCheck[]> {
+  const unique = Array.from(new Set(urls.filter(Boolean)));
+  const results = new Map<string, MediaUrlCheck>();
+  let done = 0;
+  onProgress?.(0, unique.length);
+
+  let next = 0;
+  const workers = Array(Math.min(CHECK_CONCURRENCY, Math.max(unique.length, 1)))
+    .fill(0)
+    .map(async () => {
+      while (true) {
+        const i = next++;
+        if (i >= unique.length) return;
+        const url = unique[i];
+        results.set(url, await checkOneUrl(url));
+        done++;
+        onProgress?.(done, unique.length);
+      }
+    });
+  await Promise.all(workers);
+
+  return unique.map(u => results.get(u)!);
 }
 
 interface PreparedRow {

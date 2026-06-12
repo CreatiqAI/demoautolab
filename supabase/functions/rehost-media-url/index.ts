@@ -71,7 +71,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { url, folder } = await req.json() as { url?: string; folder?: string };
+    const { url, folder, check } = await req.json() as { url?: string; folder?: string; check?: boolean };
     if (!url) {
       return new Response(JSON.stringify({ error: 'url required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -104,6 +104,26 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: `not a media file: content-type was "${contentType}". Make sure the Drive folder is shared "Anyone with the link".` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
+    // Pre-flight "check" mode: confirm the URL is reachable and is real media,
+    // optionally flagging oversize via Content-Length, WITHOUT downloading the
+    // full body or uploading anything. Lets the bulk-import UI verify every
+    // image up front so the admin fixes broken links before committing.
+    if (check) {
+      const lenHeader = resp.headers.get('content-length');
+      try { await resp.body?.cancel(); } catch { /* ignore */ }
+      if (lenHeader) {
+        const len = Number(lenHeader);
+        const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+        if (Number.isFinite(len) && len > maxBytes) {
+          return new Response(JSON.stringify({ error: `file too large (>${Math.round(maxBytes / 1024 / 1024)}MB)` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      }
+      return new Response(JSON.stringify({ ok: true, mediaType: isVideo ? 'video' : 'image' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     const buf = new Uint8Array(await resp.arrayBuffer());
     const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
     if (buf.byteLength > maxBytes) {
