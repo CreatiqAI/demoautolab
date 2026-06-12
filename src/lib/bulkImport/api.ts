@@ -36,10 +36,34 @@ async function resolveOneUrl(
     url: string;
     mediaType: 'image' | 'video';
   }>('rehost-media-url', { body: { url, folder: 'imports/admin' } });
-  if (error || !data?.url) {
-    return { error: error?.message ?? 'rehost failed' };
+  if (error) {
+    return { error: await extractFunctionError(error) };
+  }
+  if (!data?.url) {
+    return { error: 'rehost failed' };
   }
   return { url: data.url, mediaType: data.mediaType };
+}
+
+// supabase-js wraps a non-2xx edge-function response in FunctionsHttpError whose
+// `.message` is a generic "non-2xx status code". The useful reason is in the
+// response body (`{ error: "..." }`) on `.context`. Surface it so the import
+// summary tells the admin *why* a media URL failed instead of a vague message.
+async function extractFunctionError(error: { message: string; context?: unknown }): Promise<string> {
+  const ctx = error.context;
+  if (ctx instanceof Response) {
+    // 546 = edge runtime killed the worker (resource limit) — no JSON body.
+    if (ctx.status === 546) {
+      return 'server resource limit hit while processing this file (too large/complex)';
+    }
+    try {
+      const body = await ctx.clone().json();
+      if (body && typeof body.error === 'string') return body.error;
+    } catch {
+      /* body wasn't JSON — fall through to the generic message */
+    }
+  }
+  return error.message;
 }
 
 interface PreparedRow {

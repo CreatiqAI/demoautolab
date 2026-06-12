@@ -1,15 +1,21 @@
 // supabase/functions/rehost-media-url/index.ts
-// Downloads an image from any public URL (including Google Drive sharing
-// links), resizes to <=1920px, encodes JPEG @ 85%, and uploads to the
-// product-images bucket. Returns the permanent public URL.
+// Downloads an image or video from any public URL (including Google Drive
+// sharing links) and re-uploads the original bytes to Supabase Storage,
+// returning the permanent public URL.
 //
 // Solves: pasting a Drive sharing URL into the existing ImageUpload "From URL"
 // tab used to just store the string; browsers can't render Drive URLs as
 // images because they're HTML pages. This function re-hosts the actual bytes.
+//
+// NOTE: We intentionally do NOT decode/resize images in this function. Doing so
+// with a pure-JS image library (ImageScript) on large supplier photos exceeded
+// the edge runtime's CPU/memory budget and the worker was killed (HTTP 546),
+// dropping otherwise-valid images during bulk import. Re-hosting the original
+// bytes is fast, light, and reliable. If on-the-fly resizing is needed later,
+// use Supabase Storage image transformations at render time (?width=...).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,7 +51,6 @@ const IMAGE_BUCKET = 'product-images';
 const VIDEO_BUCKET = 'product-videos';
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024;
-const MAX_DIM = 1920;
 const FETCH_TIMEOUT_MS = 60_000;
 
 function pickExtension(contentType: string): string {
@@ -54,6 +59,11 @@ function pickExtension(contentType: string): string {
     if (contentType.includes('quicktime')) return 'mov';
     return 'mp4';
   }
+  // Preserve the original image format (we no longer re-encode to JPEG).
+  if (contentType.includes('png')) return 'png';
+  if (contentType.includes('webp')) return 'webp';
+  if (contentType.includes('gif')) return 'gif';
+  if (contentType.includes('svg')) return 'svg';
   return 'jpg';
 }
 
@@ -109,29 +119,13 @@ serve(async (req) => {
     const ext = pickExtension(contentType);
     const filename = `${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`;
     const path = `${cleanFolder}/${filename}`;
+    const bucket = isVideo ? VIDEO_BUCKET : IMAGE_BUCKET;
 
-    let body: Uint8Array;
-    let uploadContentType: string;
-    let bucket: string;
-
-    if (isImage) {
-      const img = await Image.decode(buf);
-      if (img.width > MAX_DIM || img.height > MAX_DIM) {
-        if (img.width >= img.height) img.resize(MAX_DIM, Image.RESIZE_AUTO);
-        else img.resize(Image.RESIZE_AUTO, MAX_DIM);
-      }
-      body = await img.encodeJPEG(85);
-      uploadContentType = 'image/jpeg';
-      bucket = IMAGE_BUCKET;
-    } else {
-      body = buf;
-      uploadContentType = contentType;
-      bucket = VIDEO_BUCKET;
-    }
-
+    // Re-host the original bytes as-is. No decode/resize: keeps the function
+    // within its CPU/memory budget so large images don't get the worker killed.
     const { error: uploadErr } = await supabase
       .storage.from(bucket)
-      .upload(path, body, { contentType: uploadContentType, upsert: false });
+      .upload(path, buf, { contentType, upsert: false });
     if (uploadErr) throw uploadErr;
 
     const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
