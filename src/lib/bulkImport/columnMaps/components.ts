@@ -1,13 +1,17 @@
 import type { ColumnMap } from '../types';
 
+// Supplier SKUs are free-form and use all kinds of punctuation
+// (e.g. - # / ( ) . : + " and spaces). Accept any printable text; reject only
+// control characters, and bound the length to 2-80.
+const SKU_PATTERN = /^[^\x00-\x1F\x7F]{2,80}$/;
+
 export const componentsColumnMap: ColumnMap = {
   entity: 'component',
   table: 'component_library',
   uniqueKey: 'component_sku',
   fields: [
     { excelColumn: 'sku', dbColumn: 'component_sku', required: true, type: 'text',
-      // Allow letters, digits, and common SKU punctuation: - # / ( ) . and spaces
-      pattern: /^[A-Z0-9 #/().-]{3,60}$/i },
+      pattern: SKU_PATTERN },
     { excelColumn: 'name', dbColumn: 'name', required: true, type: 'text', max: 200 },
     { excelColumn: 'type', dbColumn: 'component_type', required: true, type: 'text' },
     { excelColumn: 'description', dbColumn: 'description', required: false, type: 'text' },

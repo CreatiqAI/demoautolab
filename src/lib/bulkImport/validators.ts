@@ -5,6 +5,42 @@ import { normalizeMediaUrl } from './driveUrl';
 
 type FieldValue = string | number | boolean;
 
+// Prefix shared by validateRows() and recomputeDuplicates() so the latter can
+// strip stale in-file duplicate errors before re-deriving them.
+export const DUP_ERROR_PREFIX = 'duplicate SKU in file';
+
+export function summarize(rows: ParsedRow[], headerErrors: string[] = []): ValidationSummary {
+  return {
+    rows,
+    totalRows: rows.length,
+    validRows: rows.filter(r => r.errors.length === 0).length,
+    errorRows: rows.filter(r => r.errors.length > 0).length,
+    warningRows: rows.filter(r => r.errors.length === 0 && r.warnings.length > 0).length,
+    headerErrors,
+  };
+}
+
+// Re-derive the in-file duplicate-key errors across a row list. Used after the
+// admin removes a row from the preview: dropping the FIRST occurrence of a SKU
+// must clear the "duplicate" flag on later rows. Returns new row objects with
+// non-duplicate errors and all warnings preserved.
+export function recomputeDuplicates(rows: ParsedRow[], uniqueKey: string): ParsedRow[] {
+  const seen = new Map<string, number>();
+  return rows.map(row => {
+    const errors = row.errors.filter(e => !e.startsWith(DUP_ERROR_PREFIX));
+    const key = row.fields[uniqueKey];
+    if (typeof key === 'string') {
+      const firstAt = seen.get(key);
+      if (firstAt !== undefined) {
+        errors.push(`${DUP_ERROR_PREFIX} (first seen at row ${firstAt})`);
+      } else {
+        seen.set(key, row.rowIndex);
+      }
+    }
+    return { ...row, errors };
+  });
+}
+
 function coerceField(value: unknown, field: FieldDef): CoerceResult<FieldValue> {
   switch (field.type) {
     case 'text':    return coerceText(value);
@@ -56,7 +92,7 @@ export function validateRows(raws: RawRow[], map: ColumnMap): ValidationSummary 
     const skuValue = fields[map.uniqueKey];
     if (typeof skuValue === 'string') {
       if (seenSkus.has(skuValue)) {
-        errors.push(`duplicate SKU in file (first seen at row ${seenSkus.get(skuValue)})`);
+        errors.push(`${DUP_ERROR_PREFIX} (first seen at row ${seenSkus.get(skuValue)})`);
       } else {
         seenSkus.set(skuValue, raw.rowIndex);
       }
@@ -89,16 +125,5 @@ export function validateRows(raws: RawRow[], map: ColumnMap): ValidationSummary 
     rows.push({ rowIndex: raw.rowIndex, fields, mediaUrls, errors, warnings });
   }
 
-  const validRows = rows.filter(r => r.errors.length === 0).length;
-  const errorRows = rows.filter(r => r.errors.length > 0).length;
-  const warningRows = rows.filter(r => r.errors.length === 0 && r.warnings.length > 0).length;
-
-  return {
-    rows,
-    totalRows: rows.length,
-    validRows,
-    errorRows,
-    warningRows,
-    headerErrors: [],
-  };
+  return summarize(rows);
 }

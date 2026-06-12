@@ -7,7 +7,7 @@ import { ModeSelector } from '@/components/admin/bulkImport/ModeSelector';
 import { ImportProgress } from '@/components/admin/bulkImport/ImportProgress';
 import { ResultSummary } from '@/components/admin/bulkImport/ResultSummary';
 import { parseExcelFile } from '@/lib/bulkImport/parser';
-import { validateRows } from '@/lib/bulkImport/validators';
+import { validateRows, recomputeDuplicates, summarize } from '@/lib/bulkImport/validators';
 import { getColumnMap } from '@/lib/bulkImport/columnMaps';
 import { runImport } from '@/lib/bulkImport/api';
 import { annotateProductRowsWithDbChecks } from '@/lib/bulkImport/crossRowChecks';
@@ -77,6 +77,18 @@ export default function BulkImport() {
     } catch (e) {
       toast({ title: 'Parse failed', description: (e as Error).message, variant: 'destructive' });
     }
+  };
+
+  // Drop a single row from the preview (e.g. a duplicate SKU). Removing the
+  // first occurrence of a SKU clears the "duplicate" flag on later rows, so we
+  // re-derive in-file duplicates and recompute the valid/error/warning counts.
+  const handleRemoveRow = (rowIndex: number) => {
+    setSummary(prev => {
+      if (!prev) return prev;
+      const remaining = prev.rows.filter(r => r.rowIndex !== rowIndex);
+      const uniqueKey = getColumnMap(entity).uniqueKey;
+      return summarize(recomputeDuplicates(remaining, uniqueKey), prev.headerErrors);
+    });
   };
 
   const handleConfirm = async () => {
@@ -161,7 +173,7 @@ export default function BulkImport() {
               Choose a different file
             </button>
           </div>
-          <PreviewTable summary={summary} entity={entity} />
+          <PreviewTable summary={summary} entity={entity} onRemoveRow={handleRemoveRow} />
           <ModeSelector value={mode} onChange={setMode} />
           <Button onClick={handleConfirm} disabled={summary.validRows === 0}>
             Confirm import: {summary.validRows} rows

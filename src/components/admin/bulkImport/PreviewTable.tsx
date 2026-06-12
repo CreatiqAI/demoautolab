@@ -1,18 +1,25 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Entity, ValidationSummary } from '@/lib/bulkImport/types';
 
 interface Props {
   summary: ValidationSummary;
   entity: Entity;
+  /** When provided, each row shows a remove button that drops it from the import. */
+  onRemoveRow?: (rowIndex: number) => void;
 }
 
-export function PreviewTable({ summary, entity }: Props) {
+export function PreviewTable({ summary, entity, onRemoveRow }: Props) {
+  const showActions = !!onRemoveRow;
   return (
     <div className="border rounded-lg overflow-hidden">
       <Table>
-        {entity === 'component' ? <ComponentHeader /> : <ProductHeader />}
+        {entity === 'component'
+          ? <ComponentHeader showActions={showActions} />
+          : <ProductHeader showActions={showActions} />}
         <TableBody>
           {summary.rows.map((r) => {
             const hasErr = r.errors.length > 0;
@@ -27,6 +34,21 @@ export function PreviewTable({ summary, entity }: Props) {
               >
                 {entity === 'component' ? <ComponentCells r={r} /> : <ProductCells r={r} />}
                 <StatusCell errors={r.errors} warnings={r.warnings} />
+                {showActions && (
+                  <TableCell className="text-right">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      title="Remove this row from the import"
+                      onClick={() => onRemoveRow?.(r.rowIndex)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Remove row {r.rowIndex}</span>
+                    </Button>
+                  </TableCell>
+                )}
               </TableRow>
             );
           })}
@@ -36,7 +58,7 @@ export function PreviewTable({ summary, entity }: Props) {
   );
 }
 
-function ComponentHeader() {
+function ComponentHeader({ showActions }: { showActions: boolean }) {
   return (
     <TableHeader>
       <TableRow>
@@ -48,6 +70,7 @@ function ComponentHeader() {
         <TableHead className="text-right">Merchant</TableHead>
         <TableHead className="text-right">Image</TableHead>
         <TableHead>Status</TableHead>
+        {showActions && <TableHead className="w-12 text-right sr-only">Remove</TableHead>}
       </TableRow>
     </TableHeader>
   );
@@ -73,7 +96,7 @@ function ComponentCells({ r }: { r: ValidationSummary['rows'][number] }) {
   );
 }
 
-function ProductHeader() {
+function ProductHeader({ showActions }: { showActions: boolean }) {
   return (
     <TableHeader>
       <TableRow>
@@ -84,6 +107,7 @@ function ProductHeader() {
         <TableHead className="text-right">Components</TableHead>
         <TableHead className="text-right">Media</TableHead>
         <TableHead>Status</TableHead>
+        {showActions && <TableHead className="w-12 text-right sr-only">Remove</TableHead>}
       </TableRow>
     </TableHeader>
   );
