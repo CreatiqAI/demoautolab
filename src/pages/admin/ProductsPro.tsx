@@ -2829,6 +2829,7 @@ export default function ProductsPro() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">#</TableHead>
                     <TableHead>Product</TableHead>
                     <TableHead>Seller</TableHead>
                     <TableHead>Brand / Model</TableHead>
@@ -2839,8 +2840,9 @@ export default function ProductsPro() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProducts.map((product) => (
+                  {filteredProducts.map((product, index) => (
                     <TableRow key={product.id}>
+                      <TableCell className="text-muted-foreground tabular-nums">{index + 1}</TableCell>
                       <TableCell className="max-w-[280px]">
                         <div className="font-medium truncate" title={product.name}>{product.name}</div>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">

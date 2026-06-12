@@ -758,7 +758,7 @@ export default function ComponentLibraryPro() {
                       }}
                     />
                   </TableHead>
-                  <TableHead>Image</TableHead>
+                  <TableHead className="w-12">#</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
@@ -771,7 +771,7 @@ export default function ComponentLibraryPro() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {searchResults.map((component) => {
+                {searchResults.map((component, index) => {
                   const typeIcon = getTypeIcon(component.component_type);
                   return (
                     <TableRow key={component.id} id={`component-row-${component.id}`} className={`transition-colors duration-700 ${highlightedId === component.id ? 'bg-lime-100' : batchDeleteIds.has(component.id) ? 'bg-red-50/50' : ''}`}>
@@ -788,18 +788,8 @@ export default function ComponentLibraryPro() {
                           }}
                         />
                       </TableCell>
-                      <TableCell>
-                        {component.default_image_url ? (
-                          <img
-                            src={component.default_image_url}
-                            alt={component.name}
-                            className="w-12 h-12 rounded object-cover"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-lg">
-                            {typeIcon}
-                          </div>
-                        )}
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {index + 1}
                       </TableCell>
                       <TableCell>
                         <div className="font-mono text-sm">{component.component_sku}</div>
