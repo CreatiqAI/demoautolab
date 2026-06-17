@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { transformImage } from '@/lib/imageTransform';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -358,9 +359,11 @@ export default function PointsRewards() {
                     {item.image_url && (
                       <div className="w-full h-32 bg-gray-100 rounded-lg mb-3 overflow-hidden">
                         <img
-                          src={item.image_url}
+                          src={transformImage(item.image_url, { width: 320, quality: 70 })}
                           alt={item.name}
                           className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
                         />
                       </div>
                     )}
@@ -446,9 +449,11 @@ export default function PointsRewards() {
                           {redemption.reward_item?.image_url && (
                             <div className="w-16 h-16 bg-gray-100 rounded overflow-hidden flex-shrink-0">
                               <img
-                                src={redemption.reward_item.image_url}
+                                src={transformImage(redemption.reward_item.image_url, { width: 128, quality: 60 })}
                                 alt={redemption.reward_item.name}
                                 className="w-full h-full object-cover"
+                                loading="lazy"
+                                decoding="async"
                               />
                             </div>
                           )}
@@ -564,9 +569,11 @@ export default function PointsRewards() {
                 {itemToDelete.image_url && (
                   <div className="w-12 h-12 bg-gray-100 rounded overflow-hidden flex-shrink-0">
                     <img
-                      src={itemToDelete.image_url}
+                      src={transformImage(itemToDelete.image_url, { width: 96, quality: 60 })}
                       alt={itemToDelete.name}
                       className="w-full h-full object-cover"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </div>
                 )}
@@ -849,9 +856,11 @@ function CreateRewardItemDialog({ open, onOpenChange, editingItem, onSuccess }: 
               {formData.image_url && (
                 <div className="relative w-full h-32 bg-gray-100 rounded-lg overflow-hidden border">
                   <img
-                    src={formData.image_url}
+                    src={transformImage(formData.image_url, { width: 600, quality: 70 })}
                     alt="Reward preview"
                     className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <button
                     type="button"

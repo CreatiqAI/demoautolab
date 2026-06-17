@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { transformImage } from '@/lib/imageTransform';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -2224,7 +2225,7 @@ export default function Customers() {
                             rel="noopener noreferrer"
                             className="aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all"
                           >
-                            <img src={photo} alt={`Workshop ${idx + 1}`} className="w-full h-full object-cover" />
+                            <img src={transformImage(photo, { width: 240, quality: 65 })} alt={`Workshop ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                           </a>
                         ))}
                       </div>
@@ -2511,9 +2512,11 @@ export default function Customers() {
                         className="relative aspect-video rounded-lg overflow-hidden border hover:ring-2 ring-blue-500 transition-all"
                       >
                         <img
-                          src={photo}
+                          src={transformImage(photo, { width: 400, quality: 70 })}
                           alt={`Workshop photo ${idx + 1}`}
                           className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
                         />
                         <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center">
                           <ExternalLink className="h-6 w-6 text-white opacity-0 hover:opacity-100" />
@@ -3352,7 +3355,7 @@ export default function Customers() {
                                 className="block aspect-square rounded border overflow-hidden hover:ring-2 hover:ring-primary"
                                 title={`Workshop photo ${idx + 1}`}
                               >
-                                <img src={photo} alt={`Workshop ${idx + 1}`} className="w-full h-full object-cover" />
+                                <img src={transformImage(photo, { width: 240, quality: 65 })} alt={`Workshop ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                               </a>
                             ))}
                           </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { transformImage } from "@/lib/imageTransform";
 import { Star, ThumbsUp, Calendar, CheckCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -320,9 +321,11 @@ export const ReviewsSection = ({ productId, onWriteReview }: ReviewsSectionProps
                             className="rounded overflow-hidden border hover:border-blue-500 hover:shadow-md transition-all cursor-pointer bg-gray-100"
                           >
                             <img
-                              src={image.url}
+                              src={transformImage(image.url, { width: 240, quality: 65 })}
                               alt={`Review image ${index + 1}`}
                               className="w-full h-auto"
+                              loading="lazy"
+                              decoding="async"
                             />
                           </button>
                         ))}
@@ -358,9 +361,11 @@ export const ReviewsSection = ({ productId, onWriteReview }: ReviewsSectionProps
             {selectedImage && (
               <>
                 <img
-                  src={selectedImage}
+                  src={transformImage(selectedImage, { width: 1200, quality: 80 })}
                   alt="Review image"
                   className="max-w-full max-h-[95vh] w-auto h-auto object-contain"
+                  loading="lazy"
+                  decoding="async"
                 />
 
                 {/* Navigation Buttons */}

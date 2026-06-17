@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '@/lib/supabase';
+import { transformImage } from '@/lib/imageTransform';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -200,9 +201,11 @@ export default function ImageUpload({
         <div className="relative group">
           <div className="aspect-square w-full max-w-xs rounded-lg border overflow-hidden bg-gray-50">
             <img
-              src={value}
+              src={transformImage(value, { width: 600, quality: 70 })}
               alt="Uploaded image"
               className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
               onError={() => {
                 toast({
                   title: "Error",
@@ -311,9 +314,11 @@ export default function ImageUpload({
             {urlInput && urlInput.includes('/storage/v1/object/public/') && (
               <div className="aspect-video w-full max-w-xs rounded-lg border overflow-hidden bg-gray-50">
                 <img
-                  src={urlInput}
+                  src={transformImage(urlInput, { width: 600, quality: 70 })}
                   alt="Preview"
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             )}

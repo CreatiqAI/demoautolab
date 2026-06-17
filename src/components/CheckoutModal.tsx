@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AddressAutocompleteSimple from './AddressAutocompleteSimple';
 import { groupCartItemsBySeller } from '@/lib/cartGrouping';
+import { transformImage } from '@/lib/imageTransform';
 import {
   Truck,
   MapPin,
@@ -815,9 +816,11 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess: _onOrde
                         {item.component_image && (
                           <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                             <img
-                              src={item.component_image}
+                              src={transformImage(item.component_image, { width: 140, quality: 70 })}
                               alt={item.name}
                               className="w-full h-full object-cover"
+                              loading="lazy"
+                              decoding="async"
                             />
                           </div>
                         )}

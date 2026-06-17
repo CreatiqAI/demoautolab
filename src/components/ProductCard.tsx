@@ -9,6 +9,7 @@ import {
   Package
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { transformImage } from '@/lib/imageTransform';
 
 interface Product {
   id: string;
@@ -72,7 +73,7 @@ const ProductCard = ({ product, userRole = 'customer', onAddToCart }: ProductCar
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 z-10 bg-gradient-to-tr from-white/0 via-white/40 to-white/0 transform -translate-x-full group-hover:translate-x-full" style={{ transition: 'transform 0.7s ease-in-out, opacity 0.3s' }}></div>
 
         <img
-          src={imageUrl}
+          src={transformImage(imageUrl, { width: 560, quality: 70 })}
           alt={product.name}
           className="w-full h-full object-contain p-4 transition-transform duration-700 ease-out group-hover:scale-110 mix-blend-multiply"
           loading="lazy"

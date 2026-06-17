@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { transformImage } from '@/lib/imageTransform';
 import { Search, Filter, MessageSquare, Eye, ChevronLeft, ChevronRight, MapPin, Clock, Tag, X } from 'lucide-react';
 
 interface SecondhandListing {
@@ -455,8 +456,10 @@ export default function SecondhandMarketplace() {
                 <div className="relative h-48 bg-gray-200">
                   {listing.images && listing.images.length > 0 ? (
                     <img
-                      src={listing.images[0]}
+                      src={transformImage(listing.images[0], { width: 600, quality: 70 })}
                       alt={listing.title}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -551,8 +554,10 @@ export default function SecondhandMarketplace() {
                 <div className="relative">
                   <div className="relative h-96 bg-gray-200 rounded-lg overflow-hidden">
                     <img
-                      src={selectedListing.images[currentImageIndex]}
+                      src={transformImage(selectedListing.images[currentImageIndex], { width: 1000, quality: 80 })}
                       alt={`${selectedListing.title} - Image ${currentImageIndex + 1}`}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-contain"
                     />
 
@@ -588,8 +593,10 @@ export default function SecondhandMarketplace() {
                       {selectedListing.images.map((img, idx) => (
                         <img
                           key={idx}
-                          src={img}
+                          src={transformImage(img, { width: 128, quality: 60 })}
                           alt={`Thumbnail ${idx + 1}`}
+                          loading="lazy"
+                          decoding="async"
                           className={`h-16 w-16 object-cover rounded cursor-pointer ${
                             idx === currentImageIndex ? 'ring-2 ring-blue-600' : 'opacity-60'
                           }`}

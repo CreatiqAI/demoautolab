@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { transformImage } from '@/lib/imageTransform';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Input } from '@/components/ui/input';
@@ -271,8 +272,9 @@ export default function ShopDetails() {
                   centre-cropped. */}
               <div className="w-full h-[280px] sm:h-[340px] md:h-[420px] lg:h-[500px] flex items-center justify-center">
                 <img
-                  src={displayPhotos[currentPhotoIndex]}
+                  src={transformImage(displayPhotos[currentPhotoIndex], { width: 1200, quality: 75 })}
                   alt={shop.business_name}
+                  decoding="async"
                   className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
                 />
               </div>
@@ -523,8 +525,10 @@ export default function ShopDetails() {
                 }}
               >
                 <img
-                  src={displayPhotos[currentPhotoIndex]}
+                  src={transformImage(displayPhotos[currentPhotoIndex], { width: 1200, quality: 80 })}
                   alt={shop.business_name}
+                  loading="lazy"
+                  decoding="async"
                   className="max-w-full max-h-full object-contain drop-shadow-2xl rounded-md"
                 />
 

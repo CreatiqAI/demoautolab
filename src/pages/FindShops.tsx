@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { transformImage } from '@/lib/imageTransform';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Input } from '@/components/ui/input';
@@ -252,8 +253,10 @@ export default function FindShops() {
                     {hasPhotos ? (
                       <>
                         <img
-                          src={shop.shop_photos[currentPhotoIndex]}
+                          src={transformImage(shop.shop_photos[currentPhotoIndex], { width: 560, quality: 70 })}
                           alt={shop.business_name}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover"
                         />
                         {shop.shop_photos.length > 1 && (

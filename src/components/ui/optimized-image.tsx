@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { transformImage } from '@/lib/imageTransform';
 
 interface OptimizedImageProps {
   src: string;
@@ -7,6 +8,8 @@ interface OptimizedImageProps {
   fallback?: string;
   sizes?: string;
   priority?: boolean;
+  /** Target render width passed to the Supabase image CDN. Defaults to 800. */
+  transformWidth?: number;
   onLoad?: () => void;
   onError?: () => void;
 }
@@ -18,6 +21,7 @@ const OptimizedImage = ({
   fallback = '/placeholder.svg',
   sizes,
   priority = false,
+  transformWidth = 800,
   onLoad,
   onError
 }: OptimizedImageProps) => {
@@ -37,19 +41,9 @@ const OptimizedImage = ({
     onError?.();
   };
 
-  // Generate WebP version URL if the source is from Supabase
-  const getOptimizedSrc = (originalSrc: string) => {
-    if (originalSrc.includes('supabase')) {
-      // For Supabase, you could add image transformations
-      // Example: add quality=80 parameter for better compression
-      const url = new URL(originalSrc);
-      url.searchParams.set('quality', '80');
-      return url.toString();
-    }
-    return originalSrc;
-  };
-
-  const optimizedSrc = getOptimizedSrc(imageSrc);
+  // Rewrite Supabase Storage object URLs to resized CDN URLs. Non-Supabase URLs
+  // (and the local fallback) pass through unchanged.
+  const optimizedSrc = transformImage(imageSrc, { width: transformWidth, quality: 80 });
 
   return (
     <div className="relative">

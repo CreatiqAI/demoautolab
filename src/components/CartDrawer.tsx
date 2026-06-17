@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Minus, Plus, Trash2, ShoppingBag, X, ArrowRight, Store, Building2 } from 'lucide-react';
 import CheckoutModal from '@/components/CheckoutModal';
 import { groupCartItemsBySeller } from '@/lib/cartGrouping';
+import { transformImage } from '@/lib/imageTransform';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -260,9 +261,11 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                               <div className="w-14 h-14 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-transparent group-hover/item:ring-lime-500 transition-all">
                                 {item.component_image ? (
                                   <img
-                                    src={item.component_image}
+                                    src={transformImage(item.component_image, { width: 120, quality: 70 })}
                                     alt={item.name}
                                     className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-300"
+                                    loading="lazy"
+                                    decoding="async"
                                   />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center">

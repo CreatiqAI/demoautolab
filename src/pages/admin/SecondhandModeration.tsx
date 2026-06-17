@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { transformImage } from '@/lib/imageTransform';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -374,9 +375,11 @@ export default function SecondhandModeration() {
                         <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                           {listing.images && listing.images.length > 0 ? (
                             <img
-                              src={listing.images[0]}
+                              src={transformImage(listing.images[0], { width: 160, quality: 65 })}
                               alt={listing.title}
                               className="w-full h-full object-cover"
+                              loading="lazy"
+                              decoding="async"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
@@ -486,9 +489,11 @@ export default function SecondhandModeration() {
                 <div>
                   <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative">
                     <img
-                      src={selectedListing.images[currentImageIndex]}
+                      src={transformImage(selectedListing.images[currentImageIndex], { width: 1000, quality: 80 })}
                       alt={`Product ${currentImageIndex + 1}`}
                       className="w-full h-full object-contain"
+                      loading="lazy"
+                      decoding="async"
                     />
                     {selectedListing.images.length > 1 && (
                       <>
@@ -520,7 +525,7 @@ export default function SecondhandModeration() {
                             idx === currentImageIndex ? 'border-lime-600' : 'border-gray-200'
                           }`}
                         >
-                          <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                          <img src={transformImage(img, { width: 160, quality: 65 })} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                         </button>
                       ))}
                     </div>

@@ -10,6 +10,7 @@ import { Search, Package, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import PageTransition from '@/components/PageTransition';
+import { transformImage } from '@/lib/imageTransform';
 
 interface Product {
   id: string;
@@ -639,7 +640,7 @@ const Catalog = () => {
                             />
                           ) : (
                             <img
-                              src={primaryMedia.url}
+                              src={transformImage(primaryMedia.url, { width: 600, quality: 70 })}
                               alt={product.name}
                               className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                               loading="lazy"

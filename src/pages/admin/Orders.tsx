@@ -18,6 +18,7 @@ import type { OrderStatus } from '@/constants/orderStatuses';
 import ShipmentCreationDialog from '@/components/admin/ShipmentCreationDialog';
 import SellerInvoice from '@/components/invoice/SellerInvoice';
 import { splitOrderBySeller, type InvoiceSlice } from '@/lib/orderInvoices';
+import { transformImage } from '@/lib/imageTransform';
 
 declare global {
   interface Window {
@@ -803,7 +804,7 @@ export default function Orders() {
                       {items.map((item) => (
                         <div key={item.id} className="flex items-center gap-3 px-3 py-2.5">
                           {item.component_image ? (
-                            <img src={item.component_image} alt={item.component_name} className="w-11 h-11 rounded-md border object-cover flex-shrink-0" />
+                            <img src={transformImage(item.component_image, { width: 120, quality: 70 })} alt={item.component_name} className="w-11 h-11 rounded-md border object-cover flex-shrink-0" loading="lazy" decoding="async" />
                           ) : (
                             <div className="w-11 h-11 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
                               <Package className="h-4 w-4 text-muted-foreground" />

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { transformImage } from '@/lib/imageTransform';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -325,9 +326,11 @@ export default function ReviewModeration() {
                   className="relative rounded overflow-hidden border border-gray-300 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer group bg-gray-100"
                 >
                   <img
-                    src={image.image_url}
+                    src={transformImage(image.image_url, { width: 240, quality: 65 })}
                     alt={`Review image ${index + 1}`}
                     className="w-full h-auto"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity flex items-center justify-center">
                     <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">
@@ -561,9 +564,11 @@ export default function ReviewModeration() {
             {selectedImage && (
               <>
                 <img
-                  src={selectedImage}
+                  src={transformImage(selectedImage, { width: 1200, quality: 80 })}
                   alt="Review image"
                   className="max-w-full max-h-[95vh] w-auto h-auto object-contain"
+                  loading="lazy"
+                  decoding="async"
                 />
 
                 {/* Navigation Buttons */}

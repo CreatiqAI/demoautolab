@@ -12,6 +12,7 @@ import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, Store, Building2 } from 'l
 import Header from '@/components/Header';
 import CheckoutModal from '@/components/CheckoutModal';
 import { groupCartItemsBySeller } from '@/lib/cartGrouping';
+import { transformImage } from '@/lib/imageTransform';
 
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart, getTotalItems, clearCart } = useCart();
@@ -221,9 +222,11 @@ export default function Cart() {
                             {item.component_image && (
                               <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                                 <img
-                                  src={item.component_image}
+                                  src={transformImage(item.component_image, { width: 160, quality: 70 })}
                                   alt={item.name}
                                   className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  decoding="async"
                                 />
                               </div>
                             )}

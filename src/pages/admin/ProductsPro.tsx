@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { transformImage } from '@/lib/imageTransform';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -1634,7 +1635,7 @@ export default function ProductsPro() {
                               >
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   {component.default_image_url ? (
-                                    <img src={component.default_image_url} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                                    <img src={transformImage(component.default_image_url, { width: 64, quality: 60 })} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />
                                   ) : (
                                     <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
                                       <Package className="h-4 w-4 text-gray-400" />
@@ -1729,7 +1730,7 @@ export default function ProductsPro() {
                                 </div>
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   {component.default_image_url ? (
-                                    <img src={component.default_image_url} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                                    <img src={transformImage(component.default_image_url, { width: 64, quality: 60 })} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />
                                   ) : (
                                     <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
                                       <Package className="h-4 w-4 text-gray-400" />
@@ -1841,7 +1842,7 @@ export default function ProductsPro() {
                                       <video src={media.url} className="w-full h-full object-cover" preload="metadata" />
                                     )
                                   ) : (
-                                    <img src={media.url} alt={`Media ${index + 1}`} className="w-full h-full object-cover" />
+                                    <img src={transformImage(media.url, { width: 320, quality: 70 })} alt={`Media ${index + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                   )}
                                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
                                     {!isVideo && (
@@ -1992,7 +1993,7 @@ export default function ProductsPro() {
                                       <video src={media.url} className="w-full h-full object-cover" preload="metadata" />
                                     )
                                   ) : (
-                                    <img src={media.url} alt={`Media ${index + 1}`} className="w-full h-full object-cover" />
+                                    <img src={transformImage(media.url, { width: 320, quality: 70 })} alt={`Media ${index + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                   )}
                                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
                                     {!isVideo && (
@@ -2142,7 +2143,7 @@ export default function ProductsPro() {
                                       <video src={media.url} className="w-full h-full object-cover" preload="metadata" />
                                     )
                                   ) : (
-                                    <img src={media.url} alt={`Media ${index + 1}`} className="w-full h-full object-cover" />
+                                    <img src={transformImage(media.url, { width: 320, quality: 70 })} alt={`Media ${index + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                   )}
                                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
                                     {!isVideo && (
@@ -3074,7 +3075,7 @@ export default function ProductsPro() {
                               const primary = (product.product_images_new as any[] | undefined)?.find((i) => i.is_primary)
                                 ?? (product.product_images_new as any[] | undefined)?.[0];
                               return primary?.url ? (
-                                <img src={primary.url} alt={product.name} className="w-20 h-20 rounded-lg border object-cover" />
+                                <img src={transformImage(primary.url, { width: 160, quality: 60 })} alt={product.name} className="w-20 h-20 rounded-lg border object-cover" loading="lazy" decoding="async" />
                               ) : (
                                 <div className="w-20 h-20 rounded-lg border bg-gray-100 flex items-center justify-center">
                                   <Package className="h-6 w-6 text-gray-400" />
@@ -3361,9 +3362,11 @@ export default function ProductsPro() {
                             />
                           ) : (
                             <img
-                              src={image.url}
+                              src={transformImage(image.url, { width: 1000, quality: 75 })}
                               alt={image.alt_text || `Product image ${index + 1}`}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                              decoding="async"
                               onError={(e) => {
                                 e.currentTarget.src = '/placeholder-image.png';
                               }}
@@ -3408,9 +3411,11 @@ export default function ProductsPro() {
                               title="Click to enlarge component image"
                             >
                               <img
-                                src={component.default_image_url}
+                                src={transformImage(component.default_image_url, { width: 128, quality: 60 })}
                                 alt={component.name}
                                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                loading="lazy"
+                                decoding="async"
                                 onError={(e) => {
                                   e.currentTarget.style.display = 'none';
                                 }}
@@ -3496,7 +3501,7 @@ export default function ProductsPro() {
             </DialogHeader>
             <div className="flex justify-center overflow-hidden">
               <img
-                src={viewingImage}
+                src={transformImage(viewingImage, { width: 1200, quality: 80 })}
                 alt={viewingImageInfo?.title || "Full size view"}
                 className="max-w-full max-h-[75vh] object-contain rounded-lg"
                 loading="lazy"

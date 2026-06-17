@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { transformImage } from '@/lib/imageTransform';
 import { useAuth } from '@/hooks/useAuth';
 import {
   useReturns,
@@ -924,9 +925,11 @@ export default function AdminReturns() {
                         rel="noopener noreferrer"
                       >
                         <img
-                          src={img.image_url}
+                          src={transformImage(img.image_url, { width: 240, quality: 65 })}
                           alt="Return photo"
                           className="w-full aspect-square object-cover rounded-lg border hover:opacity-80"
+                          loading="lazy"
+                          decoding="async"
                         />
                       </a>
                     ))}

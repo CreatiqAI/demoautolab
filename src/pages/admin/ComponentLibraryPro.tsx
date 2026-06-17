@@ -932,7 +932,7 @@ export default function ComponentLibraryPro() {
                       <TableRow key={component.id} className="opacity-70">
                         <TableCell>
                           {component.default_image_url ? (
-                            <img src={component.default_image_url} alt={component.name} className="w-10 h-10 rounded object-cover" />
+                            <img src={transformImage(component.default_image_url, { width: 96, quality: 60 })} alt={component.name} className="w-10 h-10 rounded object-cover" loading="lazy" decoding="async" />
                           ) : (
                             <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-sm">📦</div>
                           )}
@@ -989,7 +989,7 @@ export default function ComponentLibraryPro() {
                           <div key={item.id} className="flex items-center justify-between bg-white rounded-md px-3 py-2 border">
                             <div className="flex items-center gap-3">
                               {item.default_image_url ? (
-                                <img src={item.default_image_url} alt={item.name} className="w-8 h-8 rounded object-cover" />
+                                <img src={transformImage(item.default_image_url, { width: 64, quality: 60 })} alt={item.name} className="w-8 h-8 rounded object-cover" loading="lazy" decoding="async" />
                               ) : (
                                 <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-xs">📦</div>
                               )}
@@ -1133,7 +1133,7 @@ export default function ComponentLibraryPro() {
                       }}
                     >
                       {component.default_image_url ? (
-                        <img src={component.default_image_url} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                        <img src={transformImage(component.default_image_url, { width: 64, quality: 60 })} alt={component.name} className="w-8 h-8 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />
                       ) : (
                         <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0 text-xs">📦</div>
                       )}
