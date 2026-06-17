@@ -40,7 +40,11 @@ export function transformImage(
   if (width) params.set('width', String(Math.round(width)));
   if (height) params.set('height', String(Math.round(height)));
   if (quality) params.set('quality', String(quality));
-  if (width && height && resize) params.set('resize', resize);
+  // IMPORTANT: always send `resize`. Supabase only preserves aspect ratio when
+  // `resize` is present — a width-only (or height-only) request WITHOUT it leaves
+  // the other dimension at the original size, squishing the image into a sliver.
+  // With a single dimension + resize=contain it scales proportionally.
+  params.set('resize', resize);
 
   const base = url.replace(OBJECT_PATH, RENDER_PATH);
   const sep = base.includes('?') ? '&' : '?';
