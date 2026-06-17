@@ -618,9 +618,9 @@ const ProductDetails = () => {
                                   isExpanded ? 'w-20 h-20' : 'w-12 h-12'
                                 )}>
                                   <img
-                                    src={transformImage(component.default_image_url, { width: 160, quality: 65 })}
+                                    src={transformImage(component.default_image_url, { width: 160, quality: 75 })}
                                     alt={component.name}
-                                    className="w-full h-full object-cover"
+                                    className="w-full h-full object-contain p-0.5"
                                     loading="lazy"
                                     decoding="async"
                                     onClick={(e) => {

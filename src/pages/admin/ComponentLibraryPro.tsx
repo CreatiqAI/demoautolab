@@ -796,9 +796,9 @@ export default function ComponentLibraryPro() {
                       <TableCell>
                         {component.default_image_url ? (
                           <img
-                            src={transformImage(component.default_image_url, { width: 96, quality: 60 })}
+                            src={transformImage(component.default_image_url, { width: 128, quality: 75 })}
                             alt={component.name}
-                            className="w-12 h-12 rounded object-cover"
+                            className="w-12 h-12 rounded border border-slate-200 bg-white object-contain p-0.5"
                             loading="lazy"
                             decoding="async"
                           />
