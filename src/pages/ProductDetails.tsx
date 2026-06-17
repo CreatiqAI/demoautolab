@@ -18,6 +18,7 @@ import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { ProductInstallationGuide } from '@/types/product-types';
 import { cn } from '@/lib/utils';
+import { transformImage } from '@/lib/imageTransform';
 
 interface ComponentData {
   id: string;
@@ -432,7 +433,7 @@ const ProductDetails = () => {
                     ) : (
                       <>
                         <img
-                          src={currentMedia?.url || primaryImage?.url || '/placeholder.svg'}
+                          src={transformImage(currentMedia?.url || primaryImage?.url || '/placeholder.svg', { width: 900 })}
                           alt={currentMedia?.alt_text || product.name}
                           className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700"
                           loading="lazy"
@@ -489,10 +490,11 @@ const ProductDetails = () => {
                         );
                       })() : (
                         <img
-                          src={image.url}
+                          src={transformImage(image.url, { width: 128, quality: 60 })}
                           alt={image.alt_text || `View ${index + 1}`}
                           className="w-full h-full object-cover"
                           loading="lazy"
+                          decoding="async"
                         />
                       )}
                     </button>
@@ -616,10 +618,11 @@ const ProductDetails = () => {
                                   isExpanded ? 'w-20 h-20' : 'w-12 h-12'
                                 )}>
                                   <img
-                                    src={component.default_image_url}
+                                    src={transformImage(component.default_image_url, { width: 160, quality: 65 })}
                                     alt={component.name}
                                     className="w-full h-full object-cover"
                                     loading="lazy"
+                                    decoding="async"
                                     onClick={(e) => {
                                       if (isExpanded) {
                                         e.stopPropagation();
@@ -1014,7 +1017,7 @@ const ProductDetails = () => {
                       )
                     ) : (
                       <img
-                        src={current.url}
+                        src={transformImage(current.url, { width: 1600, quality: 80 })}
                         alt="Product image"
                         className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain bg-white"
                       />

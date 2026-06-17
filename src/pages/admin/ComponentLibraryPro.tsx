@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
+import { transformImage } from '@/lib/imageTransform';
 import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock, RotateCcw, AlertTriangle, Copy, ChevronUp, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -759,6 +760,7 @@ export default function ComponentLibraryPro() {
                     />
                   </TableHead>
                   <TableHead className="w-12">#</TableHead>
+                  <TableHead>Image</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
@@ -790,6 +792,21 @@ export default function ComponentLibraryPro() {
                       </TableCell>
                       <TableCell className="text-muted-foreground tabular-nums">
                         {index + 1}
+                      </TableCell>
+                      <TableCell>
+                        {component.default_image_url ? (
+                          <img
+                            src={transformImage(component.default_image_url, { width: 96, quality: 60 })}
+                            alt={component.name}
+                            className="w-12 h-12 rounded object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-lg">
+                            {typeIcon}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="font-mono text-sm">{component.component_sku}</div>
