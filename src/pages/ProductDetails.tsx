@@ -615,7 +615,7 @@ const ProductDetails = () => {
                               {component.default_image_url && (
                                 <div className={cn(
                                   "flex-shrink-0 rounded-lg overflow-hidden bg-white border transition-all duration-200",
-                                  isExpanded ? 'w-20 h-20' : 'w-12 h-12'
+                                  isExpanded ? 'w-16 h-20' : 'w-12 h-16'
                                 )}>
                                   <img
                                     src={transformImage(component.default_image_url, { width: 160, quality: 75 })}
