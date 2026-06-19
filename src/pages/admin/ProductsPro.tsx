@@ -53,6 +53,8 @@ interface InstallationFormData {
   has_installation_guide: boolean;
   recommended_time: string;
   workman_power: number;
+  dealer_price: number;
+  rsp: number;
   installation_price: number;
   installation_videos: InstallationVideoForm[];
   difficulty_level: 'easy' | 'medium' | 'hard' | 'expert';
@@ -179,6 +181,8 @@ export default function ProductsPro() {
       has_installation_guide: false,
       recommended_time: '',
       workman_power: 1,
+      dealer_price: 0,
+      rsp: 0,
       installation_price: 0,
       installation_videos: [],
       difficulty_level: 'medium',
@@ -1096,6 +1100,8 @@ export default function ProductsPro() {
           product_id: product.id,
           recommended_time: formData.installation.recommended_time || null,
           workman_power: formData.installation.workman_power || 1,
+          dealer_price: formData.installation.dealer_price || null,
+          rsp: formData.installation.rsp || null,
           installation_price: formData.installation.installation_price || null,
           installation_videos: finalVideos,
           difficulty_level: formData.installation.difficulty_level || 'medium',
@@ -1174,6 +1180,8 @@ export default function ProductsPro() {
         has_installation_guide: false,
         recommended_time: '',
         workman_power: 1,
+        dealer_price: 0,
+        rsp: 0,
         installation_price: 0,
         installation_videos: [],
         difficulty_level: 'medium',
@@ -1240,6 +1248,8 @@ export default function ProductsPro() {
         has_installation_guide: true,
         recommended_time: installationData.recommended_time || '',
         workman_power: installationData.workman_power || 1,
+        dealer_price: installationData.dealer_price || 0,
+        rsp: installationData.rsp || 0,
         installation_price: installationData.installation_price || 0,
         installation_videos: installationData.installation_videos || [],
         difficulty_level: installationData.difficulty_level || 'medium',
@@ -1248,6 +1258,8 @@ export default function ProductsPro() {
         has_installation_guide: false,
         recommended_time: '',
         workman_power: 1,
+        dealer_price: 0,
+        rsp: 0,
         installation_price: 0,
         installation_videos: [],
         difficulty_level: 'medium',
@@ -2387,7 +2399,7 @@ export default function ProductsPro() {
                       {formData.installation.has_installation_guide && (
                         <>
                           {/* Installation Details Grid */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <Label className="flex items-center gap-1">
                                 <Clock className="h-4 w-4" />
@@ -2415,6 +2427,44 @@ export default function ProductsPro() {
                                 onChange={(e) => setFormData(prev => ({
                                   ...prev,
                                   installation: { ...prev.installation, workman_power: parseInt(e.target.value) || 1 }
+                                }))}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Pricing Grid — Dealer Price, RSP, Installation Price */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <DollarSign className="h-4 w-4" />
+                                Dealer Price (RM)
+                              </Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={formData.installation.dealer_price}
+                                onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  installation: { ...prev.installation, dealer_price: parseFloat(e.target.value) || 0 }
+                                }))}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <DollarSign className="h-4 w-4" />
+                                RSP (RM)
+                              </Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={formData.installation.rsp}
+                                onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  installation: { ...prev.installation, rsp: parseFloat(e.target.value) || 0 }
                                 }))}
                               />
                             </div>

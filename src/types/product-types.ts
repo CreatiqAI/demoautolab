@@ -226,6 +226,8 @@ export interface ProductInstallationGuide {
   product_id: string;
   recommended_time?: string;
   workman_power?: number;
+  dealer_price?: number;
+  rsp?: number;
   installation_price?: number;
   installation_videos: InstallationVideo[];
   difficulty_level?: 'easy' | 'medium' | 'hard' | 'expert';

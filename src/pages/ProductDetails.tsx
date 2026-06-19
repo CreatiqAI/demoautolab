@@ -820,10 +820,26 @@ const ProductDetails = () => {
                         </div>
                       )}
 
+                      {installationGuide.dealer_price && installationGuide.dealer_price > 0 && (
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                          <DollarSign className="h-5 w-5 text-slate-400 mb-2" />
+                          <p className="text-xs font-medium text-slate-500 mb-1">Dealer Price</p>
+                          <p className="font-semibold text-gray-700">{formatPrice(installationGuide.dealer_price)}</p>
+                        </div>
+                      )}
+
+                      {installationGuide.rsp && installationGuide.rsp > 0 && (
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                          <DollarSign className="h-5 w-5 text-slate-400 mb-2" />
+                          <p className="text-xs font-medium text-slate-500 mb-1">RSP</p>
+                          <p className="font-semibold text-gray-700">{formatPrice(installationGuide.rsp)}</p>
+                        </div>
+                      )}
+
                       {installationGuide.installation_price && installationGuide.installation_price > 0 && (
                         <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                           <DollarSign className="h-5 w-5 text-slate-400 mb-2" />
-                          <p className="text-xs font-medium text-slate-500 mb-1">Installation Fee</p>
+                          <p className="text-xs font-medium text-slate-500 mb-1">Installation Price</p>
                           <p className="font-semibold text-gray-700">{formatPrice(installationGuide.installation_price)}</p>
                         </div>
                       )}
