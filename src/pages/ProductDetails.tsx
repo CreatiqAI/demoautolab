@@ -19,6 +19,7 @@ import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { ProductInstallationGuide } from '@/types/product-types';
 import { cn } from '@/lib/utils';
 import { transformImage } from '@/lib/imageTransform';
+import CatalogProductCard, { type CatalogCardProduct } from '@/components/CatalogProductCard';
 
 interface ComponentData {
   id: string;
@@ -60,18 +61,6 @@ interface Product {
   vendor?: { id: string; business_name: string } | null;
 }
 
-interface SimilarProduct {
-  id: string;
-  name: string;
-  slug: string;
-  brand: string | null;
-  model: string | null;
-  year_from: number | null;
-  year_to: number | null;
-  image_url: string | null;
-  image_type: string | null;
-}
-
 const ProductDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -90,7 +79,7 @@ const ProductDetails = () => {
     }
   };
   const [product, setProduct] = useState<Product | null>(null);
-  const [similarProducts, setSimilarProducts] = useState<SimilarProduct[]>([]);
+  const [similarProducts, setSimilarProducts] = useState<CatalogCardProduct[]>([]);
   const [components, setComponents] = useState<ComponentData[]>([]);
   const [localCart, setLocalCart] = useState<CartItem[]>([]);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -145,7 +134,10 @@ const ProductDetails = () => {
       const { data, error } = await supabase
         .from('products_new' as any)
         .select(`
-          id, name, slug, brand, model, year_from, year_to, category_id,
+          id, name, slug, brand, model, year_from, year_to, category_id, featured,
+          categories:category_id ( name ),
+          vendors:vendor_id ( business_name ),
+          product_components ( count ),
           product_images_new ( url, is_primary, sort_order, media_type )
         `)
         .eq('active', true)
@@ -183,14 +175,17 @@ const ProductDetails = () => {
           item: {
             id: p.id,
             name: p.name,
-            slug: p.slug,
             brand: p.brand,
             model: p.model,
             year_from: p.year_from,
             year_to: p.year_to,
+            category_name: p.categories?.name ?? null,
+            vendor_name: p.vendors?.business_name ?? null,
+            component_count: p.product_components?.[0]?.count ?? 0,
+            featured: !!p.featured,
             image_url: img.url,
             image_type: img.type,
-          } as SimilarProduct,
+          } as CatalogCardProduct,
         };
       });
 
@@ -1076,55 +1071,13 @@ const ProductDetails = () => {
               </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4">
-              {similarProducts.map((sp) => {
-                const isVideo = sp.image_type === 'video';
-                const imageUrl = sp.image_url || '/placeholder.svg';
-                return (
-                  <div
-                    key={sp.id}
-                    onClick={() => navigate(`/product/${sp.id}`)}
-                    className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group flex flex-col"
-                  >
-                    <div className="relative aspect-square overflow-hidden bg-gray-50">
-                      {isVideo ? (
-                        <video
-                          src={`${imageUrl}#t=0.1`}
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
-                          muted
-                          playsInline
-                          preload="metadata"
-                        />
-                      ) : (
-                        <img
-                          src={transformImage(imageUrl, { width: 400, quality: 70 })}
-                          alt={sp.name}
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
-                          loading="lazy"
-                          decoding="async"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/placeholder.svg';
-                          }}
-                        />
-                      )}
-                    </div>
-                    <div className="p-2.5 sm:p-3 flex flex-col flex-1">
-                      {sp.brand && (
-                        <span className="inline-block w-fit px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[9px] font-semibold rounded uppercase tracking-wide mb-1 truncate max-w-full">
-                          {sp.brand}
-                        </span>
-                      )}
-                      <h3 className="text-[11px] sm:text-xs font-semibold text-gray-900 line-clamp-2 leading-snug flex-1">
-                        {sp.name}
-                      </h3>
-                      {sp.year_from && sp.year_to && (
-                        <span className="text-[10px] text-gray-400 mt-1.5">
-                          {sp.year_from}–{sp.year_to}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {similarProducts.map((sp) => (
+                <CatalogProductCard
+                  key={sp.id}
+                  product={sp}
+                  onClick={() => navigate(`/product/${sp.id}`)}
+                />
+              ))}
             </div>
           </div>
         )}
