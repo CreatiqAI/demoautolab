@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -60,10 +60,37 @@ interface Product {
   vendor?: { id: string; business_name: string } | null;
 }
 
+interface SimilarProduct {
+  id: string;
+  name: string;
+  slug: string;
+  brand: string | null;
+  model: string | null;
+  year_from: number | null;
+  year_to: number | null;
+  image_url: string | null;
+  image_type: string | null;
+}
+
 const ProductDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Return to the catalog with the filters/search the user came in with.
+  // Falls back to in-app history, then a bare catalog, for direct landings.
+  const handleBackToCatalog = () => {
+    const catalogSearch = (location.state as { catalogSearch?: string } | null)?.catalogSearch;
+    if (typeof catalogSearch === 'string') {
+      navigate(catalogSearch ? `/catalog?${catalogSearch}` : '/catalog');
+    } else if (location.key !== 'default') {
+      navigate(-1);
+    } else {
+      navigate('/catalog');
+    }
+  };
   const [product, setProduct] = useState<Product | null>(null);
+  const [similarProducts, setSimilarProducts] = useState<SimilarProduct[]>([]);
   const [components, setComponents] = useState<ComponentData[]>([]);
   const [localCart, setLocalCart] = useState<CartItem[]>([]);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -90,6 +117,90 @@ const ProductDetails = () => {
       fetchInstallationGuide();
     }
   }, [id]);
+
+  // Recommend related products once the current product is loaded.
+  useEffect(() => {
+    if (product) {
+      fetchSimilarProducts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id]);
+
+  const fetchSimilarProducts = async () => {
+    if (!product) return;
+
+    const brand = product.brand;
+    const categoryId = (product as any).category_id as string | null | undefined;
+
+    // Match on the same brand and/or category; bail if we have nothing to match on.
+    const orFilters: string[] = [];
+    if (brand) orFilters.push(`brand.eq.${brand}`);
+    if (categoryId) orFilters.push(`category_id.eq.${categoryId}`);
+    if (orFilters.length === 0) {
+      setSimilarProducts([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('products_new' as any)
+        .select(`
+          id, name, slug, brand, model, year_from, year_to, category_id,
+          product_images_new ( url, is_primary, sort_order, media_type )
+        `)
+        .eq('active', true)
+        .eq('approval_status', 'APPROVED')
+        .neq('id', product.id)
+        .or(orFilters.join(','))
+        .limit(24);
+
+      if (error || !data) {
+        setSimilarProducts([]);
+        return;
+      }
+
+      // Pick the best thumbnail (primary first, prefer images over videos).
+      const pickImage = (imgs: any[] | null) => {
+        if (!imgs || imgs.length === 0) return { url: null, type: 'image' };
+        const sorted = [...imgs].sort(
+          (a, b) =>
+            (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) ||
+            (a.sort_order ?? 999) - (b.sort_order ?? 999)
+        );
+        const chosen = sorted.find((i) => i.media_type !== 'video') || sorted[0];
+        return { url: chosen.url, type: chosen.media_type || 'image' };
+      };
+
+      // Rank by relevance: same model > same brand > same category.
+      const scored = (data as any[]).map((p) => {
+        const img = pickImage(p.product_images_new);
+        const score =
+          (p.model && product.model && p.model === product.model ? 4 : 0) +
+          (p.brand && brand && p.brand === brand ? 2 : 0) +
+          (p.category_id && categoryId && p.category_id === categoryId ? 1 : 0);
+        return {
+          score,
+          item: {
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            brand: p.brand,
+            model: p.model,
+            year_from: p.year_from,
+            year_to: p.year_to,
+            image_url: img.url,
+            image_type: img.type,
+          } as SimilarProduct,
+        };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      setSimilarProducts(scored.slice(0, 8).map((s) => s.item));
+    } catch {
+      // Recommendations are best-effort; never block the page on failure.
+      setSimilarProducts([]);
+    }
+  };
 
   const fetchInstallationGuide = async () => {
     if (!id) return;
@@ -379,7 +490,7 @@ const ProductDetails = () => {
         <nav className="mb-3 md:mb-6">
           <Button
             variant="ghost"
-            onClick={() => navigate('/catalog')}
+            onClick={handleBackToCatalog}
             className="text-xs uppercase tracking-[0.2em] font-bold px-0 text-slate-500 hover:bg-transparent hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -954,6 +1065,69 @@ const ProductDetails = () => {
             </Card>
           </Collapsible>
         </div>
+
+        {/* Similar Products */}
+        {similarProducts.length > 0 && (
+          <div className="mt-6 md:mt-8">
+            <div className="flex items-end justify-between mb-4">
+              <div>
+                <h2 className="text-lg md:text-xl font-bold text-[#0f172a] tracking-wide">Similar Products</h2>
+                <p className="text-sm text-slate-500 font-light mt-0.5">You might also be interested in these</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4">
+              {similarProducts.map((sp) => {
+                const isVideo = sp.image_type === 'video';
+                const imageUrl = sp.image_url || '/placeholder.svg';
+                return (
+                  <div
+                    key={sp.id}
+                    onClick={() => navigate(`/product/${sp.id}`)}
+                    className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group flex flex-col"
+                  >
+                    <div className="relative aspect-square overflow-hidden bg-gray-50">
+                      {isVideo ? (
+                        <video
+                          src={`${imageUrl}#t=0.1`}
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                          muted
+                          playsInline
+                          preload="metadata"
+                        />
+                      ) : (
+                        <img
+                          src={transformImage(imageUrl, { width: 400, quality: 70 })}
+                          alt={sp.name}
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/placeholder.svg';
+                          }}
+                        />
+                      )}
+                    </div>
+                    <div className="p-2.5 sm:p-3 flex flex-col flex-1">
+                      {sp.brand && (
+                        <span className="inline-block w-fit px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[9px] font-semibold rounded uppercase tracking-wide mb-1 truncate max-w-full">
+                          {sp.brand}
+                        </span>
+                      )}
+                      <h3 className="text-[11px] sm:text-xs font-semibold text-gray-900 line-clamp-2 leading-snug flex-1">
+                        {sp.name}
+                      </h3>
+                      {sp.year_from && sp.year_to && (
+                        <span className="text-[10px] text-gray-400 mt-1.5">
+                          {sp.year_from}–{sp.year_to}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sticky Mobile Cart Bar */}

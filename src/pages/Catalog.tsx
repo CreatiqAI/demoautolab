@@ -183,7 +183,9 @@ const Catalog = () => {
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
   };
 
-  const handleProductView = (id: string) => navigate(`/product/${id}`);
+  // Carry the active catalog filters/search so "Back to Catalog" can restore them.
+  const handleProductView = (id: string) =>
+    navigate(`/product/${id}`, { state: { catalogSearch: searchParams.toString() } });
 
   const categoryName = useMemo(
     () => categories.find((c) => c.id === selectedCategory)?.name,
@@ -276,8 +278,8 @@ const Catalog = () => {
           )}
         </div>
 
-        {/* Hover specs overlay — bottom half of card */}
-        <div className="absolute top-[50%] left-0 right-0 bottom-0 flex items-center justify-center px-2 py-1.5 pointer-events-none">
+        {/* Hover specs overlay — desktop only (hidden on touch where hover sticks and breaks the layout) */}
+        <div className="absolute top-[50%] left-0 right-0 bottom-0 hidden [@media(hover:hover)]:flex items-center justify-center px-2 py-1.5 pointer-events-none">
           <div className="backdrop-blur-lg bg-black/5 rounded-lg p-2.5 border-2 border-white/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out w-full h-full flex flex-col justify-center overflow-y-auto shadow-lg no-scrollbar">
             <div className="mb-1.5">
               <div className="flex items-center gap-1 mb-1">
@@ -333,6 +335,23 @@ const Catalog = () => {
           <h3 className="font-sans text-gray-900 text-[11px] sm:text-xs font-semibold mb-1.5 sm:mb-2 line-clamp-2 leading-snug flex-1">
             {product.name}
           </h3>
+
+          {/* Inline specs for touch devices (hover overlay handles desktop) */}
+          {(product.model || (product.year_from && product.year_to)) && (
+            <div className="[@media(hover:hover)]:hidden flex flex-wrap gap-1 mb-1.5">
+              {product.model && (
+                <span className="inline-flex items-center px-1.5 py-0.5 bg-lime-50 text-lime-700 text-[9px] font-semibold rounded border border-lime-100 truncate max-w-full">
+                  {product.model}
+                </span>
+              )}
+              {product.year_from && product.year_to && (
+                <span className="inline-flex items-center px-1.5 py-0.5 bg-gray-50 text-gray-600 text-[9px] font-medium rounded border border-gray-100">
+                  {product.year_from}–{product.year_to}
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between text-[8px] sm:text-[9px] text-gray-400 pt-1 sm:pt-1.5 border-t border-gray-100">
             <span className="uppercase tracking-wider font-medium truncate max-w-[60%]">
               {product.category_name || 'Details'}
