@@ -240,7 +240,7 @@ const Register = () => {
       </div>
 
       {/* Right Side - Form */}
-      <div className="w-full lg:w-1/2 bg-white flex flex-col h-screen">
+      <div className="w-full lg:w-1/2 bg-white flex flex-col min-h-screen">
         <div className="flex-1 overflow-y-auto p-6 lg:p-12">
           <div className="w-full max-w-[480px] mx-auto">
             {/* Mobile Logo */}
@@ -289,7 +289,7 @@ const Register = () => {
                   Phone Number <span className="text-red-500">*</span>
                 </Label>
                 <div className="flex">
-                  <div className="flex items-center bg-gray-50 border border-r-0 border-gray-200 rounded-l-lg px-4 text-sm text-gray-500 font-medium">
+                  <div className="shrink-0 flex items-center bg-gray-50 border border-r-0 border-gray-200 rounded-l-lg px-4 text-sm text-gray-500 font-medium">
                     +60
                   </div>
                   <Input
@@ -299,7 +299,7 @@ const Register = () => {
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
                     required
-                    className="rounded-l-none border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
+                    className="min-w-0 flex-1 rounded-l-none border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
                   />
                 </div>
               </div>

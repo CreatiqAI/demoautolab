@@ -343,17 +343,17 @@ export default function Settings() {
           {/* Tabs */}
           <Tabs defaultValue="profile" className="max-w-4xl">
             <TabsList className={`mb-6 ${isMerchant ? 'grid grid-cols-3 w-full sm:w-auto sm:inline-grid' : 'grid grid-cols-2 w-full sm:w-auto sm:inline-grid'}`}>
-              <TabsTrigger value="profile" className="gap-2">
+              <TabsTrigger value="profile" className="gap-2 min-h-9">
                 <User className="w-4 h-4" />
                 <span className="hidden sm:inline">Profile</span>
               </TabsTrigger>
               {isMerchant && (
-                <TabsTrigger value="subscription" className="gap-2">
+                <TabsTrigger value="subscription" className="gap-2 min-h-9">
                   <Crown className="w-4 h-4" />
                   <span className="hidden sm:inline">Subscription</span>
                 </TabsTrigger>
               )}
-              <TabsTrigger value="notifications" className="gap-2">
+              <TabsTrigger value="notifications" className="gap-2 min-h-9">
                 <Bell className="w-4 h-4" />
                 <span className="hidden sm:inline">Notifications</span>
               </TabsTrigger>
@@ -505,7 +505,7 @@ export default function Settings() {
                           <Separator className="my-6" />
                           <div>
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Workshop Photos</p>
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
                               {merchantReg.workshop_photos.map((photo, i) => (
                                 <a key={i} href={photo} target="_blank" rel="noopener noreferrer" className="aspect-square rounded overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity">
                                   <img src={photo} alt={`Workshop ${i + 1}`} className="w-full h-full object-cover" />

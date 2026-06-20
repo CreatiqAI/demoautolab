@@ -166,7 +166,7 @@ export default function FindShops() {
         {/* Filters card */}
         <Card className="mb-6">
           <CardContent className="p-4">
-            <div className="grid md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               <div className="md:col-span-2 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
@@ -236,7 +236,7 @@ export default function FindShops() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredShops.map((shop) => {
               const currentPhotoIndex = currentPhotoIndexes[shop.id] || 0;
               const hasPhotos = shop.shop_photos && shop.shop_photos.length > 0;

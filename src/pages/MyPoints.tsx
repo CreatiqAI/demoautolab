@@ -291,7 +291,7 @@ export default function MyPoints({ embedded = false }: { embedded?: boolean }) {
   const pointsContent = (
     <>
       {/* Points Balance Cards */}
-      <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4 mb-6">
           <Card className="border-l-4 border-l-primary">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -512,7 +512,7 @@ export default function MyPoints({ embedded = false }: { embedded?: boolean }) {
                     <CardContent className="p-4 sm:p-6">
                       <div className="flex flex-col sm:flex-row gap-4">
                         {redemption.reward_item?.image_url && (
-                          <div className="w-full sm:w-20 h-32 sm:h-20 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded overflow-hidden flex-shrink-0">
                             <img
                               src={redemption.reward_item.image_url}
                               alt={redemption.reward_item.name}
@@ -614,7 +614,7 @@ export default function MyPoints({ embedded = false }: { embedded?: boolean }) {
 
       {/* Redemption Confirmation Dialog */}
       <Dialog open={redeemDialogOpen} onOpenChange={setRedeemDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Confirm Redemption</DialogTitle>
             <DialogDescription>

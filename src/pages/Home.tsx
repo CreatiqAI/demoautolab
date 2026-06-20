@@ -61,7 +61,7 @@ const Home = () => {
       <Header />
 
       {/* Hero Section: Refined Premium Aesthetic */}
-      <section className="relative w-full h-screen min-h-[750px] overflow-hidden bg-[#070707]">
+      <section className="relative w-full h-screen min-h-[560px] sm:min-h-[650px] lg:min-h-[750px] overflow-hidden bg-[#070707]">
         {/* Background Image Layer */}
         <div className="absolute inset-0 z-0">
           <motion.div
@@ -101,7 +101,7 @@ const Home = () => {
             {/* Main Headline: Refined Scale & Wording */}
             <motion.h1
               variants={fadeInUp}
-              className="text-5xl md:text-7xl lg:text-8xl font-heading font-black text-white leading-[0.9] mb-8 tracking-tighter"
+              className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-heading font-black text-white leading-[0.9] mb-8 tracking-tighter"
             >
               <span className="block opacity-90">THE AUTO LAB</span>
               <span className="block text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/40 italic pr-8">
@@ -188,7 +188,7 @@ const Home = () => {
             </Button>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-[350px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-[260px] sm:auto-rows-[320px] lg:auto-rows-[350px]">
             {[
               { title: "Performance Tuning", img: "https://images.unsplash.com/photo-1616788494707-ec28f08d05a1?auto=format&fit=crop&q=80&w=1200", colSpan: "lg:col-span-2" },
               { title: "Smart Media", img: "https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&q=80&w=600", colSpan: "lg:col-span-1" },

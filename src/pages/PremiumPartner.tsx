@@ -574,7 +574,7 @@ export default function PremiumPartner() {
               )}
 
               {/* Subscription Details */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 pt-3 border-t">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 pt-3 border-t">
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">Current Plan</p>
                   <p className="font-semibold text-sm flex items-center gap-1.5">
@@ -598,7 +598,7 @@ export default function PremiumPartner() {
 
               {/* Statistics */}
               {partnership.subscription_status === 'ACTIVE' && (
-                <div className="grid grid-cols-3 gap-3 md:gap-4 pt-3 border-t">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 pt-3 border-t">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 md:p-2 bg-blue-100 rounded-lg">
                       <Eye className="h-4 w-4 text-blue-600" />
@@ -1068,11 +1068,11 @@ export default function PremiumPartner() {
 
                     {/* Existing Photos */}
                     {formData.shop_photos.length > 0 && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         {formData.shop_photos.map((photoUrl, index) => (
                           <div key={index} className="relative group">
                             <div
-                              className="w-full h-48 bg-gray-50 rounded-lg border-2 border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition-all"
+                              className="w-full h-40 sm:h-48 bg-gray-50 rounded-lg border-2 border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition-all"
                               onClick={() => setPreviewImage(photoUrl)}
                             >
                               <img

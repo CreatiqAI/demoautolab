@@ -147,7 +147,7 @@ export default function MyVouchers() {
         ) : (
           <div className="space-y-6">
             {/* Voucher Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {vouchers.map((voucher) => (
                 <Card
                   key={voucher.id}

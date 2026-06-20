@@ -372,7 +372,7 @@ export default function Cart() {
               All
             </label>
             <div className="ml-2 min-w-0">
-              <p className="text-[10px] text-muted-foreground leading-tight">Total ({selectedItems.length})</p>
+              <p className="text-xs text-muted-foreground leading-tight">Total ({selectedItems.length})</p>
               <p className="text-base font-bold text-gray-900 leading-tight truncate">{formatPrice(getSelectedTotal())}</p>
             </div>
           </div>

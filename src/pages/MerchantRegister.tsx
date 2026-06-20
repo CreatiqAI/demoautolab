@@ -452,7 +452,7 @@ const MerchantRegister = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-2xl">
         {/* Back Button */}
         <div className="mb-6">
@@ -553,7 +553,7 @@ const MerchantRegister = () => {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="phone">Phone Number *</Label>
                         <div className="flex">
@@ -596,7 +596,7 @@ const MerchantRegister = () => {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="password">Password *</Label>
                         <div className="relative">
@@ -642,7 +642,7 @@ const MerchantRegister = () => {
                       Business Information
                     </h3>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="company-name">Business Name *</Label>
                         <Input
@@ -675,7 +675,7 @@ const MerchantRegister = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="business-reg">Business Registration No. *</Label>
                         <Input
@@ -747,7 +747,7 @@ const MerchantRegister = () => {
                             value={link.platform}
                             onValueChange={(value) => updateSocialMediaLink(index, 'platform', value)}
                           >
-                            <SelectTrigger className="w-[140px]">
+                            <SelectTrigger className="w-full sm:w-[140px]">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -897,7 +897,7 @@ const MerchantRegister = () => {
                         <Image className="h-4 w-4" />
                         Workshop Photos * (min 2, max 5)
                       </Label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {merchantForm.workshopPhotos.map((photo, index) => (
                           <div key={index} className="relative aspect-video bg-muted rounded-lg overflow-hidden">
                             <img src={photo} alt={`Workshop ${index + 1}`} className="w-full h-full object-cover" />

@@ -373,7 +373,7 @@ const Auth = () => {
       </div>
 
       {/* Right Side - Form */}
-      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-6 lg:p-12">
+      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 lg:p-12">
         <div className="w-full max-w-[400px]">
           {/* Mobile Logo */}
           <div className="lg:hidden flex justify-center mb-8">
@@ -450,20 +450,20 @@ const Auth = () => {
           {/* Contact Entry & Tabs (Initial Step) */}
           {authStep === 'contact' && (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-6 bg-gray-100 p-1 rounded-lg h-11">
-                <TabsTrigger value="customer" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] text-gray-600 px-1">
+              <TabsList className="grid w-full grid-cols-4 gap-1 mb-6 bg-gray-100 p-1 rounded-lg h-auto">
+                <TabsTrigger value="customer" className="min-h-9 py-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] sm:text-xs text-gray-600 px-1">
                   <Phone className="h-3.5 w-3.5 mr-1" />
                   Customer
                 </TabsTrigger>
-                <TabsTrigger value="merchant" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] text-gray-600 px-1">
+                <TabsTrigger value="merchant" className="min-h-9 py-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] sm:text-xs text-gray-600 px-1">
                   <Store className="h-3.5 w-3.5 mr-1" />
                   Merchant
                 </TabsTrigger>
-                <TabsTrigger value="partner" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] text-gray-600 px-1">
+                <TabsTrigger value="partner" className="min-h-9 py-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] sm:text-xs text-gray-600 px-1">
                   <Briefcase className="h-3.5 w-3.5 mr-1" />
                   Partner
                 </TabsTrigger>
-                <TabsTrigger value="admin" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] text-gray-600 px-1">
+                <TabsTrigger value="admin" className="min-h-9 py-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] sm:text-xs text-gray-600 px-1">
                   <Shield className="h-3.5 w-3.5 mr-1" />
                   Admin
                 </TabsTrigger>

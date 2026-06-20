@@ -357,7 +357,7 @@ export default function SecondhandMarketplace() {
         {showFilters && (
           <Card>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <Label>Category</Label>
                   <Select value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -448,7 +448,7 @@ export default function SecondhandMarketplace() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredListings.map((listing) => (
             <Card key={listing.id} className="hover:shadow-lg transition-shadow cursor-pointer overflow-hidden">
               <div onClick={() => handleViewListing(listing)}>
@@ -540,7 +540,7 @@ export default function SecondhandMarketplace() {
       {/* Listing Detail Dialog */}
       {selectedListing && (
         <Dialog open={!!selectedListing} onOpenChange={() => setSelectedListing(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-2xl">{selectedListing.title}</DialogTitle>
               <DialogDescription>

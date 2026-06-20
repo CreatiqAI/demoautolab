@@ -318,7 +318,7 @@ export default function ShopDetails() {
         )}
 
         {/* Content grid */}
-        <div className="grid lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Main content */}
           <div className="lg:col-span-2 space-y-5">
             {/* About */}
@@ -342,7 +342,7 @@ export default function ShopDetails() {
                   <CardTitle className="text-base">Services Offered</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {shop.services_offered.map((service, idx) => (
                       <div
                         key={idx}
@@ -561,7 +561,7 @@ export default function ShopDetails() {
 
       {/* Inquiry Modal */}
       <Dialog open={isInquiryModalOpen} onOpenChange={setIsInquiryModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Send inquiry</DialogTitle>
             <DialogDescription>

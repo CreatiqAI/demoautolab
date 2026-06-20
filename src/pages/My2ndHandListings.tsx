@@ -484,7 +484,7 @@ export default function My2ndHandListings() {
               {/* Product Information */}
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b">Product Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <Label htmlFor="title">Title *</Label>
                     <Input
@@ -546,7 +546,7 @@ export default function My2ndHandListings() {
               {/* Pricing */}
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b">Pricing</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="original_price">Original Price (RM)</Label>
                     <Input
@@ -671,7 +671,7 @@ export default function My2ndHandListings() {
 
                 {/* Image Preview Grid */}
                 {uploadedImages.length > 0 && (
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
                     {uploadedImages.map((url, index) => (
                       <div key={index} className="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-200">
                         <img src={url} alt={`Product ${index + 1}`} className="w-full h-full object-cover" />
@@ -689,7 +689,7 @@ export default function My2ndHandListings() {
 
                 {/* Upload Button */}
                 {uploadedImages.length < 5 && (
-                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-8 cursor-pointer hover:border-lime-500 hover:bg-lime-50 transition-colors">
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 cursor-pointer hover:border-lime-500 hover:bg-lime-50 transition-colors">
                     <input
                       type="file"
                       accept="image/*"

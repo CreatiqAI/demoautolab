@@ -1164,7 +1164,7 @@ export default function MyOrders() {
               </div>
 
               {/* Meta — Created / Payment / Status */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-4 px-4 sm:px-6 py-4 sm:py-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 px-4 sm:px-6 py-4 sm:py-6">
                 <div>
                   <p className="text-[11px] text-muted-foreground mb-1">Ordered on</p>
                   <p className="text-sm text-gray-900">{new Date(selectedOrder.created_at).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
@@ -1490,7 +1490,7 @@ export default function MyOrders() {
           className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
           onClick={(e) => { if (e.target === e.currentTarget) closeInvoiceModal(); }}
         >
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto shadow-xl mx-2 sm:mx-0">
+          <div className="bg-white rounded-lg max-w-[calc(100vw-2rem)] sm:max-w-4xl w-full max-h-[90vh] overflow-auto shadow-xl mx-2 sm:mx-0">
             <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
               <h2 className="text-base font-semibold">
                 Invoice Preview

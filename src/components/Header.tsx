@@ -209,11 +209,11 @@ const Header = () => {
     <>
       {/* Main Navigation - exactly like sample-design */}
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${navClasses} h-20 font-sans`}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${navClasses} h-16 sm:h-20 font-sans`}
         onMouseEnter={() => setIsHoveringNavbar(true)}
         onMouseLeave={() => setIsHoveringNavbar(false)}
       >
-        <div className="container mx-auto px-4 md:px-8 h-20">
+        <div className="container mx-auto px-4 md:px-8 h-16 sm:h-20">
           <div className="flex items-center justify-between h-full">
             {/* Logo - Using image from public folder - Made bigger */}
             <div
@@ -243,7 +243,7 @@ const Header = () => {
                 <div className="fixed top-20 left-0 right-0 w-full opacity-0 invisible group-hover/megamenu:opacity-100 group-hover/megamenu:visible transition-all duration-300 pointer-events-none group-hover/megamenu:pointer-events-auto">
                   <div className="bg-white border-b border-gray-200 shadow-md">
                     <div className="container mx-auto px-4 md:px-8">
-                      <div className="grid grid-cols-3 gap-8 py-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 py-6">
                         {/* Categories Column */}
                         <div>
                           <h3 className="text-xs font-bold uppercase tracking-widest text-gray-900 mb-3 pb-2 border-b-2 border-gray-200">
@@ -487,7 +487,7 @@ const Header = () => {
                           setMobileMenuOpen(false);
                           setIsCartOpen(true);
                         }}
-                        className="bg-gray-900 text-white font-bold uppercase tracking-widest px-8 py-3.5 w-full rounded-full text-center text-sm"
+                        className="bg-gray-900 text-white font-bold uppercase tracking-widest px-8 py-3.5 w-full rounded-full text-center text-sm whitespace-nowrap"
                       >
                         Cart ({getTotalItems()})
                       </button>
@@ -537,7 +537,7 @@ const Header = () => {
 
       {/* Subscription Expiry Banner */}
       {isMerchant && subscriptionStatus && showExpiryBanner && (
-        <div className={`fixed top-20 left-0 right-0 z-40 transition-all duration-300 ${
+        <div className={`fixed top-16 sm:top-20 left-0 right-0 z-40 transition-all duration-300 ${
           subscriptionStatus.type === 'expired'
             ? 'bg-red-500'
             : 'bg-orange-500'
@@ -578,7 +578,7 @@ const Header = () => {
       )}
 
       {/* Spacer for fixed header - Only on non-homepage */}
-      {!isHomePage && <div className="h-20 transition-all duration-300" />}
+      {!isHomePage && <div className="h-16 sm:h-20 transition-all duration-300" />}
     </>
   );
 };
