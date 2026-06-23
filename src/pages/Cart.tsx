@@ -66,26 +66,51 @@ export default function Cart() {
     }).format(amount);
   };
 
+  // Free (FOC) gifts follow their main item: a free line is selected iff a paid
+  // item from the same product is selected. This keeps a gift bundled with its
+  // purchase and drops it when the main item is unchecked. Free items' checkboxes
+  // are disabled in the UI, so their selection is always derived here.
+  const reconcileFreeSelection = (ids: string[]): string[] => {
+    const idSet = new Set(ids);
+    const paidSelectedProducts = new Set(
+      cartItems.filter(i => i.normal_price > 0 && idSet.has(i.id)).map(i => i.product_name)
+    );
+    const result = new Set(
+      // keep only the user-controllable (paid) selections...
+      ids.filter(id => {
+        const item = cartItems.find(i => i.id === id);
+        return item ? item.normal_price > 0 : true;
+      })
+    );
+    // ...then add free gifts whose product has a selected paid sibling
+    cartItems.forEach(i => {
+      if (i.normal_price === 0 && paidSelectedProducts.has(i.product_name)) {
+        result.add(i.id);
+      }
+    });
+    return Array.from(result);
+  };
+
   const handleItemSelection = (itemId: string, checked: boolean) => {
     setSelectedItems(prev =>
-      checked
-        ? [...prev, itemId]
-        : prev.filter(id => id !== itemId)
+      reconcileFreeSelection(
+        checked ? [...prev, itemId] : prev.filter(id => id !== itemId)
+      )
     );
   };
 
   const handleSelectAll = (checked: boolean) => {
-    setSelectedItems(checked ? cartItems.map(item => item.id) : []);
+    setSelectedItems(checked ? reconcileFreeSelection(cartItems.map(item => item.id)) : []);
   };
 
   const handleSelectGroup = (groupItemIds: string[], checked: boolean) => {
     setSelectedItems(prev => {
       if (checked) {
         const merged = new Set([...prev, ...groupItemIds]);
-        return Array.from(merged);
+        return reconcileFreeSelection(Array.from(merged));
       }
       const drop = new Set(groupItemIds);
-      return prev.filter(id => !drop.has(id));
+      return reconcileFreeSelection(prev.filter(id => !drop.has(id)));
     });
   };
 
@@ -211,12 +236,16 @@ export default function Cart() {
                   {/* Items in this group */}
                   <CardContent className="p-0">
                     <div className="divide-y">
-                      {group.items.map((item) => (
+                      {group.items.map((item) => {
+                        const isFree = item.normal_price === 0;
+                        return (
                         <div key={item.id} className="p-3 sm:p-5">
                           <div className="flex items-start gap-3 sm:gap-4">
                             <Checkbox
                               checked={selectedItems.includes(item.id)}
                               onCheckedChange={(checked) => handleItemSelection(item.id, checked as boolean)}
+                              disabled={isFree}
+                              title={isFree ? 'Free gift — follows the main item' : undefined}
                               className="mt-1"
                             />
                             {item.component_image && (
@@ -242,38 +271,48 @@ export default function Cart() {
 
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="text-xs">
-                                    {formatPrice(item.normal_price)} each
-                                  </Badge>
+                                  {isFree ? (
+                                    <Badge className="text-xs bg-green-100 text-green-800 border border-green-200 hover:bg-green-100">🎁 FREE / FOC</Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-xs">
+                                      {formatPrice(item.normal_price)} each
+                                    </Badge>
+                                  )}
                                 </div>
 
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-1 sm:gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                      disabled={item.quantity <= 1}
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      <Minus className="h-3 w-3" />
-                                    </Button>
-                                    <span className="w-8 sm:w-12 text-center text-sm border rounded px-1 sm:px-2 py-1">
-                                      {item.quantity}
-                                    </span>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      <Plus className="h-3 w-3" />
-                                    </Button>
-                                  </div>
+                                  {isFree ? (
+                                    <div className="flex items-center text-sm font-medium text-green-700">
+                                      Qty {item.quantity}
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                        disabled={item.quantity <= 1}
+                                        className="h-8 w-8 p-0"
+                                      >
+                                        <Minus className="h-3 w-3" />
+                                      </Button>
+                                      <span className="w-8 sm:w-12 text-center text-sm border rounded px-1 sm:px-2 py-1">
+                                        {item.quantity}
+                                      </span>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                        className="h-8 w-8 p-0"
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  )}
 
                                   <div className="text-right min-w-[80px] sm:min-w-[100px]">
-                                    <p className="text-sm sm:text-base font-semibold">
-                                      {formatPrice(item.normal_price * item.quantity)}
+                                    <p className={`text-sm sm:text-base font-semibold ${isFree ? 'text-green-700' : ''}`}>
+                                      {isFree ? 'FREE' : formatPrice(item.normal_price * item.quantity)}
                                     </p>
                                   </div>
 
@@ -290,7 +329,8 @@ export default function Cart() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
 

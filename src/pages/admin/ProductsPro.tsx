@@ -37,6 +37,9 @@ interface ComponentSearchResult {
 interface SelectedComponent extends ComponentSearchResult {
   selected: boolean;
   remark?: string;
+  is_foc?: boolean;          // given free (RM0) when the main item is in the order
+  foc_quantity?: number;     // fixed number of free units (default 1)
+  is_foc_trigger?: boolean;  // the main item; buying it unlocks the FOC gifts
 }
 
 interface InstallationVideoForm {
@@ -892,7 +895,10 @@ export default function ProductsPro() {
     const newComponent: SelectedComponent = {
       ...component,
       selected: true,
-      remark: ''
+      remark: '',
+      is_foc: false,
+      foc_quantity: 1,
+      is_foc_trigger: false
     };
 
     setFormData(prev => ({
@@ -1065,7 +1071,10 @@ export default function ProductsPro() {
             is_required: false,
             is_default: i === 0,
             display_order: i,
-            remark: comp.remark || null
+            remark: comp.remark || null,
+            is_foc: comp.is_foc ?? false,
+            foc_quantity: comp.is_foc ? Math.max(1, comp.foc_quantity ?? 1) : 1,
+            is_foc_trigger: comp.is_foc_trigger ?? false
           }]);
 
         if (linkError) {
@@ -1203,6 +1212,9 @@ export default function ProductsPro() {
         .from('product_components' as any)
         .select(`
           remark,
+          is_foc,
+          foc_quantity,
+          is_foc_trigger,
           component_library!inner(
             id, component_sku, name, description, component_type,
             stock_level, normal_price, merchant_price, default_image_url
@@ -1229,7 +1241,10 @@ export default function ProductsPro() {
       const components = (productComponents as any)?.map((pc: any) => ({
         ...pc.component_library,
         selected: true,
-        remark: pc.remark || ''
+        remark: pc.remark || '',
+        is_foc: pc.is_foc ?? false,
+        foc_quantity: pc.foc_quantity ?? 1,
+        is_foc_trigger: pc.is_foc_trigger ?? false
       })) || [];
 
       // Format all media for the form (unified slots)
@@ -1303,6 +1318,9 @@ export default function ProductsPro() {
         .from('product_components' as any)
         .select(`
           remark,
+          is_foc,
+          foc_quantity,
+          is_foc_trigger,
           component_library!inner(
             id, component_sku, name, description, component_type,
             stock_level, normal_price, merchant_price, default_image_url
@@ -1332,7 +1350,10 @@ export default function ProductsPro() {
           normal_price: component.normal_price || 0,
           merchant_price: component.merchant_price || component.normal_price || 0,
           default_image_url: component.default_image_url || null,
-          remark: item.remark || null
+          remark: item.remark || null,
+          is_foc: item.is_foc ?? false,
+          foc_quantity: item.foc_quantity ?? 1,
+          is_foc_trigger: item.is_foc_trigger ?? false
         };
       });
 
@@ -1772,6 +1793,68 @@ export default function ProductsPro() {
                                       }}
                                       className="w-full text-xs border border-gray-200 rounded px-2 py-1 mt-1 text-gray-600 placeholder:text-gray-400 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30"
                                     />
+                                    {/* FOC role: Normal / Main item / Free gift */}
+                                    <div className="flex items-center gap-1 mt-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                                      {([
+                                        { key: 'normal', label: 'Normal' },
+                                        { key: 'main', label: 'Main item' },
+                                        { key: 'foc', label: '🎁 Free gift (FOC)' },
+                                      ] as const).map((opt) => {
+                                        const active =
+                                          opt.key === 'main' ? !!component.is_foc_trigger
+                                          : opt.key === 'foc' ? !!component.is_foc
+                                          : (!component.is_foc && !component.is_foc_trigger);
+                                        return (
+                                          <button
+                                            key={opt.key}
+                                            type="button"
+                                            onClick={() => setFormData(prev => ({
+                                              ...prev,
+                                              selectedComponents: prev.selectedComponents.map(c =>
+                                                c.id === component.id
+                                                  ? {
+                                                      ...c,
+                                                      is_foc_trigger: opt.key === 'main',
+                                                      is_foc: opt.key === 'foc',
+                                                      foc_quantity: opt.key === 'foc' ? Math.max(1, c.foc_quantity ?? 1) : (c.foc_quantity ?? 1),
+                                                    }
+                                                  : c
+                                              )
+                                            }))}
+                                            className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                                              active
+                                                ? (opt.key === 'foc' ? 'bg-green-600 text-white border-green-600'
+                                                   : opt.key === 'main' ? 'bg-blue-600 text-white border-blue-600'
+                                                   : 'bg-gray-700 text-white border-gray-700')
+                                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                            }`}
+                                          >
+                                            {opt.label}
+                                          </button>
+                                        );
+                                      })}
+                                      {component.is_foc && (
+                                        <span className="flex items-center gap-1 text-[10px] text-green-700">
+                                          Free qty
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            value={component.foc_quantity ?? 1}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => {
+                                              const q = Math.max(1, parseInt(e.target.value || '1', 10) || 1);
+                                              setFormData(prev => ({
+                                                ...prev,
+                                                selectedComponents: prev.selectedComponents.map(c =>
+                                                  c.id === component.id ? { ...c, foc_quantity: q } : c
+                                                )
+                                              }));
+                                            }}
+                                            className="w-12 text-[10px] border border-green-300 rounded px-1 py-0.5 focus:outline-none focus:border-green-500"
+                                          />
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 <Button
@@ -3480,7 +3563,15 @@ export default function ProductsPro() {
                             </div>
                           )}
                           <div className="flex-1">
-                            <h4 className="font-medium">{component.name}</h4>
+                            <h4 className="font-medium">
+                              {component.name}
+                              {component.is_foc && (
+                                <span className="ml-2 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 rounded px-1.5 py-0.5 align-middle">🎁 FOC x{component.foc_quantity ?? 1}</span>
+                              )}
+                              {component.is_foc_trigger && (
+                                <span className="ml-2 text-[10px] font-semibold text-blue-700 bg-blue-100 border border-blue-200 rounded px-1.5 py-0.5 align-middle">Main item</span>
+                              )}
+                            </h4>
                             {component.remark && (
                               <span className="text-xs text-amber-600 font-medium">{component.remark}</span>
                             )}

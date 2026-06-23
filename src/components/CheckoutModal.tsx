@@ -569,14 +569,24 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess: _onOrde
         shipping_methods: shippingMethods,
       };
 
-      const orderItems = selectedItems.map(item => ({
-        component_sku: item.component_sku,
-        component_name: item.name,
-        product_context: item.product_name,
-        quantity: item.quantity,
-        unit_price: item.normal_price,
-        total_price: item.normal_price * item.quantity,
-      }));
+      // FOC guard: a free (RM0) line is only legitimate if a paid item from the
+      // same product is also in this order (the "main item" that unlocks the gift).
+      // If the customer removed the main item but kept the gift, drop the gift so
+      // it cannot be claimed for free on its own. Free lines contribute 0 to the
+      // totals, so dropping them does not change subtotal/total.
+      const paidProductContexts = new Set(
+        selectedItems.filter(i => i.normal_price > 0).map(i => i.product_name)
+      );
+      const orderItems = selectedItems
+        .filter(item => item.normal_price > 0 || paidProductContexts.has(item.product_name))
+        .map(item => ({
+          component_sku: item.component_sku,
+          component_name: item.name,
+          product_context: item.product_name,
+          quantity: item.quantity,
+          unit_price: item.normal_price,
+          total_price: item.normal_price * item.quantity,
+        }));
 
       // The RPC handles the multi-seller split internally and returns either
       // the legacy `{ success, order_id, order_number }` shape or the newer

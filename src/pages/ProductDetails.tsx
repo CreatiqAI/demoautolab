@@ -32,6 +32,9 @@ interface ComponentData {
   merchant_price: number;
   default_image_url?: string;
   remark?: string;
+  is_foc?: boolean;          // free gift when the main item is also bought
+  foc_quantity?: number;     // fixed number of free units (default 1)
+  is_foc_trigger?: boolean;  // the main item; buying it unlocks the FOC gifts
 }
 
 interface CartItem {
@@ -197,6 +200,54 @@ const ProductDetails = () => {
     }
   };
 
+  // --- FOC (free-of-charge) bundle logic ---
+  // A product may mark one component as the "main item" (is_foc_trigger) and one
+  // or more as free gifts (is_foc). A gift is free only while the main item is in
+  // the selection. Fallback: if no explicit trigger is set, any selected non-FOC
+  // component acts as the trigger ("buy anything -> gift is free").
+  const focComponents = components.filter(c => c.is_foc);
+  const hasExplicitTrigger = components.some(c => c.is_foc_trigger);
+  const triggerName = components.find(c => c.is_foc_trigger)?.name;
+  const triggerSelected = localCart.some(item =>
+    item.quantity >= 1 &&
+    (hasExplicitTrigger ? item.component.is_foc_trigger : !item.component.is_foc)
+  );
+
+  // Price a component is charged at, factoring in FOC eligibility.
+  const getEffectivePrice = (component: ComponentData) =>
+    (component.is_foc && triggerSelected)
+      ? 0
+      : getDisplayPrice(component.normal_price, component.merchant_price);
+
+  // Auto-include free gifts when the main item is selected; remove them when it
+  // leaves the selection. Only mutates state when something actually changes, and
+  // never touches trigger detection, so it cannot loop.
+  useEffect(() => {
+    if (focComponents.length === 0) return;
+    setLocalCart(prev => {
+      let next = prev;
+      let changed = false;
+      for (const foc of focComponents) {
+        const idx = next.findIndex(i => i.component.id === foc.id);
+        const freeQty = Math.max(1, foc.foc_quantity ?? 1);
+        if (triggerSelected) {
+          if (idx === -1) {
+            next = [...next, { component: foc, quantity: freeQty }];
+            changed = true;
+          } else if (next[idx].quantity !== freeQty) {
+            next = next.map((item, n) => (n === idx ? { ...item, quantity: freeQty } : item));
+            changed = true;
+          }
+        } else if (idx !== -1) {
+          next = next.filter(i => i.component.id !== foc.id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerSelected, components]);
+
   const fetchInstallationGuide = async () => {
     if (!id) return;
 
@@ -307,6 +358,9 @@ const ProductDetails = () => {
         .from('product_components' as any)
         .select(`
           remark,
+          is_foc,
+          foc_quantity,
+          is_foc_trigger,
           component_library!inner(
             id, component_sku, name, description, component_type,
             stock_level, normal_price, merchant_price, default_image_url
@@ -337,7 +391,10 @@ const ProductDetails = () => {
           normal_price: component.normal_price || 0,
           merchant_price: component.merchant_price || component.normal_price || 0,
           default_image_url: component.default_image_url || null,
-          remark: pc.remark || null
+          remark: pc.remark || null,
+          is_foc: pc.is_foc ?? false,
+          foc_quantity: pc.foc_quantity ?? 1,
+          is_foc_trigger: pc.is_foc_trigger ?? false
         };
       });
 
@@ -392,8 +449,7 @@ const ProductDetails = () => {
 
   const getLocalCartTotal = () => {
     return localCart.reduce((total, item) => {
-      const displayPrice = getDisplayPrice(item.component.normal_price, item.component.merchant_price);
-      return total + (displayPrice * item.quantity);
+      return total + (getEffectivePrice(item.component) * item.quantity);
     }, 0);
   };
 
@@ -441,12 +497,14 @@ const ProductDetails = () => {
     }
 
     localCart.forEach(cartItem => {
-      const displayPrice = getDisplayPrice(cartItem.component.normal_price, cartItem.component.merchant_price);
+      const isFreeGift = cartItem.component.is_foc && triggerSelected;
+      const displayPrice = isFreeGift ? 0 : getDisplayPrice(cartItem.component.normal_price, cartItem.component.merchant_price);
+      const quantity = isFreeGift ? Math.max(1, cartItem.component.foc_quantity ?? 1) : cartItem.quantity;
       addToCart({
         component_sku: cartItem.component.component_sku,
         name: cartItem.component.name,
         normal_price: displayPrice,
-        quantity: cartItem.quantity,
+        quantity,
         product_name: product?.name || 'Unknown Product',
         component_image: cartItem.component.default_image_url
       });
@@ -701,7 +759,9 @@ const ProductDetails = () => {
                     {components.map((component) => {
                       const quantity = getLocalCartQuantity(component.id);
                       const isExpanded = expandedComponent === component.id;
-                      const price = getDisplayPrice(component.normal_price, component.merchant_price);
+                      const isFreeGift = !!component.is_foc && triggerSelected;
+                      const price = getEffectivePrice(component);
+                      const originalPrice = getDisplayPrice(component.normal_price, component.merchant_price);
 
                       return (
                         <div
@@ -752,10 +812,25 @@ const ProductDetails = () => {
                                     {component.remark && (
                                       <span className="text-xs text-amber-600 font-medium">{component.remark}</span>
                                     )}
+                                    {isFreeGift && (
+                                      <span className="ml-1 inline-block text-[10px] font-bold text-green-700 bg-green-100 border border-green-200 rounded px-1.5 py-0.5">🎁 FREE GIFT</span>
+                                    )}
+                                    {component.is_foc && !triggerSelected && (
+                                      <span className="block text-[11px] text-green-700 font-medium mt-0.5">🎁 FREE when you add {triggerName || 'the main item'}</span>
+                                    )}
                                     <div className="flex items-center gap-2 mt-1">
-                                      <span className="font-semibold text-primary">
-                                        {formatPrice(price)}
-                                      </span>
+                                      {isFreeGift ? (
+                                        <>
+                                          <span className="font-bold text-green-700">FREE</span>
+                                          {originalPrice > 0 && (
+                                            <span className="text-xs text-gray-400 line-through">{formatPrice(originalPrice)}</span>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span className="font-semibold text-primary">
+                                          {formatPrice(price)}
+                                        </span>
+                                      )}
                                       <span className="text-xs text-gray-400">•</span>
                                       <span className="text-xs text-gray-500">
                                         {component.stock_level} in stock
@@ -765,7 +840,11 @@ const ProductDetails = () => {
 
                                   {/* Controls */}
                                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                    {user && quantity > 0 ? (
+                                    {isFreeGift ? (
+                                      <div className="flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">
+                                        FREE ×{Math.max(1, component.foc_quantity ?? 1)}
+                                      </div>
+                                    ) : user && quantity > 0 ? (
                                       <div className="flex items-center border rounded border-slate-200 bg-white">
                                         <button
                                           onClick={() => updateLocalQuantity(component, quantity - 1)}
