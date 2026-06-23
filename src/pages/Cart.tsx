@@ -238,6 +238,12 @@ export default function Cart() {
                     <div className="divide-y">
                       {group.items.map((item) => {
                         const isFree = item.normal_price === 0;
+                        // A paid item whose product includes a free gift: its quantity sets how
+                        // many free sets are given, so lock it here and let the customer change
+                        // it on the product page. Keeps the gift-to-main ratio intact.
+                        const productHasFreeGift = !isFree && cartItems.some(
+                          i => i.product_name === item.product_name && i.normal_price === 0
+                        );
                         return (
                         <div key={item.id} className="p-3 sm:p-5">
                           <div className="flex items-start gap-3 sm:gap-4">
@@ -283,6 +289,13 @@ export default function Cart() {
                                 <div className="flex items-center justify-between gap-3">
                                   {isFree ? (
                                     <div className="flex items-center text-sm font-medium text-green-700">
+                                      Qty {item.quantity}
+                                    </div>
+                                  ) : productHasFreeGift ? (
+                                    <div
+                                      className="flex items-center text-sm font-medium text-gray-700"
+                                      title="This item comes with a free gift — change its quantity on the product page"
+                                    >
                                       Qty {item.quantity}
                                     </div>
                                   ) : (

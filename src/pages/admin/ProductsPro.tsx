@@ -38,7 +38,7 @@ interface SelectedComponent extends ComponentSearchResult {
   selected: boolean;
   remark?: string;
   is_foc?: boolean;          // given free (RM0) when the main item is in the order
-  foc_quantity?: number;     // fixed number of free units (default 1)
+  foc_quantity?: number;     // free units per main item / per set (default 1)
   is_foc_trigger?: boolean;  // the main item; buying it unlocks the FOC gifts
 }
 
@@ -1835,7 +1835,7 @@ export default function ProductsPro() {
                                       })}
                                       {component.is_foc && (
                                         <span className="flex items-center gap-1 text-[10px] text-green-700">
-                                          Free qty
+                                          Free qty / main
                                           <input
                                             type="number"
                                             min={1}
@@ -3566,7 +3566,7 @@ export default function ProductsPro() {
                             <h4 className="font-medium">
                               {component.name}
                               {component.is_foc && (
-                                <span className="ml-2 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 rounded px-1.5 py-0.5 align-middle">🎁 FOC x{component.foc_quantity ?? 1}</span>
+                                <span className="ml-2 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 rounded px-1.5 py-0.5 align-middle">🎁 FOC x{component.foc_quantity ?? 1}/main</span>
                               )}
                               {component.is_foc_trigger && (
                                 <span className="ml-2 text-[10px] font-semibold text-blue-700 bg-blue-100 border border-blue-200 rounded px-1.5 py-0.5 align-middle">Main item</span>

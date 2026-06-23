@@ -33,7 +33,7 @@ interface ComponentData {
   default_image_url?: string;
   remark?: string;
   is_foc?: boolean;          // free gift when the main item is also bought
-  foc_quantity?: number;     // fixed number of free units (default 1)
+  foc_quantity?: number;     // free units per main item / per set (default 1)
   is_foc_trigger?: boolean;  // the main item; buying it unlocks the FOC gifts
 }
 
@@ -208,10 +208,18 @@ const ProductDetails = () => {
   const focComponents = components.filter(c => c.is_foc);
   const hasExplicitTrigger = components.some(c => c.is_foc_trigger);
   const triggerName = components.find(c => c.is_foc_trigger)?.name;
-  const triggerSelected = localCart.some(item =>
-    item.quantity >= 1 &&
-    (hasExplicitTrigger ? item.component.is_foc_trigger : !item.component.is_foc)
-  );
+
+  // Number of "sets" the customer is buying = total quantity of the main item(s).
+  // The free gift quantity scales with this (buy 2 casings -> 2 sets of gifts).
+  // Fallback: if no explicit main is marked, any paid (non-FOC) item counts as
+  // one set, so the gift still unlocks but does not multiply.
+  const mainQty = hasExplicitTrigger
+    ? localCart.reduce((sum, item) => item.component.is_foc_trigger ? sum + item.quantity : sum, 0)
+    : (localCart.some(item => !item.component.is_foc && item.quantity >= 1) ? 1 : 0);
+  const triggerSelected = mainQty > 0;
+
+  // Free units of a given gift = its per-set quantity × number of sets bought.
+  const focFreeQty = (component: ComponentData) => Math.max(1, component.foc_quantity ?? 1) * mainQty;
 
   // Price a component is charged at, factoring in FOC eligibility.
   const getEffectivePrice = (component: ComponentData) =>
@@ -219,9 +227,10 @@ const ProductDetails = () => {
       ? 0
       : getDisplayPrice(component.normal_price, component.merchant_price);
 
-  // Auto-include free gifts when the main item is selected; remove them when it
-  // leaves the selection. Only mutates state when something actually changes, and
-  // never touches trigger detection, so it cannot loop.
+  // Auto-include free gifts when the main item is selected, scaling their quantity
+  // to the number of sets; remove them when the main item leaves the selection.
+  // Only mutates state when something actually changes, and never touches the main
+  // quantity, so it cannot loop.
   useEffect(() => {
     if (focComponents.length === 0) return;
     setLocalCart(prev => {
@@ -229,8 +238,8 @@ const ProductDetails = () => {
       let changed = false;
       for (const foc of focComponents) {
         const idx = next.findIndex(i => i.component.id === foc.id);
-        const freeQty = Math.max(1, foc.foc_quantity ?? 1);
-        if (triggerSelected) {
+        const freeQty = Math.max(1, foc.foc_quantity ?? 1) * mainQty;
+        if (mainQty > 0) {
           if (idx === -1) {
             next = [...next, { component: foc, quantity: freeQty }];
             changed = true;
@@ -246,7 +255,7 @@ const ProductDetails = () => {
       return changed ? next : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [triggerSelected, components]);
+  }, [mainQty, components]);
 
   const fetchInstallationGuide = async () => {
     if (!id) return;
@@ -499,7 +508,7 @@ const ProductDetails = () => {
     localCart.forEach(cartItem => {
       const isFreeGift = cartItem.component.is_foc && triggerSelected;
       const displayPrice = isFreeGift ? 0 : getDisplayPrice(cartItem.component.normal_price, cartItem.component.merchant_price);
-      const quantity = isFreeGift ? Math.max(1, cartItem.component.foc_quantity ?? 1) : cartItem.quantity;
+      const quantity = isFreeGift ? focFreeQty(cartItem.component) : cartItem.quantity;
       addToCart({
         component_sku: cartItem.component.component_sku,
         name: cartItem.component.name,
@@ -842,7 +851,7 @@ const ProductDetails = () => {
                                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                                     {isFreeGift ? (
                                       <div className="flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">
-                                        FREE ×{Math.max(1, component.foc_quantity ?? 1)}
+                                        FREE ×{focFreeQty(component)}
                                       </div>
                                     ) : user && quantity > 0 ? (
                                       <div className="flex items-center border rounded border-slate-200 bg-white">
