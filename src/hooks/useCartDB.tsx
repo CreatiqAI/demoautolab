@@ -12,6 +12,8 @@ interface CartItem {
   component_image?: string;
   /** True when this line is a free (FOC) gift, kept distinct from a paid buy. */
   is_foc?: boolean;
+  /** True when this paid line is the FOC trigger (main item that unlocks gifts). */
+  is_foc_trigger?: boolean;
   /** Seller of this item. NULL means AutoLab in-house. */
   vendor_id?: string | null;
   /** Display name of seller. NULL/undefined means "AutoLab". */
@@ -135,6 +137,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             quantity: item.quantity,
             product_name: productName,
             is_foc: isFoc,
+            is_foc_trigger: item.is_foc_trigger ?? false,
             component_image: imageMap.get(item.component_sku) || item.default_image_url || undefined,
             vendor_id: vendorId,
             vendor_name: vendorId ? (vendorNameMap.get(vendorId) || null) : null,
@@ -248,6 +251,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           p_user_id: user.id,
           p_guest_session: null,
           p_is_foc: isFoc,
+          p_is_foc_trigger: newItem.is_foc_trigger ?? false,
         } as any);
 
       if (error) {
@@ -395,6 +399,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         p_user_id: user.id,
         p_guest_session: null,
         p_is_foc: existingItem.is_foc ?? false,
+        p_is_foc_trigger: existingItem.is_foc_trigger ?? false,
       } as any);
     } catch (error) {
       // Silently fail - state already updated for instant feedback

@@ -517,6 +517,9 @@ const ProductDetails = () => {
         product_name: product?.name || 'Unknown Product',
         component_image: cartItem.component.default_image_url,
         is_foc: isFreeGift,
+        // Mark the trigger so the cart treats only it (not other paid add-ons
+        // bought from this page) as the bundle's main item.
+        is_foc_trigger: !isFreeGift && !!cartItem.component.is_foc_trigger,
       });
     });
 

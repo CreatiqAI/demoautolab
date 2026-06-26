@@ -16,6 +16,8 @@ export type GroupableCartItem = {
   component_image?: string;
   /** True when this line is a free (FOC) gift rather than a paid purchase. */
   is_foc?: boolean;
+  /** True when this paid line is the FOC trigger (the main that unlocks gifts). */
+  is_foc_trigger?: boolean;
   vendor_id?: string | null;
   vendor_name?: string | null;
 };

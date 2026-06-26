@@ -55,12 +55,37 @@ export function buildCartRows<T extends GroupableCartItem>(items: T[]): CartRow<
   const rows: CartRow<T>[] = [];
   for (const list of byProduct.values()) {
     const freebies = list.filter((i) => isFreeGift(i));
-    const mains = list.filter((i) => !isFreeGift(i));
-    if (freebies.length > 0 && mains.length > 0) {
-      rows.push({ kind: 'bundle', mains, freebies });
-    } else {
+    const paid = list.filter((i) => !isFreeGift(i));
+
+    // No gifts, or nothing paid to anchor them -> plain lines.
+    if (freebies.length === 0 || paid.length === 0) {
       for (const item of list) rows.push({ kind: 'single', item });
+      continue;
     }
+
+    // Only the FOC trigger(s) are the bundle's mains. Any other paid line — a
+    // paid copy of a gift component, or an unrelated add-on bought from the same
+    // product page — stands on its own, so its quantity never scales the gifts.
+    const triggers = paid.filter((i) => i.is_foc_trigger);
+    let mains: T[];
+    let others: T[];
+    if (triggers.length > 0) {
+      mains = triggers;
+      others = paid.filter((i) => !i.is_foc_trigger);
+    } else {
+      // Legacy / fallback rows with no explicit trigger: only pull a paid line
+      // out of the bundle when it is a paid copy of one of the gift components.
+      const giftSkus = new Set(freebies.map((g) => g.component_sku));
+      mains = paid.filter((i) => !giftSkus.has(i.component_sku));
+      others = paid.filter((i) => giftSkus.has(i.component_sku));
+      if (mains.length === 0) {
+        mains = paid;
+        others = [];
+      }
+    }
+
+    rows.push({ kind: 'bundle', mains, freebies });
+    for (const item of others) rows.push({ kind: 'single', item });
   }
   return rows;
 }

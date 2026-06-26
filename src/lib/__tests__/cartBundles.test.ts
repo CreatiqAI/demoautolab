@@ -59,28 +59,46 @@ describe('buildCartRows', () => {
     expect(rows).toEqual([{ kind: 'single', item: expect.objectContaining({ id: 'orphan' }) }]);
   });
 
-  it('classifies by is_foc, not price: a paid copy of a gift component is a main', () => {
-    // Same product holds the free gift (is_foc) AND a paid copy of it the user
-    // chose to buy. The paid copy must be a main, not folded into the gifts.
+  it('only the trigger is a bundle main; paid copies + add-ons stand alone', () => {
+    // Casing page: casing is the trigger, AL-19 is a free gift, and the user
+    // also bought a paid AL-19 (same SKU) and a paid add-on. Only the casing
+    // drives the bundle; the paid lines are separate single rows.
     const rows = buildCartRows([
-      line({ id: 'casing', normal_price: 195, is_foc: false, product_name: 'P' }),
-      line({ id: 'gift', normal_price: 0, is_foc: true, product_name: 'P' }),
-      line({ id: 'paidGift', normal_price: 45, is_foc: false, product_name: 'P' }),
+      line({ id: 'casing', component_sku: 'K88', normal_price: 195, is_foc_trigger: true, product_name: 'P' }),
+      line({ id: 'freeAL', component_sku: 'AL-19', normal_price: 0, is_foc: true, product_name: 'P' }),
+      line({ id: 'paidAL', component_sku: 'AL-19', normal_price: 45, is_foc: false, product_name: 'P' }),
+      line({ id: 'addon', component_sku: 'LHL-845', normal_price: 5, is_foc: false, product_name: 'P' }),
     ]);
-    expect(rows).toHaveLength(1);
-    if (rows[0].kind === 'bundle') {
-      expect(rows[0].mains.map(m => m.id).sort()).toEqual(['casing', 'paidGift']);
-      expect(rows[0].freebies.map(f => f.id)).toEqual(['gift']);
-    }
+    const bundle = rows.find(r => r.kind === 'bundle');
+    expect(bundle && bundle.kind === 'bundle' && bundle.mains.map(m => m.id)).toEqual(['casing']);
+    expect(bundle && bundle.kind === 'bundle' && bundle.freebies.map(f => f.id)).toEqual(['freeAL']);
+    const singles = rows.filter(r => r.kind === 'single').map(r => (r as { item: { id: string } }).item.id).sort();
+    expect(singles).toEqual(['addon', 'paidAL']);
   });
 
-  it('honours is_foc over a zero price (an explicit paid 0 line is a main)', () => {
+  it('two triggers sharing gifts are both mains; non-trigger paid is separate', () => {
     const rows = buildCartRows([
-      line({ id: 'main', normal_price: 100, is_foc: false, product_name: 'P' }),
-      line({ id: 'freebie0', normal_price: 0, is_foc: false, product_name: 'P' }),
+      line({ id: 'mainA', normal_price: 100, is_foc_trigger: true, product_name: 'P' }),
+      line({ id: 'mainB', normal_price: 80, is_foc_trigger: true, product_name: 'P' }),
+      line({ id: 'gift', normal_price: 0, is_foc: true, product_name: 'P' }),
+      line({ id: 'addon', normal_price: 5, is_foc: false, product_name: 'P' }),
     ]);
-    // No is_foc gift here, so both are mains -> two single rows.
-    expect(rows.every(r => r.kind === 'single')).toBe(true);
+    const bundle = rows.find(r => r.kind === 'bundle');
+    expect(bundle && bundle.kind === 'bundle' && bundle.mains.map(m => m.id).sort()).toEqual(['mainA', 'mainB']);
+    expect(rows.some(r => r.kind === 'single' && r.item.id === 'addon')).toBe(true);
+  });
+
+  it('falls back to non-gift-SKU paid lines as mains when no trigger is flagged', () => {
+    // Legacy rows with no is_foc_trigger: a paid copy of the gift SKU is split
+    // out, the genuine main stays the bundle main.
+    const rows = buildCartRows([
+      line({ id: 'casing', component_sku: 'K88', normal_price: 195, product_name: 'P' }),
+      line({ id: 'freeAL', component_sku: 'AL-19', normal_price: 0, is_foc: true, product_name: 'P' }),
+      line({ id: 'paidAL', component_sku: 'AL-19', normal_price: 45, product_name: 'P' }),
+    ]);
+    const bundle = rows.find(r => r.kind === 'bundle');
+    expect(bundle && bundle.kind === 'bundle' && bundle.mains.map(m => m.id)).toEqual(['casing']);
+    expect(rows.some(r => r.kind === 'single' && r.item.id === 'paidAL')).toBe(true);
   });
 });
 
