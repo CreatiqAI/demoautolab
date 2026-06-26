@@ -8,10 +8,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, Store, Building2 } from 'lucide-react';
+import { Trash2, ShoppingBag, ArrowLeft, Store, Building2, Gift } from 'lucide-react';
 import Header from '@/components/Header';
 import CheckoutModal from '@/components/CheckoutModal';
+import QuantityInput from '@/components/QuantityInput';
 import { groupCartItemsBySeller } from '@/lib/cartGrouping';
+import { buildCartRows, bundleMainQtyUpdates, bundleMainRemoval, type CartBundle } from '@/lib/cartBundles';
 import { transformImage } from '@/lib/imageTransform';
 
 export default function Cart() {
@@ -99,6 +101,22 @@ export default function Cart() {
     );
   };
 
+  type CartLine = typeof cartItems[number];
+
+  // Changing one main item's quantity rescales the bundle's shared gifts to the
+  // new combined main total (2 mains share their gifts -> gift = per-set × sum).
+  const changeBundleMainQty = (bundle: CartBundle<CartLine>, mainId: string, newQty: number) => {
+    bundleMainQtyUpdates(bundle, mainId, newQty).forEach(u => updateQuantity(u.id, u.quantity));
+  };
+
+  // Removing one main rescales the gifts to the remaining mains, or drops the
+  // gifts entirely when the last main goes (a gift can't stand on its own).
+  const removeBundleMain = (bundle: CartBundle<CartLine>, mainId: string) => {
+    const { removeIds, updates } = bundleMainRemoval(bundle, mainId);
+    updates.forEach(u => updateQuantity(u.id, u.quantity));
+    removeIds.forEach(id => removeFromCart(id));
+  };
+
   const handleSelectAll = (checked: boolean) => {
     setSelectedItems(checked ? reconcileFreeSelection(cartItems.map(item => item.id)) : []);
   };
@@ -124,6 +142,114 @@ export default function Cart() {
 
   const isAllSelected = selectedItems.length === cartItems.length && cartItems.length > 0;
   const hasSelectedItems = selectedItems.length > 0;
+
+  // One cart line (a standalone item, or a paid "main" inside a bundle).
+  const renderLine = (
+    item: CartLine,
+    opts: { onQty: (q: number) => void; onRemove: () => void; bundled?: boolean },
+  ) => {
+    const isFree = item.normal_price === 0;
+    return (
+      <div className="flex items-start gap-3 sm:gap-4">
+        <Checkbox
+          checked={selectedItems.includes(item.id)}
+          onCheckedChange={(checked) => handleItemSelection(item.id, checked as boolean)}
+          disabled={isFree}
+          title={isFree ? 'Free gift — follows the main item' : undefined}
+          className="mt-1"
+        />
+        {item.component_image && (
+          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+            <img
+              src={transformImage(item.component_image, { width: 160, quality: 70 })}
+              alt={item.name}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        )}
+
+        <div className="flex-1 min-w-0 space-y-2">
+          <div>
+            <h3 className="text-sm sm:text-base font-semibold line-clamp-2">{item.name}</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground">{item.component_sku}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">From: {item.product_name}</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              {isFree ? (
+                <Badge className="text-xs bg-green-100 text-green-800 border border-green-200 hover:bg-green-100">🎁 FREE / FOC</Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs">{formatPrice(item.normal_price)} each</Badge>
+              )}
+              {opts.bundled && (
+                <Badge className="text-xs bg-lime-100 text-lime-800 border border-lime-200 hover:bg-lime-100">
+                  <Gift className="h-3 w-3 mr-1" /> Bundle
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              {isFree ? (
+                <div className="flex items-center text-sm font-medium text-green-700">Qty {item.quantity}</div>
+              ) : (
+                <QuantityInput value={item.quantity} onChange={opts.onQty} />
+              )}
+
+              <div className="text-right min-w-[80px] sm:min-w-[100px]">
+                <p className={`text-sm sm:text-base font-semibold ${isFree ? 'text-green-700' : ''}`}>
+                  {isFree ? 'FREE' : formatPrice(item.normal_price * item.quantity)}
+                </p>
+              </div>
+
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={opts.onRemove}
+                className="text-destructive hover:text-destructive p-1 sm:p-2 h-8 w-8"
+              >
+                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Shared free-gift block shown once per bundle, under its main item(s).
+  const renderGiftBlock = (freebies: CartLine[]) => (
+    <div className="space-y-2 rounded-lg border border-dashed border-lime-300 bg-lime-50/60 p-2 sm:p-3">
+      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-lime-700">
+        <Gift className="h-3 w-3" />
+        Free gift{freebies.length > 1 ? 's' : ''} included
+      </p>
+      {freebies.map((f) => (
+        <div key={f.id} className="flex items-center gap-2 sm:gap-3">
+          {f.component_image && (
+            <div className="w-10 h-10 bg-white rounded-md overflow-hidden flex-shrink-0 border">
+              <img
+                src={transformImage(f.component_image, { width: 80, quality: 70 })}
+                alt={f.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs sm:text-sm font-medium line-clamp-1">{f.name}</p>
+            <p className="text-[11px] text-muted-foreground">{f.component_sku}</p>
+          </div>
+          <Badge className="text-xs bg-green-100 text-green-800 border border-green-200 hover:bg-green-100 flex-shrink-0">
+            🎁 FREE ×{f.quantity}
+          </Badge>
+        </div>
+      ))}
+    </div>
+  );
 
   if (cartItems.length === 0) {
     return (
@@ -233,115 +359,40 @@ export default function Cart() {
                     </span>
                   </div>
 
-                  {/* Items in this group */}
+                  {/* Items in this group — a product's paid mains + shared FOC gifts render as one bundle */}
                   <CardContent className="p-0">
                     <div className="divide-y">
-                      {group.items.map((item) => {
-                        const isFree = item.normal_price === 0;
-                        // A paid item whose product includes a free gift: its quantity sets how
-                        // many free sets are given, so lock it here and let the customer change
-                        // it on the product page. Keeps the gift-to-main ratio intact.
-                        const productHasFreeGift = !isFree && cartItems.some(
-                          i => i.product_name === item.product_name && i.normal_price === 0
-                        );
+                      {buildCartRows(group.items).map((row) => {
+                        if (row.kind === 'single') {
+                          const item = row.item;
+                          return (
+                            <div key={item.id} className="p-3 sm:p-5">
+                              {renderLine(item, {
+                                onQty: (q) => updateQuantity(item.id, q),
+                                onRemove: () => removeFromCart(item.id),
+                              })}
+                            </div>
+                          );
+                        }
+
+                        // FOC bundle: one card holding every paid main item plus the
+                        // gifts they share. Changing any main rescales the gifts.
+                        const bundle: CartBundle<CartLine> = { mains: row.mains, freebies: row.freebies };
                         return (
-                        <div key={item.id} className="p-3 sm:p-5">
-                          <div className="flex items-start gap-3 sm:gap-4">
-                            <Checkbox
-                              checked={selectedItems.includes(item.id)}
-                              onCheckedChange={(checked) => handleItemSelection(item.id, checked as boolean)}
-                              disabled={isFree}
-                              title={isFree ? 'Free gift — follows the main item' : undefined}
-                              className="mt-1"
-                            />
-                            {item.component_image && (
-                              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                                <img
-                                  src={transformImage(item.component_image, { width: 160, quality: 70 })}
-                                  alt={item.name}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                  decoding="async"
-                                />
-                              </div>
-                            )}
-
-                            <div className="flex-1 min-w-0 space-y-2">
-                              <div>
-                                <h3 className="text-sm sm:text-base font-semibold line-clamp-2">{item.name}</h3>
-                                <p className="text-xs sm:text-sm text-muted-foreground">{item.component_sku}</p>
-                                <p className="text-xs sm:text-sm text-muted-foreground">
-                                  From: {item.product_name}
-                                </p>
-                              </div>
-
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div className="flex items-center gap-2">
-                                  {isFree ? (
-                                    <Badge className="text-xs bg-green-100 text-green-800 border border-green-200 hover:bg-green-100">🎁 FREE / FOC</Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="text-xs">
-                                      {formatPrice(item.normal_price)} each
-                                    </Badge>
-                                  )}
+                          <div key={`bundle-${row.mains[0].id}`} className="p-3 sm:p-5">
+                            <div className="space-y-3 rounded-xl border border-lime-200 bg-lime-50/30 p-2 sm:p-3">
+                              {row.mains.map((m, i) => (
+                                <div key={m.id} className={i > 0 ? 'pt-3 border-t border-lime-100' : undefined}>
+                                  {renderLine(m, {
+                                    bundled: true,
+                                    onQty: (q) => changeBundleMainQty(bundle, m.id, q),
+                                    onRemove: () => removeBundleMain(bundle, m.id),
+                                  })}
                                 </div>
-
-                                <div className="flex items-center justify-between gap-3">
-                                  {isFree ? (
-                                    <div className="flex items-center text-sm font-medium text-green-700">
-                                      Qty {item.quantity}
-                                    </div>
-                                  ) : productHasFreeGift ? (
-                                    <div
-                                      className="flex items-center text-sm font-medium text-gray-700"
-                                      title="This item comes with a free gift — change its quantity on the product page"
-                                    >
-                                      Qty {item.quantity}
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1 sm:gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                        disabled={item.quantity <= 1}
-                                        className="h-8 w-8 p-0"
-                                      >
-                                        <Minus className="h-3 w-3" />
-                                      </Button>
-                                      <span className="w-8 sm:w-12 text-center text-sm border rounded px-1 sm:px-2 py-1">
-                                        {item.quantity}
-                                      </span>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                        className="h-8 w-8 p-0"
-                                      >
-                                        <Plus className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  )}
-
-                                  <div className="text-right min-w-[80px] sm:min-w-[100px]">
-                                    <p className={`text-sm sm:text-base font-semibold ${isFree ? 'text-green-700' : ''}`}>
-                                      {isFree ? 'FREE' : formatPrice(item.normal_price * item.quantity)}
-                                    </p>
-                                  </div>
-
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => removeFromCart(item.id)}
-                                    className="text-destructive hover:text-destructive p-1 sm:p-2 h-8 w-8"
-                                  >
-                                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </Button>
-                                </div>
-                              </div>
+                              ))}
+                              {renderGiftBlock(row.freebies)}
                             </div>
                           </div>
-                        </div>
                         );
                       })}
                     </div>

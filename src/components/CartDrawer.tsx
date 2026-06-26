@@ -7,9 +7,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Minus, Plus, Trash2, ShoppingBag, X, ArrowRight, Store, Building2 } from 'lucide-react';
+import { Trash2, ShoppingBag, X, ArrowRight, Store, Building2, Gift } from 'lucide-react';
 import CheckoutModal from '@/components/CheckoutModal';
+import QuantityInput from '@/components/QuantityInput';
 import { groupCartItemsBySeller } from '@/lib/cartGrouping';
+import { buildCartRows, bundleMainQtyUpdates, bundleMainRemoval, type CartBundle } from '@/lib/cartBundles';
 import { transformImage } from '@/lib/imageTransform';
 
 interface CartDrawerProps {
@@ -67,27 +69,63 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     }).format(amount);
   };
 
+  // Free (FOC) gifts follow their main item: a free line is selected iff a paid
+  // item from the same product is selected. Free items have no checkbox, so their
+  // selection is always derived here (keeps the gift bundled with its purchase).
+  const reconcileFreeSelection = (ids: string[]): string[] => {
+    const idSet = new Set(ids);
+    const paidSelectedProducts = new Set(
+      cartItems.filter(i => i.normal_price > 0 && idSet.has(i.id)).map(i => i.product_name)
+    );
+    const result = new Set(
+      ids.filter(id => {
+        const item = cartItems.find(i => i.id === id);
+        return item ? item.normal_price > 0 : true;
+      })
+    );
+    cartItems.forEach(i => {
+      if (i.normal_price === 0 && paidSelectedProducts.has(i.product_name)) {
+        result.add(i.id);
+      }
+    });
+    return Array.from(result);
+  };
+
   const handleItemSelection = (itemId: string, checked: boolean) => {
     setSelectedItems(prev =>
-      checked
-        ? [...prev, itemId]
-        : prev.filter(id => id !== itemId)
+      reconcileFreeSelection(
+        checked ? [...prev, itemId] : prev.filter(id => id !== itemId)
+      )
     );
   };
 
   const handleSelectAll = (checked: boolean) => {
-    setSelectedItems(checked ? cartItems.map(item => item.id) : []);
+    setSelectedItems(checked ? reconcileFreeSelection(cartItems.map(item => item.id)) : []);
   };
 
   const handleSelectGroup = (groupItemIds: string[], checked: boolean) => {
     setSelectedItems(prev => {
       if (checked) {
         const merged = new Set([...prev, ...groupItemIds]);
-        return Array.from(merged);
+        return reconcileFreeSelection(Array.from(merged));
       }
       const drop = new Set(groupItemIds);
-      return prev.filter(id => !drop.has(id));
+      return reconcileFreeSelection(prev.filter(id => !drop.has(id)));
     });
+  };
+
+  type CartLine = typeof cartItems[number];
+
+  // Changing one main item's quantity rescales the bundle's shared gifts to the
+  // new combined main total; removing a main rescales (or drops) them likewise.
+  const changeBundleMainQty = (bundle: CartBundle<CartLine>, mainId: string, newQty: number) => {
+    bundleMainQtyUpdates(bundle, mainId, newQty).forEach(u => updateQuantity(u.id, u.quantity));
+  };
+
+  const removeBundleMain = (bundle: CartBundle<CartLine>, mainId: string) => {
+    const { removeIds, updates } = bundleMainRemoval(bundle, mainId);
+    updates.forEach(u => updateQuantity(u.id, u.quantity));
+    removeIds.forEach(id => removeFromCart(id));
   };
 
   const getSelectedItems = () => {
@@ -134,6 +172,111 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     } catch (error) {
     }
   };
+
+  // One cart line (a standalone item, or a paid "main" inside a bundle).
+  const renderLine = (
+    item: CartLine,
+    opts: { onQty?: (q: number) => void; onRemove: () => void; bundled?: boolean },
+  ) => {
+    const isFree = item.normal_price === 0;
+    return (
+      <>
+        <div className="flex items-start gap-3">
+          <Checkbox
+            checked={selectedItems.includes(item.id)}
+            onCheckedChange={(checked) => handleItemSelection(item.id, checked as boolean)}
+            disabled={isFree}
+            className="mt-1 flex-shrink-0"
+          />
+
+          {/* Clickable area - Image and Title */}
+          <div
+            onClick={() => handleItemClick(item)}
+            className="flex items-start gap-3 flex-1 min-w-0 cursor-pointer group/item"
+          >
+            <div className="w-14 h-14 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-transparent group-hover/item:ring-lime-500 transition-all">
+              {item.component_image ? (
+                <img
+                  src={transformImage(item.component_image, { width: 120, quality: 70 })}
+                  alt={item.name}
+                  className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-300"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <ShoppingBag className="h-5 w-5 text-gray-300" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <h3 className="text-[14px] font-medium text-gray-900 line-clamp-2 mb-0.5 group-hover/item:text-lime-600 transition-colors">{item.name}</h3>
+              <p className="text-[11px] text-gray-500 mb-1">{item.component_sku}</p>
+              {opts.bundled && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-lime-700">
+                  <Gift className="h-3 w-3" /> Bundle
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Action buttons - NOT clickable for navigation */}
+          <div className="flex-shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                opts.onRemove();
+              }}
+              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Quantity controls and price */}
+        <div className="flex items-center justify-between gap-2 mt-2 ml-[44px]">
+          {isFree ? (
+            <span className="text-sm font-medium text-green-700">Qty {item.quantity}</span>
+          ) : (
+            <QuantityInput size="sm" value={item.quantity} onChange={(q) => opts.onQty?.(q)} />
+          )}
+
+          <span className={`text-[14px] font-bold ${isFree ? 'text-green-700' : 'text-gray-900'}`}>
+            {isFree ? 'FREE' : formatPrice(item.normal_price * item.quantity)}
+          </span>
+        </div>
+      </>
+    );
+  };
+
+  // Shared free-gift block shown once per bundle, under its main item(s).
+  const renderGiftBlock = (freebies: CartLine[]) => (
+    <div className="mt-2 ml-[44px] space-y-1.5 rounded-lg border border-dashed border-lime-300 bg-lime-50/60 p-2">
+      {freebies.map((f) => (
+        <div key={f.id} className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-white rounded-md overflow-hidden flex-shrink-0 border">
+            {f.component_image ? (
+              <img
+                src={transformImage(f.component_image, { width: 64, quality: 70 })}
+                alt={f.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Gift className="h-4 w-4 text-lime-400" />
+              </div>
+            )}
+          </div>
+          <p className="flex-1 min-w-0 text-[12px] font-medium text-gray-700 line-clamp-1">{f.name}</p>
+          <span className="text-[11px] font-semibold text-green-700 flex-shrink-0">🎁 FREE ×{f.quantity}</span>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <>
@@ -243,84 +386,38 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         <span className="text-[11px] text-gray-500 flex-shrink-0">{formatPrice(group.subtotal)}</span>
                       </div>
 
-                      {/* Items in this group */}
-                      {group.items.map((item) => (
-                        <div key={item.id} className="px-4 py-3 border-b border-gray-100 last:border-b-0">
-                          <div className="flex items-start gap-3">
-                            <Checkbox
-                              checked={selectedItems.includes(item.id)}
-                              onCheckedChange={(checked) => handleItemSelection(item.id, checked as boolean)}
-                              className="mt-1 flex-shrink-0"
-                            />
-
-                            {/* Clickable area - Image and Title */}
-                            <div
-                              onClick={() => handleItemClick(item)}
-                              className="flex items-start gap-3 flex-1 min-w-0 cursor-pointer group/item"
-                            >
-                              <div className="w-14 h-14 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-transparent group-hover/item:ring-lime-500 transition-all">
-                                {item.component_image ? (
-                                  <img
-                                    src={transformImage(item.component_image, { width: 120, quality: 70 })}
-                                    alt={item.name}
-                                    className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-300"
-                                    loading="lazy"
-                                    decoding="async"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <ShoppingBag className="h-5 w-5 text-gray-300" />
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                <h3 className="text-[14px] font-medium text-gray-900 line-clamp-2 mb-0.5 group-hover/item:text-lime-600 transition-colors">{item.name}</h3>
-                                <p className="text-[11px] text-gray-500 mb-1">{item.component_sku}</p>
-                              </div>
+                      {/* Items in this group — a product's paid mains + shared FOC gifts render as one bundle */}
+                      {buildCartRows(group.items).map((row) => {
+                        if (row.kind === 'single') {
+                          const item = row.item;
+                          return (
+                            <div key={item.id} className="px-4 py-3 border-b border-gray-100 last:border-b-0">
+                              {renderLine(item, {
+                                onQty: (q) => updateQuantity(item.id, q),
+                                onRemove: () => removeFromCart(item.id),
+                              })}
                             </div>
+                          );
+                        }
 
-                            {/* Action buttons - NOT clickable for navigation */}
-                            <div className="flex-shrink-0">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeFromCart(item.id);
-                                }}
-                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                        const bundle: CartBundle<CartLine> = { mains: row.mains, freebies: row.freebies };
+                        return (
+                          <div key={`bundle-${row.mains[0].id}`} className="px-4 py-3 border-b border-gray-100 last:border-b-0">
+                            <div className="rounded-lg border border-lime-200 bg-lime-50/30 p-2 space-y-3">
+                              {row.mains.map((m, i) => (
+                                <div key={m.id} className={i > 0 ? 'pt-3 border-t border-lime-100' : undefined}>
+                                  {renderLine(m, {
+                                    bundled: true,
+                                    onQty: (q) => changeBundleMainQty(bundle, m.id, q),
+                                    onRemove: () => removeBundleMain(bundle, m.id),
+                                  })}
+                                </div>
+                              ))}
+                              {renderGiftBlock(row.freebies)}
                             </div>
                           </div>
-
-                          {/* Quantity controls and price - Below the clickable area */}
-                          <div className="flex items-center justify-between gap-2 mt-2 ml-[44px]">
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                disabled={item.quantity <= 1}
-                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-700"
-                              >
-                                <Minus className="h-3 w-3" />
-                              </button>
-                              <span className="w-9 text-center text-sm font-medium text-gray-900">
-                                {item.quantity}
-                              </span>
-                              <button
-                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors text-gray-700"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </button>
-                            </div>
-
-                            <span className="text-[14px] font-bold text-gray-900">
-                              {formatPrice(item.normal_price * item.quantity)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })}
