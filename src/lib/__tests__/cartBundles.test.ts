@@ -58,6 +58,30 @@ describe('buildCartRows', () => {
     const rows = buildCartRows([line({ id: 'orphan', normal_price: 0, product_name: 'P' })]);
     expect(rows).toEqual([{ kind: 'single', item: expect.objectContaining({ id: 'orphan' }) }]);
   });
+
+  it('classifies by is_foc, not price: a paid copy of a gift component is a main', () => {
+    // Same product holds the free gift (is_foc) AND a paid copy of it the user
+    // chose to buy. The paid copy must be a main, not folded into the gifts.
+    const rows = buildCartRows([
+      line({ id: 'casing', normal_price: 195, is_foc: false, product_name: 'P' }),
+      line({ id: 'gift', normal_price: 0, is_foc: true, product_name: 'P' }),
+      line({ id: 'paidGift', normal_price: 45, is_foc: false, product_name: 'P' }),
+    ]);
+    expect(rows).toHaveLength(1);
+    if (rows[0].kind === 'bundle') {
+      expect(rows[0].mains.map(m => m.id).sort()).toEqual(['casing', 'paidGift']);
+      expect(rows[0].freebies.map(f => f.id)).toEqual(['gift']);
+    }
+  });
+
+  it('honours is_foc over a zero price (an explicit paid 0 line is a main)', () => {
+    const rows = buildCartRows([
+      line({ id: 'main', normal_price: 100, is_foc: false, product_name: 'P' }),
+      line({ id: 'freebie0', normal_price: 0, is_foc: false, product_name: 'P' }),
+    ]);
+    // No is_foc gift here, so both are mains -> two single rows.
+    expect(rows.every(r => r.kind === 'single')).toBe(true);
+  });
 });
 
 describe('focPerSet / bundleSets', () => {

@@ -506,7 +506,7 @@ const ProductDetails = () => {
     }
 
     localCart.forEach(cartItem => {
-      const isFreeGift = cartItem.component.is_foc && triggerSelected;
+      const isFreeGift = !!(cartItem.component.is_foc && triggerSelected);
       const displayPrice = isFreeGift ? 0 : getDisplayPrice(cartItem.component.normal_price, cartItem.component.merchant_price);
       const quantity = isFreeGift ? focFreeQty(cartItem.component) : cartItem.quantity;
       addToCart({
@@ -515,7 +515,8 @@ const ProductDetails = () => {
         normal_price: displayPrice,
         quantity,
         product_name: product?.name || 'Unknown Product',
-        component_image: cartItem.component.default_image_url
+        component_image: cartItem.component.default_image_url,
+        is_foc: isFreeGift,
       });
     });
 

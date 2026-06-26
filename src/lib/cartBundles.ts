@@ -30,6 +30,16 @@ export type CartRow<T extends GroupableCartItem> =
 export type QtyUpdate = { id: string; quantity: number };
 
 /**
+ * Whether a cart line is a free (FOC) gift. Uses the persisted `is_foc` flag,
+ * falling back to price for legacy lines that predate the flag. A paid purchase
+ * of a component that is *also* a gift elsewhere has is_foc === false, so it is
+ * treated as a normal main, not a gift.
+ */
+export function isFreeGift<T extends GroupableCartItem>(item: T): boolean {
+  return item.is_foc ?? item.normal_price === 0;
+}
+
+/**
  * Group a flat list of cart items into display rows. A product that has both
  * paid items and free gifts becomes one `bundle` row (all its mains + all its
  * gifts). Everything else becomes its own `single` row. First-seen order kept.
@@ -44,8 +54,8 @@ export function buildCartRows<T extends GroupableCartItem>(items: T[]): CartRow<
 
   const rows: CartRow<T>[] = [];
   for (const list of byProduct.values()) {
-    const freebies = list.filter((i) => i.normal_price === 0);
-    const mains = list.filter((i) => i.normal_price > 0);
+    const freebies = list.filter((i) => isFreeGift(i));
+    const mains = list.filter((i) => !isFreeGift(i));
     if (freebies.length > 0 && mains.length > 0) {
       rows.push({ kind: 'bundle', mains, freebies });
     } else {

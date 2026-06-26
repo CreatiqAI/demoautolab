@@ -10,11 +10,19 @@ interface CartItem {
   quantity: number;
   product_name: string;
   component_image?: string;
+  /** True when this line is a free (FOC) gift, kept distinct from a paid buy. */
+  is_foc?: boolean;
   /** Seller of this item. NULL means AutoLab in-house. */
   vendor_id?: string | null;
   /** Display name of seller. NULL/undefined means "AutoLab". */
   vendor_name?: string | null;
 }
+
+// A cart line is identified by its component, the product it came from, AND
+// whether it is a free gift — so a paid purchase and a FOC gift of the same
+// component stay separate lines instead of collapsing into one.
+const cartLineId = (sku: string, productName: string, isFoc: boolean) =>
+  `${sku}_${productName}_${isFoc ? 'foc' : 'std'}`;
 
 interface CartContextType {
   cartItems: CartItem[];
@@ -116,13 +124,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Transform database items to match CartItem interface with images + seller info
         const transformedItems: CartItem[] = data.map((item: any) => {
           const vendorId = vendorIdMap.get(item.component_sku) ?? null;
+          const productName = item.product_context || 'Unknown Product';
+          // Prefer the persisted is_foc flag; fall back to price for legacy rows.
+          const isFoc = item.is_foc ?? (Number(item.unit_price) === 0);
           return {
-            id: `${item.component_sku}_${item.product_context}`,
+            id: cartLineId(item.component_sku, productName, isFoc),
             component_sku: item.component_sku,
             name: item.component_name,
             normal_price: item.unit_price,
             quantity: item.quantity,
-            product_name: item.product_context || 'Unknown Product',
+            product_name: productName,
+            is_foc: isFoc,
             component_image: imageMap.get(item.component_sku) || item.default_image_url || undefined,
             vendor_id: vendorId,
             vendor_name: vendorId ? (vendorNameMap.get(vendorId) || null) : null,
@@ -165,7 +177,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
 
       // Immediately update local state for instant UI feedback
-      const itemId = `${newItem.component_sku}_${newItem.product_name}`;
+      const isFoc = newItem.is_foc ?? false;
+      const itemId = cartLineId(newItem.component_sku, newItem.product_name, isFoc);
       let updatedItems: CartItem[] = [];
 
       setCartItems(prevItems => {
@@ -186,10 +199,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return updatedItems;
       });
       
-      // Find component_id from component_library
+      // Find component_id + vendor_id from component_library. We fetch vendor_id
+      // here (the same source of truth loadCartFromDatabase uses) so the cart can
+      // group the item under the correct seller immediately, without a refresh.
       const { data: componentData, error: componentError } = await supabase
         .from('component_library')
-        .select('id')
+        .select('id, vendor_id')
         .eq('component_sku', newItem.component_sku)
         .single();
 
@@ -198,6 +213,29 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('cart', JSON.stringify(updatedItems));
         return;
       }
+
+      // Resolve seller info and patch the optimistic item so the multi-seller
+      // grouping (AutoLab vs vendor) renders correctly on add — not just on reload.
+      const vendorId = (componentData as any).vendor_id ?? null;
+      let vendorName: string | null = null;
+      if (vendorId) {
+        const { data: vendorRow } = await supabase
+          .from('vendors' as any)
+          .select('business_name')
+          .eq('id', vendorId)
+          .maybeSingle();
+        vendorName = (vendorRow as any)?.business_name ?? null;
+      }
+
+      setCartItems(prevItems => {
+        const patched = prevItems.map(item =>
+          item.id === itemId
+            ? { ...item, vendor_id: vendorId, vendor_name: vendorName }
+            : item
+        );
+        localStorage.setItem('cart', JSON.stringify(patched));
+        return patched;
+      });
 
       const { error } = await supabase
         .rpc('add_item_to_cart', {
@@ -208,8 +246,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           p_quantity: newItem.quantity,
           p_unit_price: newItem.normal_price,
           p_user_id: user.id,
-          p_guest_session: null
-        });
+          p_guest_session: null,
+          p_is_foc: isFoc,
+        } as any);
 
       if (error) {
         // State was already updated above for instant feedback
@@ -251,12 +290,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      // Capture the line before removing it so we can target the exact cart row
+      // (component + product + free/paid), not every line sharing the component.
+      const removed = cartItems.find(item => item.id === itemId);
+
       // Immediately update local state for instant UI feedback (already sorted, just filter)
       setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
-      
-      // Extract component_sku from itemId
-      const component_sku = itemId.split('_')[0];
-      
+
+      // Extract component_sku from the line (fall back to the id prefix)
+      const component_sku = removed?.component_sku ?? itemId.split('_')[0];
+
       // Find component_id
       const { data: componentData, error: componentError } = await supabase
         .from('component_library')
@@ -270,13 +313,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Authentication is now required for all cart operations
-      
+
       const { error } = await supabase
         .rpc('remove_item_from_cart', {
           p_component_id: componentData.id,
           p_user_id: user.id,
-          p_guest_session: null
-        });
+          p_guest_session: null,
+          p_product_context: removed?.product_name ?? null,
+          p_is_foc: removed?.is_foc ?? null,
+        } as any);
 
       if (error) {
         // State was already updated above for instant feedback
@@ -315,30 +360,30 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ).sort((a, b) => a.name.localeCompare(b.name)) // Keep sorted
       );
 
-      // Extract component_sku from itemId
-      const component_sku = itemId.split('_')[0];
+      // Get existing item details (its sku/product/is_foc identify the line)
+      const existingItem = cartItems.find(item => item.id === itemId);
+      if (!existingItem) return;
 
       // Find component_id
       const { data: componentData, error: componentError } = await supabase
         .from('component_library')
         .select('id')
-        .eq('component_sku', component_sku)
+        .eq('component_sku', existingItem.component_sku)
         .single();
 
       if (componentError || !componentData) {
         return;
       }
 
-      // Get existing item details
-      const existingItem = cartItems.find(item => item.id === itemId);
-      if (!existingItem) return;
-
-      // Remove old entry and add new one with updated quantity
+      // Remove the specific line and re-add it with the updated quantity,
+      // preserving its free/paid (is_foc) identity so it stays separate.
       await supabase.rpc('remove_item_from_cart', {
         p_component_id: componentData.id,
         p_user_id: user.id,
-        p_guest_session: null
-      });
+        p_guest_session: null,
+        p_product_context: existingItem.product_name,
+        p_is_foc: existingItem.is_foc ?? false,
+      } as any);
 
       await supabase.rpc('add_item_to_cart', {
         p_component_id: componentData.id,
@@ -348,8 +393,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         p_quantity: quantity,
         p_unit_price: existingItem.normal_price,
         p_user_id: user.id,
-        p_guest_session: null
-      });
+        p_guest_session: null,
+        p_is_foc: existingItem.is_foc ?? false,
+      } as any);
     } catch (error) {
       // Silently fail - state already updated for instant feedback
     }

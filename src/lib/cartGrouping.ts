@@ -14,6 +14,8 @@ export type GroupableCartItem = {
   quantity: number;
   product_name: string;
   component_image?: string;
+  /** True when this line is a free (FOC) gift rather than a paid purchase. */
+  is_foc?: boolean;
   vendor_id?: string | null;
   vendor_name?: string | null;
 };
