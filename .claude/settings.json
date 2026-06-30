@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__supabase__list_tables",
+      "PowerShell(npm run type-check)",
+      "PowerShell(npm run build)",
+      "Bash(git pull *)",
+      "Bash(echo \"exit:$?\")"
+    ]
+  }
+}
