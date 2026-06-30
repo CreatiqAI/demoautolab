@@ -228,19 +228,16 @@ export default function VendorPayouts() {
       if (upErr) throw upErr;
       const { data: { publicUrl } } = supabase.storage.from('vendor-payout-slips').getPublicUrl(filePath);
 
-      // 2. Update payout row
+      // 2. Update payout row via SECURITY DEFINER RPC (vendor_payouts has no
+      // UPDATE policy, so the anon admin client can't update it directly).
       const admin = getCurrentAdmin();
-      const { error: updErr } = await supabase
-        .from('vendor_payouts' as any)
-        .update({
-          status: 'PAID',
-          paid_at: new Date().toISOString(),
-          paid_by: admin?.id ?? null,
-          payment_reference: paidReference.trim(),
-          payment_slip_url: publicUrl,
-          notes: paidNotes.trim() || null,
-        } as any)
-        .eq('id', paidPayout.id);
+      const { error: updErr } = await supabase.rpc('admin_mark_vendor_payout_paid' as any, {
+        p_payout_id: paidPayout.id,
+        p_reference: paidReference.trim(),
+        p_slip_url: publicUrl,
+        p_notes: paidNotes.trim() || null,
+        p_paid_by: admin?.id ?? null,
+      });
       if (updErr) throw updErr;
 
       void logAdminAction({
