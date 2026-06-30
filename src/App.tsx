@@ -16,6 +16,7 @@ import About from './pages/About';
 import Auth from './pages/Auth';
 import AuthCallback from './pages/AuthCallback';
 import Catalog from './pages/Catalog';
+import NewArrivals from './pages/NewArrivals';
 import ProductDetails from './pages/ProductDetails';
 import Profile from './pages/Profile';
 import FindShops from './pages/FindShops';
@@ -126,6 +127,7 @@ const App = () => (
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route path="/catalog" element={<Catalog />} />
+                  <Route path="/new-arrivals" element={<NewArrivals />} />
                   <Route path="/product/:id" element={<ProductDetails />} />
                   <Route path="/cart" element={<Cart />} />
                   <Route path="/my-orders" element={<MyOrders />} />

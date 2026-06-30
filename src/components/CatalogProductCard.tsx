@@ -16,6 +16,8 @@ export interface CatalogCardProduct {
   image_type?: string | null;
   component_count?: number;
   featured?: boolean;
+  /** True while within its 30-day New Arrivals window. */
+  is_new_arrival?: boolean;
 }
 
 interface CatalogProductCardProps {
@@ -56,11 +58,18 @@ const CatalogProductCard = ({ product, onClick }: CatalogProductCardProps) => {
           />
         )}
 
-        {product.featured && (
-          <div className="absolute top-1.5 left-1.5">
-            <span className="px-1.5 py-0.5 bg-amber-600 text-white text-[9px] font-bold rounded shadow-lg">
-              Premium
-            </span>
+        {(product.is_new_arrival || product.featured) && (
+          <div className="absolute top-1.5 left-1.5 flex flex-col items-start gap-1">
+            {product.is_new_arrival && (
+              <span className="px-1.5 py-0.5 bg-lime-600 text-white text-[9px] font-bold rounded shadow-lg">
+                New
+              </span>
+            )}
+            {product.featured && (
+              <span className="px-1.5 py-0.5 bg-amber-600 text-white text-[9px] font-bold rounded shadow-lg">
+                Premium
+              </span>
+            )}
           </div>
         )}
 

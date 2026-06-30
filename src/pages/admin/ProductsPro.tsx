@@ -76,6 +76,8 @@ interface ProductFormData {
   slug: string;
   active: boolean;
   featured: boolean;
+  /** New Arrivals window start (ISO) or null. Set = on the page for 30 days. */
+  new_arrival_at: string | null;
   images: Array<{
     url: string;
     is_primary: boolean;
@@ -178,6 +180,7 @@ export default function ProductsPro() {
     slug: '',
     active: true,
     featured: false,
+    new_arrival_at: null,
     images: [],
     selectedComponents: [],
     installation: {
@@ -945,7 +948,8 @@ export default function ProductsPro() {
         screen_size: formData.screen_size,
         slug: formData.slug,
         active: formData.active,
-        featured: formData.featured
+        featured: formData.featured,
+        new_arrival_at: formData.new_arrival_at
       };
 
       let product;
@@ -1183,6 +1187,7 @@ export default function ProductsPro() {
       slug: '',
       active: true,
       featured: false,
+      new_arrival_at: null,
       images: [],
       selectedComponents: [],
       installation: {
@@ -1293,6 +1298,7 @@ export default function ProductsPro() {
         slug: product.slug || '',
         active: product.active ?? true,
         featured: product.featured ?? false,
+        new_arrival_at: (product as any).new_arrival_at ?? null,
         images: formattedImages,
         selectedComponents: components,
         installation: installationFormData
@@ -1592,6 +1598,34 @@ export default function ProductsPro() {
                             <p className="text-xs text-muted-foreground">Show on homepage</p>
                           </div>
                         </div>
+                        {(() => {
+                          // Window-aware so the toggle reflects whether the product is
+                          // *currently* a new arrival (within 30 days of its start), not
+                          // just whether new_arrival_at was ever set. Turning it on stamps
+                          // now(); leaving it on while editing preserves the original start.
+                          const startMs = formData.new_arrival_at ? Date.parse(formData.new_arrival_at) : null;
+                          const active = startMs !== null && startMs <= Date.now() && startMs > Date.now() - 30 * 864e5;
+                          const until = startMs !== null
+                            ? new Date(startMs + 30 * 864e5).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })
+                            : null;
+                          return (
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                checked={active}
+                                onCheckedChange={(checked) => setFormData(prev => ({
+                                  ...prev,
+                                  new_arrival_at: checked ? new Date().toISOString() : null,
+                                }))}
+                              />
+                              <div>
+                                <Label className="font-medium">New Arrival</Label>
+                                <p className="text-xs text-muted-foreground">
+                                  {active ? `On New Arrivals until ${until}` : 'Show on New Arrivals for 30 days'}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </TabsContent>

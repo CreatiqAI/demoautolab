@@ -43,6 +43,7 @@ interface CatalogProduct {
   is_full_match: boolean;
   total_count?: number;
   full_count?: number;
+  is_new_arrival?: boolean;
 }
 
 interface ProductCategory {

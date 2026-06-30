@@ -304,6 +304,13 @@ const Header = () => {
               </div>
 
               <Link
+                to="/new-arrivals"
+                className={`relative h-full flex items-center text-xs font-bold tracking-widest uppercase transition-all duration-300 ${linkHoverColor} liquid-underline`}
+              >
+                New Arrivals
+              </Link>
+
+              <Link
                 to="/find-shops"
                 className={`relative h-full flex items-center text-xs font-bold tracking-widest uppercase transition-all duration-300 ${linkHoverColor} liquid-underline`}
               >
@@ -429,6 +436,7 @@ const Header = () => {
                     <nav className="flex flex-col gap-1">
                       {[
                         { label: 'Catalog', path: '/catalog' },
+                        { label: 'New Arrivals', path: '/new-arrivals' },
                         { label: 'Find Shops', path: '/find-shops' },
                         { label: 'About Us', path: '/about' },
                       ].map((item) => (
