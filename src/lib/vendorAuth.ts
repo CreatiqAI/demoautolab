@@ -63,22 +63,27 @@ export async function getVendorByUserId(userId: string): Promise<Vendor | null> 
 export function useCurrentVendor(): { vendor: Vendor | null; loading: boolean; refetch: () => void } {
   const { user } = useAuth();
   const [vendor, setVendor] = useState<Vendor | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Which auth user the current `vendor` value was resolved for. Loading is
+  // derived from this *during render* rather than a separate effect-set flag.
+  // That matters on a hard refresh: the auth user is restored one render before
+  // this hook's fetch effect re-runs, so a plain `loading` boolean would briefly
+  // read false-with-null-vendor and make ProtectedVendorRoute bounce to /auth
+  // (a false "logout"). Comparing against the current user.id closes that gap.
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     if (!user) {
       setVendor(null);
-      setLoading(false);
+      setResolvedUserId(null);
       return;
     }
-    setLoading(true);
     void (async () => {
       const v = await getVendorByUserId(user.id);
       if (!cancelled) {
         setVendor(v);
-        setLoading(false);
+        setResolvedUserId(user.id);
       }
     })();
     return () => {
@@ -86,7 +91,14 @@ export function useCurrentVendor(): { vendor: Vendor | null; loading: boolean; r
     };
   }, [user, tick]);
 
-  return { vendor, loading, refetch: () => setTick((t) => t + 1) };
+  // While a user is signed in but their vendor row hasn't been resolved yet,
+  // report loading — never a premature (loading:false, vendor:null).
+  const resolved = !!user && resolvedUserId === user.id;
+  return {
+    vendor: resolved ? vendor : null,
+    loading: !!user && !resolved,
+    refetch: () => setTick((t) => t + 1),
+  };
 }
 
 /**

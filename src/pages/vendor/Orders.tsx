@@ -159,14 +159,13 @@ const STATUS_META: Record<
   },
 };
 
-const STATUS_FILTER_OPTIONS: { value: FulfilmentStatus | 'all' | 'stuck'; label: string }[] = [
-  { value: 'all', label: 'All Orders' },
-  { value: 'stuck', label: 'Stuck Shipments' },
+// Mirror the admin Warehouse Operations layout: a clean 4-step pipeline.
+// Cancelled is intentionally not a tab — it shows as a quiet badge on the row.
+const STATUS_FILTER_OPTIONS: { value: FulfilmentStatus; label: string }[] = [
   { value: 'PENDING', label: STATUS_META.PENDING.label }, // "Processing"
   { value: 'PROCESSING', label: STATUS_META.PROCESSING.label }, // "Packing"
   { value: 'SHIPPED', label: STATUS_META.SHIPPED.label },
   { value: 'DELIVERED', label: STATUS_META.DELIVERED.label },
-  { value: 'CANCELLED', label: STATUS_META.CANCELLED.label },
 ];
 
 const formatRM = (n: number) =>
@@ -241,7 +240,7 @@ export default function VendorOrders() {
 
   const [fulfilments, setFulfilments] = useState<Fulfilment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<FulfilmentStatus | 'all' | 'stuck'>('all');
+  const [statusFilter, setStatusFilter] = useState<FulfilmentStatus>('PENDING');
   const [search, setSearch] = useState('');
 
   // Drawer state
@@ -480,16 +479,22 @@ export default function VendorOrders() {
   // Derived
   // -------------------------------------------------------------------------
 
+  // An order only "counts" as real work once the customer has actually paid.
+  // (A vendor_fulfilment row is created at checkout, before payment, so unpaid
+  // / abandoned orders would otherwise show as "stuck" forever.)
+  const isPaid = (f: Fulfilment): boolean => {
+    const ps = f.orders?.payment_state;
+    return ps === 'SUCCESS' || ps === 'APPROVED';
+  };
+
+  // Stuck = a PAID order still sitting in "Processing" (PENDING) for >72h.
+  // Surfaced only as a subtle row badge — not as its own tab.
   const isStuck = (f: Fulfilment): boolean => {
     if (f.status !== 'PENDING') return false;
+    if (!isPaid(f)) return false;
     const ageHours = (Date.now() - new Date(f.created_at).getTime()) / 3600000;
     return ageHours > STUCK_THRESHOLD_HOURS;
   };
-
-  const stuckCount = useMemo(
-    () => fulfilments.filter(isStuck).length,
-    [fulfilments],
-  );
 
   const countByStatus = useMemo(() => {
     const c: Record<FulfilmentStatus, number> = {
@@ -500,12 +505,7 @@ export default function VendorOrders() {
   }, [fulfilments]);
 
   const filtered = useMemo(() => {
-    let rows = fulfilments;
-    if (statusFilter === 'stuck') {
-      rows = rows.filter(isStuck);
-    } else if (statusFilter !== 'all') {
-      rows = rows.filter((f) => f.status === statusFilter);
-    }
+    let rows = fulfilments.filter((f) => f.status === statusFilter);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       rows = rows.filter((f) => {
@@ -685,14 +685,10 @@ export default function VendorOrders() {
 
       {/* Quick filter tabs — desktop. Mirrors warehouse operations. */}
       <div className="hidden lg:block">
-        <div className="grid w-full grid-cols-7 rounded-md bg-muted p-1 text-muted-foreground">
+        <div className="grid w-full grid-cols-4 rounded-md bg-muted p-1 text-muted-foreground">
           {STATUS_FILTER_OPTIONS.map((o) => {
             const isActive = statusFilter === o.value;
-            const count = o.value === 'all'
-              ? fulfilments.length
-              : o.value === 'stuck'
-                ? stuckCount
-                : countByStatus[o.value as FulfilmentStatus] ?? 0;
+            const count = countByStatus[o.value] ?? 0;
             return (
               <button
                 key={o.value}
@@ -701,7 +697,6 @@ export default function VendorOrders() {
                 className={cn(
                   'text-xs rounded-sm px-2 py-1.5 font-medium transition-colors whitespace-nowrap',
                   isActive ? 'bg-background text-foreground shadow-sm' : 'hover:text-foreground',
-                  o.value === 'stuck' && stuckCount > 0 && !isActive && 'text-amber-700',
                 )}
               >
                 {o.label} ({count})
@@ -728,9 +723,7 @@ export default function VendorOrders() {
               {/* Mobile fallback for the desktop quick-filter tabs */}
               <Select
                 value={statusFilter}
-                onValueChange={(v) =>
-                  setStatusFilter(v as FulfilmentStatus | 'all' | 'stuck')
-                }
+                onValueChange={(v) => setStatusFilter(v as FulfilmentStatus)}
               >
                 <SelectTrigger className="w-48 lg:hidden">
                   <SelectValue />
@@ -738,8 +731,7 @@ export default function VendorOrders() {
                 <SelectContent>
                   {STATUS_FILTER_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                      {o.value === 'stuck' && stuckCount > 0 ? ` (${stuckCount})` : ''}
+                      {o.label} ({countByStatus[o.value] ?? 0})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -759,7 +751,7 @@ export default function VendorOrders() {
             <div className="py-12">
               <EmptyState
                 hasAny={fulfilments.length > 0}
-                isFiltered={statusFilter !== 'all' || search.trim() !== ''}
+                isFiltered={true}
               />
             </div>
           ) : (
