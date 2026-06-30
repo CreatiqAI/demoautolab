@@ -32,13 +32,9 @@ interface VendorRow {
   status: 'PENDING' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
 }
 
-interface LedgerRow {
-  id: string;
+interface PendingRow {
   vendor_id: string;
-  type: 'SALE' | 'REFUND' | 'ADJUSTMENT' | 'PAYOUT';
-  net_amount: number;
-  payout_id: string | null;
-  created_at: string;
+  pending_net: number;
 }
 
 interface PayoutRow {
@@ -91,7 +87,7 @@ const payoutStatusBadge = (status: PayoutRow['status']) => {
 export default function VendorPayouts() {
   const { toast } = useToast();
   const [vendors, setVendors] = useState<VendorRow[]>([]);
-  const [unpaidLedger, setUnpaidLedger] = useState<LedgerRow[]>([]);
+  const [pendingRows, setPendingRows] = useState<PendingRow[]>([]);
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -117,38 +113,34 @@ export default function VendorPayouts() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [{ data: vendorData }, { data: ledgerData }, { data: payoutData }] = await Promise.all([
+      // Admins are anonymous to Postgres (localStorage auth), so the RLS-scoped
+      // ledger/payout tables return nothing on a direct select. These SECURITY
+      // DEFINER RPCs expose the admin-wide aggregates/list instead.
+      const [{ data: vendorData }, { data: pendingData }, { data: payoutData }] = await Promise.all([
         supabase
           .from('vendors' as any)
           .select('id, business_name, bank_name, bank_account_name, bank_account_number, commission_rate, status')
           .eq('status', 'APPROVED')
           .order('business_name', { ascending: true }),
-        supabase
-          .from('vendor_sales_ledger' as any)
-          .select('id, vendor_id, type, net_amount, payout_id, created_at')
-          .is('payout_id', null),
-        supabase
-          .from('vendor_payouts' as any)
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(500),
+        supabase.rpc('admin_vendor_pending_balances' as any),
+        supabase.rpc('admin_list_vendor_payouts' as any, { p_limit: 500 }),
       ]);
       setVendors(((vendorData as any[] | null) ?? []) as VendorRow[]);
-      setUnpaidLedger(((ledgerData as any[] | null) ?? []) as LedgerRow[]);
+      setPendingRows(((pendingData as any[] | null) ?? []) as PendingRow[]);
       setPayouts(((payoutData as any[] | null) ?? []) as PayoutRow[]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Pending balance per vendor: sum of unpaid ledger net_amount.
+  // Pending balance per vendor: net unpaid total from the admin RPC.
   const pendingByVendor = useMemo(() => {
     const map = new Map<string, number>();
-    for (const r of unpaidLedger) {
-      map.set(r.vendor_id, (map.get(r.vendor_id) ?? 0) + Number(r.net_amount || 0));
+    for (const r of pendingRows) {
+      map.set(r.vendor_id, Number(r.pending_net || 0));
     }
     return map;
-  }, [unpaidLedger]);
+  }, [pendingRows]);
 
   const vendorNameById = useMemo(() => {
     const m = new Map<string, string>();
