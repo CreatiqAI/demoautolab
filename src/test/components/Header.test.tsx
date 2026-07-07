@@ -1,55 +1,88 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import Header from '../../components/Header'
+import Header from '@/components/Header'
 
-// Mock the hooks
-vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({
-    user: null,
-    signOut: vi.fn(),
-  }),
+// --- Navigation ---------------------------------------------------------
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>()
+  return { ...actual, useNavigate: () => mockNavigate }
+})
+
+// --- Hooks --------------------------------------------------------------
+vi.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({ user: null, signOut: vi.fn() }),
 }))
 
-vi.mock('../../hooks/useCartDB', () => ({
-  useCart: () => ({
-    getTotalItems: () => 0,
-  }),
+vi.mock('@/hooks/useCartDB', () => ({
+  useCart: () => ({ getTotalItems: () => 0, cartItems: [] }),
 }))
 
-const renderWithRouter = (component: React.ReactElement) => {
-  return render(
+// --- Supabase (mega-menu fetch) ----------------------------------------
+// Header fetches categories + brands on mount; return empty results so the
+// component mounts without hitting the network.
+vi.mock('@/lib/supabase', () => {
+  const chain: any = {
+    select: () => chain,
+    eq: () => chain,
+    order: () => chain,
+    not: () => chain,
+    limit: () => Promise.resolve({ data: [], error: null }),
+  }
+  return {
+    supabase: {
+      from: () => chain,
+      rpc: () => Promise.resolve({ data: [], error: null }),
+    },
+  }
+})
+
+// --- Heavy children stubbed to keep this a Header unit test -------------
+vi.mock('@/components/CartDrawer', () => ({ default: () => null }))
+vi.mock('@/components/ProfileModal', () => ({ default: () => null }))
+
+const renderHeader = () =>
+  render(
     <BrowserRouter>
-      {component}
+      <Header />
     </BrowserRouter>
   )
-}
 
-describe('Header Component', () => {
-  it('should render company contact information', () => {
-    renderWithRouter(<Header />)
-    
-    expect(screen.getByText('03-4297 7668')).toBeInTheDocument()
-    expect(screen.getByText('Cheras, Kuala Lumpur')).toBeInTheDocument()
+describe('Header', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear()
   })
 
-  it('should render company logo and name', () => {
-    renderWithRouter(<Header />)
-    
-    expect(screen.getByText('Autolab')).toBeInTheDocument()
-    expect(screen.getByText('Car Parts & More')).toBeInTheDocument()
+  it('renders the 12V logo and Auto Lab attribution', () => {
+    renderHeader()
+    expect(screen.getByAltText('12V')).toBeInTheDocument()
+    expect(screen.getByText('by Auto Lab')).toBeInTheDocument()
   })
 
-  it('should render free shipping message', () => {
-    renderWithRouter(<Header />)
-    
-    expect(screen.getByText(/Free shipping on orders over RM 200/)).toBeInTheDocument()
+  it('renders the primary navigation links', () => {
+    renderHeader()
+    // Labels appear in both the desktop nav and the mobile menu.
+    expect(screen.getAllByText('Catalog').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('New Arrivals').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Find Shops').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('About Us').length).toBeGreaterThan(0)
   })
 
-  it('should be accessible with proper ARIA labels', () => {
-    renderWithRouter(<Header />)
-    
-    const logo = screen.getByText('Autolab').closest('div')
-    expect(logo).toHaveClass('cursor-pointer')
+  it('shows a Login action when the user is signed out', () => {
+    renderHeader()
+    expect(screen.getAllByText('Login').length).toBeGreaterThan(0)
+  })
+
+  it('navigates home when the logo is clicked', () => {
+    renderHeader()
+    fireEvent.click(screen.getByAltText('12V'))
+    expect(mockNavigate).toHaveBeenCalledWith('/')
+  })
+
+  it('renders the logo inside a clickable container', () => {
+    renderHeader()
+    const logoContainer = screen.getByAltText('12V').closest('div')
+    expect(logoContainer).toHaveClass('cursor-pointer')
   })
 })
