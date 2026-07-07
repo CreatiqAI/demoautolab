@@ -13,15 +13,14 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Prevent Radix UI from causing layout shift when dropdowns open */
+  /* Prevent Radix UI from causing layout shift when dropdowns open.
+     overflow-x uses `clip` (with `hidden` fallback) because `hidden` on
+     body creates a scroll container that breaks position:sticky. */
   html, body {
     overflow-x: hidden;
+    overflow-x: clip;
     margin-right: 0 !important;
     padding-right: 0 !important;
-  }
-
-  body {
-    overflow-y: auto !important;
   }
 
   /* Override Radix scroll lock completely */

@@ -8,16 +8,17 @@ const Footer = () => {
       <div className="container mx-auto px-6 py-16">
         <div className="grid md:grid-cols-4 gap-12 mb-12">
           {/* Brand */}
-          <div className="space-y-6">
-            <div className="flex items-center gap-2">
-              <img
-                src="/autolab_logo.png"
-                alt="Auto Lab"
-                className="h-14 w-auto object-contain brightness-0 invert"
-              />
+          <div className="space-y-5">
+            <div className="flex flex-col select-none">
+              <span className="font-heading font-black text-4xl leading-none tracking-tighter text-white">
+                12<span className="italic text-lime-500">V</span>
+              </span>
+              <span className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-medium mt-1">
+                Supported by Auto Lab
+              </span>
             </div>
             <p className="text-gray-400 leading-relaxed text-sm">
-              Malaysia's trusted destination for premium automotive parts and accessories since 2007. Quality OEM and aftermarket parts with fast delivery nationwide.
+              Premium automotive accessories — Ninja Shades, Android players, casings and lighting. Backed by Auto Lab Sdn Bhd since 2007, delivered nationwide.
             </p>
           </div>
 
@@ -96,7 +97,7 @@ const Footer = () => {
         <div className="border-t border-gray-800 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-gray-500 text-sm">
-              &copy; 2026 Auto Lab Sdn Bhd. All rights reserved.
+              &copy; 2026 12V — supported by Auto Lab Sdn Bhd. All rights reserved.
             </p>
             <div className="flex items-center gap-6 text-sm">
               <Link to="/privacy" className="text-gray-500 hover:text-white transition-colors">

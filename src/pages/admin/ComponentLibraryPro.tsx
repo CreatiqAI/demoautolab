@@ -98,18 +98,31 @@ export default function ComponentLibraryPro() {
 
   const fetchComponentTypes = async () => {
     try {
-      // Get unique component types from existing components
-      const { data, error } = await supabase
-        .from('component_library' as any)
-        .select('component_type')
-        .not('component_type', 'is', null);
+      // Distinct types are computed in Postgres via an RPC. Deriving them
+      // client-side breaks once component_library exceeds Supabase's default
+      // 1000-row query cap: types that only exist in newer rows (e.g. a
+      // freshly created type) never make it into the dropdown.
+      const { data, error } = await (supabase.rpc as any)('get_component_library_types');
 
       if (error) throw error;
 
-      // Extract unique types
-      const uniqueTypes = [...new Set((data || []).map((item: any) => item.component_type))].sort();
-      setComponentTypes(uniqueTypes);
+      const types = [...new Set((data || []).map((item: any) => item.component_type))].sort();
+      setComponentTypes(types);
     } catch (error: any) {
+      // Fallback if the RPC isn't available: fetch with an explicit high limit
+      // so we still pull every row rather than the default 1000.
+      try {
+        const { data } = await supabase
+          .from('component_library' as any)
+          .select('component_type')
+          .not('component_type', 'is', null)
+          .limit(100000);
+
+        const types = [...new Set((data || []).map((item: any) => item.component_type))].sort();
+        setComponentTypes(types);
+      } catch {
+        // Leave the existing list in place on total failure.
+      }
     }
   };
 

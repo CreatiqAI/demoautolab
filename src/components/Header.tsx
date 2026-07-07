@@ -65,13 +65,23 @@ const Header = () => {
           .order('name', { ascending: true })
           .limit(8);
 
-        // Fetch unique brands
-        const { data: productsData } = await supabase
-          .from('products_new' as any)
-          .select('brand')
-          .eq('active', true);
-
-        const uniqueBrands = [...new Set((productsData || []).map((item: any) => item.brand).filter(Boolean))].slice(0, 8);
+        // Fetch unique brands. Distinct is computed in Postgres via an RPC:
+        // deriving it client-side truncates once products_new exceeds
+        // Supabase's default 1000-row query cap.
+        let uniqueBrands: string[] = [];
+        const { data: brandRows, error: brandError } = await (supabase.rpc as any)('get_product_brands');
+        if (brandError) {
+          // Fallback with an explicit high limit if the RPC isn't available.
+          const { data: productsData } = await supabase
+            .from('products_new' as any)
+            .select('brand')
+            .eq('active', true)
+            .limit(100000);
+          uniqueBrands = [...new Set((productsData || []).map((item: any) => item.brand).filter(Boolean))];
+        } else {
+          uniqueBrands = [...new Set((brandRows || []).map((item: any) => item.brand).filter(Boolean))];
+        }
+        uniqueBrands = uniqueBrands.slice(0, 8);
 
         setCategories(categoriesData || []);
         setBrands(uniqueBrands.map(brand => ({ id: brand, name: brand })));
@@ -215,16 +225,17 @@ const Header = () => {
       >
         <div className="container mx-auto px-4 md:px-8 h-16 sm:h-20">
           <div className="flex items-center justify-between h-full">
-            {/* Logo - Using image from public folder - Made bigger */}
+            {/* Logo — 12V wordmark */}
             <div
               onClick={handleLogoClick}
-              className="flex items-center gap-2 cursor-pointer group z-50"
+              className="flex flex-col cursor-pointer group z-50 select-none"
             >
-              <img
-                src="/autolab_logo.png"
-                alt="Auto Lab"
-                className="h-16 md:h-20 w-auto object-contain"
-              />
+              <span className="font-heading font-black text-3xl md:text-4xl leading-none tracking-tighter text-gray-900">
+                12<span className="italic text-lime-500">V</span>
+              </span>
+              <span className="text-[8px] md:text-[9px] uppercase tracking-[0.3em] text-gray-400 font-medium mt-0.5">
+                by Auto Lab
+              </span>
             </div>
 
             {/* Center Navigation - Desktop */}
