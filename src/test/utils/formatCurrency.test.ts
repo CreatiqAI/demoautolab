@@ -8,23 +8,28 @@ const formatCurrency = (amount: number) => {
   }).format(amount)
 }
 
+// Intl inserts a non-breaking (U+00A0) or narrow no-break (U+202F) space
+// between the currency symbol and the amount; the exact character varies by
+// ICU version. Normalise to a regular space so assertions stay stable.
+const fmt = (amount: number) => formatCurrency(amount).replace(/[\u00A0\u202F]/g, ' ')
+
 describe('formatCurrency', () => {
   it('should format positive amounts correctly', () => {
-    expect(formatCurrency(100)).toBe('RM 100.00')
-    expect(formatCurrency(1234.56)).toBe('RM 1,234.56')
+    expect(fmt(100)).toBe('RM 100.00')
+    expect(fmt(1234.56)).toBe('RM 1,234.56')
   })
 
   it('should format zero correctly', () => {
-    expect(formatCurrency(0)).toBe('RM 0.00')
+    expect(fmt(0)).toBe('RM 0.00')
   })
 
   it('should format decimal amounts correctly', () => {
-    expect(formatCurrency(715.50)).toBe('RM 715.50')
-    expect(formatCurrency(99.99)).toBe('RM 99.99')
+    expect(fmt(715.50)).toBe('RM 715.50')
+    expect(fmt(99.99)).toBe('RM 99.99')
   })
 
   it('should handle large amounts with proper formatting', () => {
-    expect(formatCurrency(1000000)).toBe('RM 1,000,000.00')
-    expect(formatCurrency(1234567.89)).toBe('RM 1,234,567.89')
+    expect(fmt(1000000)).toBe('RM 1,000,000.00')
+    expect(fmt(1234567.89)).toBe('RM 1,234,567.89')
   })
 })
