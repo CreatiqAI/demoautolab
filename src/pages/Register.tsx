@@ -245,7 +245,7 @@ const Register = () => {
           <div className="w-full max-w-[480px] mx-auto">
             {/* Mobile Logo */}
             <div className="lg:hidden flex justify-center mb-8">
-              <img src="/autolab_logo.png" alt="Auto Lab" className="h-12 w-auto object-contain" />
+              <img src="/12v-logo.png" alt="12V" className="h-10 w-auto object-contain" />
             </div>
 
             {/* Back Button */}

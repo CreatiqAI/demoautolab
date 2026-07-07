@@ -9,11 +9,11 @@ const Footer = () => {
         <div className="grid md:grid-cols-4 gap-12 mb-12">
           {/* Brand */}
           <div className="space-y-5">
-            <div className="flex flex-col select-none">
-              <span className="font-heading font-black text-4xl leading-none tracking-tighter text-white">
-                12<span className="italic text-lime-500">V</span>
-              </span>
-              <span className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-medium mt-1">
+            <div className="flex flex-col select-none gap-3">
+              <div className="inline-flex bg-white rounded-xl px-4 py-3 w-fit">
+                <img src="/12v-logo.png" alt="12V" className="h-8 w-auto object-contain" />
+              </div>
+              <span className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-medium">
                 Supported by Auto Lab
               </span>
             </div>

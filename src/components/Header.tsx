@@ -225,15 +225,17 @@ const Header = () => {
       >
         <div className="container mx-auto px-4 md:px-8 h-16 sm:h-20">
           <div className="flex items-center justify-between h-full">
-            {/* Logo — 12V wordmark */}
+            {/* Logo — 12V */}
             <div
               onClick={handleLogoClick}
-              className="flex flex-col cursor-pointer group z-50 select-none"
+              className="flex items-center gap-2.5 cursor-pointer group z-50 select-none"
             >
-              <span className="font-heading font-black text-3xl md:text-4xl leading-none tracking-tighter text-gray-900">
-                12<span className="italic text-lime-500">V</span>
-              </span>
-              <span className="text-[8px] md:text-[9px] uppercase tracking-[0.3em] text-gray-400 font-medium mt-0.5">
+              <img
+                src="/12v-logo.png"
+                alt="12V"
+                className="h-8 sm:h-9 w-auto object-contain"
+              />
+              <span className="hidden sm:block text-[9px] uppercase tracking-[0.28em] text-gray-400 font-medium border-l border-gray-200 pl-2.5">
                 by Auto Lab
               </span>
             </div>
