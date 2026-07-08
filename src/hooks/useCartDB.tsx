@@ -88,10 +88,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Get unique component SKUs to fetch images + vendor info
         const componentSkus = [...new Set(data.map((item: any) => item.component_sku))];
 
-        // Fetch ALL components (image + vendor_id) to avoid special character issues with .in() operator
+        // Fetch only the components actually in the cart. (Fetching the whole
+        // library hit PostgREST's 1000-row cap, so images for SKUs past row
+        // 1000 silently vanished — the cart has few SKUs, so filter instead.)
         const { data: allComponentsData } = await supabase
           .from('component_library' as any)
-          .select('component_sku, default_image_url, vendor_id');
+          .select('component_sku, default_image_url, vendor_id')
+          .in('component_sku', componentSkus as string[]);
 
         // Create maps from component_sku to image URL and vendor_id
         const componentSkusSet = new Set(componentSkus);
@@ -114,8 +117,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         )];
         const vendorNameMap = new Map<string, string>();
         if (vendorIds.length > 0) {
+          // vendors_public: base vendors table is RLS-locked to owner+admin, so
+          // customers read seller names from the public-safe view instead.
           const { data: vendorRows } = await supabase
-            .from('vendors' as any)
+            .from('vendors_public' as any)
             .select('id, business_name')
             .in('id', vendorIds);
           (vendorRows as any[] | null)?.forEach((v: any) => {
