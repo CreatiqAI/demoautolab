@@ -6,8 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, Trash2, Shield, User, Phone, Mail, Calendar } from 'lucide-react';
+import { Search, Trash2, Shield, User, Phone, Mail, Calendar, UserPlus, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AdminProfile {
@@ -40,7 +42,17 @@ export default function UserManagement() {
   const [selectedUser, setSelectedUser] = useState<AdminProfile | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ email: '', fullName: '', password: '', role: 'admin' });
   const { toast } = useToast();
+
+  // Only the master admin (super_admin) may provision new admin accounts.
+  const currentRole = (() => {
+    try { return (JSON.parse(localStorage.getItem('admin_user') || '{}').role || '') as string; }
+    catch { return ''; }
+  })();
+  const canManageAdmins = currentRole === 'super_admin';
 
   useEffect(() => {
     fetchUsers();
@@ -107,26 +119,57 @@ export default function UserManagement() {
     }
   };
 
+  const handleCreateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = form.email.trim().toLowerCase();
+    if (!email || !form.fullName.trim() || form.password.length < 8) {
+      toast({
+        title: 'Missing details',
+        description: 'Enter an email, a full name, and a password of at least 8 characters.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setCreating(true);
+    try {
+      // Provision a REAL Supabase Auth user (with the admin role in app_metadata)
+      // via a service-role edge function that verifies the caller is an admin.
+      // The caller's JWT is attached automatically by functions.invoke.
+      const { data, error } = await supabase.functions.invoke('provision-admin', {
+        body: { email, password: form.password, fullName: form.fullName.trim(), role: form.role },
+      });
+      if (error) throw error;
+      if (data && data.success === false) {
+        toast({ title: 'Could not create admin', description: data.message || 'Failed to create admin.', variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Admin created', description: `${email} can now sign in at /admin-login with their password.` });
+      setIsAddOpen(false);
+      setForm({ email: '', fullName: '', password: '', role: 'admin' });
+      fetchUsers();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create admin.', variant: 'destructive' });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
-
     setIsDeleting(true);
     try {
-      // Note: In production, you should create a proper admin function to delete users
-      // For now, we'll show instructions to delete via SQL
-      toast({
-        title: "Staff Deletion",
-        description: `To delete ${selectedUser.full_name} (@${selectedUser.username}), run this SQL in Supabase: DELETE FROM public.admin_profiles WHERE id = '${selectedUser.id}';`
-      });
-
+      const { data, error } = await (supabase.rpc as any)('admin_delete_account', { p_id: selectedUser.id });
+      if (error) throw error;
+      if (data && data.success === false) {
+        toast({ title: 'Could not delete', description: data.message || 'Failed to delete admin.', variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Admin removed', description: `${selectedUser.full_name} (@${selectedUser.username}) has been deleted.` });
+      setUsers((prev) => prev.filter((u) => u.id !== selectedUser.id));
       setIsDeleteDialogOpen(false);
-      
+      setSelectedUser(null);
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete user",
-        variant: "destructive"
-      });
+      toast({ title: 'Error', description: error.message || 'Failed to delete admin.', variant: 'destructive' });
     } finally {
       setIsDeleting(false);
     }
@@ -155,6 +198,8 @@ export default function UserManagement() {
 
   const getRoleBadge = (role: string) => {
     switch (role) {
+      case 'super_admin':
+        return <Badge className="bg-amber-500 hover:bg-amber-500 text-white"><Shield className="h-3 w-3 mr-1" />Master</Badge>;
       case 'admin':
         return <Badge variant="destructive"><Shield className="h-3 w-3 mr-1" />Admin</Badge>;
       case 'manager':
@@ -168,15 +213,25 @@ export default function UserManagement() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Staff Management</h2>
-        <p className="text-muted-foreground">Manage staff members and administrators</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Staff Management</h2>
+          <p className="text-muted-foreground">Manage staff members and administrators</p>
+        </div>
+        {canManageAdmins && (
+          <Button onClick={() => setIsAddOpen(true)}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Admin
+          </Button>
+        )}
       </div>
 
       <Alert>
         <Shield className="h-4 w-4" />
         <AlertDescription>
-          This page shows users registered through Supabase Auth. To delete users safely, use the provided SQL commands in your Supabase dashboard.
+          {canManageAdmins
+            ? 'As the master admin you can add new admin accounts here. New admins sign in with their email and password.'
+            : 'Only the master admin can create or remove admin accounts.'}
         </AlertDescription>
       </Alert>
 
@@ -252,17 +307,21 @@ export default function UserManagement() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setIsDeleteDialogOpen(true);
-                          }}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {canManageAdmins && user.role !== 'super_admin' ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setIsDeleteDialogOpen(true);
+                            }}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -274,54 +333,80 @@ export default function UserManagement() {
         </CardContent>
       </Card>
 
+      {/* Add Admin Dialog — master admin only */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Admin</DialogTitle>
+            <DialogDescription>
+              Create a new admin account. They sign in on the admin tab with this email and password.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateAdmin} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="admin-email">Email</Label>
+              <Input id="admin-email" type="email" required value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="name@company.com" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="admin-name">Full name</Label>
+              <Input id="admin-name" required value={form.fullName}
+                onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                placeholder="Jane Doe" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="admin-pass">Password</Label>
+              <Input id="admin-pass" type="password" required minLength={8} value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                placeholder="At least 8 characters" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="support">Support</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Admin'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Staff Instructions Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete Staff Account</DialogTitle>
+            <DialogTitle>Delete admin account</DialogTitle>
             <DialogDescription>
-              To safely delete this staff account, run the following SQL command in your Supabase SQL Editor:
+              This permanently removes the account and revokes their access. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedUser && (
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="font-medium mb-2">Staff Details:</p>
                 <div className="space-y-1 text-sm">
                   <div><strong>Name:</strong> {selectedUser.full_name || 'Unknown'}</div>
-                  <div><strong>Username:</strong> @{selectedUser.username}</div>
+                  <div><strong>Email:</strong> {selectedUser.username}</div>
                   <div><strong>Role:</strong> {selectedUser.role}</div>
-                  <div><strong>ID:</strong> <code>{selectedUser.id}</code></div>
                 </div>
               </div>
 
-              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                <p className="font-medium mb-2 text-red-800">SQL Command:</p>
-                <code className="block p-2 bg-red-100 rounded text-sm text-red-800">
-                  DELETE FROM public.admin_profiles WHERE id = '{selectedUser.id}';
-                </code>
-              </div>
-
-              <Alert>
-                <AlertDescription>
-                  <strong>Warning:</strong> This action cannot be undone. The staff member will be permanently deleted from the system.
-                </AlertDescription>
-              </Alert>
-
               <div className="flex justify-end space-x-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsDeleteDialogOpen(false)}
-                >
+                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
                   Cancel
                 </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleDeleteUser}
-                  disabled={isDeleting}
-                >
-                  I Understand - Show SQL
+                <Button variant="destructive" onClick={handleDeleteUser} disabled={isDeleting}>
+                  {isDeleting ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</>) : 'Delete Admin'}
                 </Button>
               </div>
             </div>

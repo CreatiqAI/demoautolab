@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { fetchVendorNames } from '@/lib/vendorNames';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -35,6 +36,7 @@ interface CatalogProduct {
   featured: boolean;
   category_id: string | null;
   category_name: string | null;
+  vendor_id?: string | null;
   vendor_name: string | null;
   image_url: string | null;
   image_type: string | null;
@@ -521,9 +523,8 @@ async function fallbackQuery(
   let q = supabase
     .from('products_new' as any)
     .select(
-      `id, name, slug, brand, model, year_from, year_to, featured, category_id,
+      `id, name, slug, brand, model, year_from, year_to, featured, category_id, vendor_id,
        categories ( name ),
-       vendors:vendor_id ( business_name ),
        product_images_new ( url, is_primary, sort_order, media_type )`,
       { count: 'exact' }
     )
@@ -556,13 +557,17 @@ async function fallbackQuery(
       featured: !!item.featured,
       category_id: item.category_id,
       category_name: item.categories?.name ?? null,
-      vendor_name: item.vendors?.business_name ?? null,
+      vendor_id: item.vendor_id ?? null,
+      vendor_name: null as string | null,
       image_url: primary?.url ?? null,
       image_type: primary?.media_type ?? 'image',
       component_count: 0,
       is_full_match: true,
     };
   });
+
+  const vendorNames = await fetchVendorNames(products.map((p: any) => p.vendor_id));
+  products.forEach((p: any) => { p.vendor_name = p.vendor_id ? vendorNames[p.vendor_id] ?? null : null; });
 
   return { products, total: count ?? products.length, fullCount: count ?? products.length };
 }

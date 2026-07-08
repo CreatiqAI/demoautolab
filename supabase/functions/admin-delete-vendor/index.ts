@@ -17,34 +17,26 @@ serve(async (req) => {
   }
 
   try {
-    const body = (await req.json()) as DeletePayload;
-    if (!body.admin_id || !body.vendor_id) {
-      return new Response(
-        JSON.stringify({ success: false, message: 'admin_id and vendor_id are required.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // 1. Verify admin
-    const { data: admin } = await supabase
-      .from('admin_profiles')
-      .select('id, is_active')
-      .eq('id', body.admin_id)
-      .maybeSingle();
-    if (!admin) {
+    // 1. Authorize the CALLER from their JWT (not a client-supplied admin_id).
+    const jwt = (req.headers.get('Authorization') || '').replace('Bearer ', '');
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+    const callerRole = (user?.app_metadata as Record<string, unknown> | null)?.role;
+    if (authErr || !user || !['super_admin', 'admin', 'support'].includes(callerRole as string)) {
       return new Response(
-        JSON.stringify({ success: false, message: 'Unauthorized — admin profile not found.' }),
+        JSON.stringify({ success: false, message: 'Admin privileges required.' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    if ((admin as any).is_active === false) {
+
+    const body = (await req.json()) as DeletePayload;
+    if (!body.vendor_id) {
       return new Response(
-        JSON.stringify({ success: false, message: 'Admin account is inactive.' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, message: 'vendor_id is required.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

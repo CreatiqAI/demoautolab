@@ -1,71 +1,87 @@
-import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import type { Enums } from '@/integrations/supabase/types';
+import { useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
+import AdminLogin from '@/pages/AdminLogin';
 
+// Access is decided by the REAL Supabase session's admin role (JWT app_metadata),
+// read from the app's already-initialized auth provider — never from a stale
+// localStorage blob. localStorage is only a UI mirror of the verified session.
 interface ProtectedAdminRouteProps {
   children: React.ReactNode;
-  allowedRoles?: Enums<'user_role'>[];
+  allowedRoles?: string[];
 }
 
 export default function ProtectedAdminRoute({
   children,
-  allowedRoles = ['admin', 'staff', 'manager']
+  allowedRoles = ['super_admin', 'admin', 'support'],
 }: ProtectedAdminRouteProps) {
-  const [adminUser, setAdminUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, signOut } = useAuth();
+  const role = (user?.app_metadata as Record<string, unknown> | undefined)?.role as string | undefined;
+  const isAdmin = !!user && !!role && allowedRoles.includes(role);
 
   useEffect(() => {
-    const checkAdminAuth = () => {
-      try {
-        // Check for admin user in localStorage
-        const storedAdminUser = localStorage.getItem('admin_user');
-        if (storedAdminUser) {
-          const adminData = JSON.parse(storedAdminUser);
-          setAdminUser(adminData);
-        }
-      } catch (error) {
-        localStorage.removeItem('admin_user');
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!(isAdmin && user)) {
+      localStorage.removeItem('admin_user');
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      // The audit log FK and several edge functions key off admin_profiles.id —
+      // NOT the auth user id — so resolve it server-side and mirror that.
+      const { data } = await supabase.rpc('get_admin_context' as any);
+      if (cancelled) return;
+      const ctx = (data ?? null) as { id?: string; username?: string; full_name?: string; role?: string } | null;
+      localStorage.setItem('admin_user', JSON.stringify({
+        id: ctx?.id || user.id,              // admin_profiles.id (fallback: auth uid)
+        auth_id: user.id,
+        username: ctx?.username || user.email,
+        role: ctx?.role || role,
+        full_name: ctx?.full_name || (user.user_metadata as Record<string, unknown> | undefined)?.full_name || user.email,
+      }));
+    })();
+    return () => { cancelled = true; };
+  }, [isAdmin, user, role]);
 
-    checkAdminAuth();
-  }, []);
-
-  // Show loading spinner while checking auth
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAF8]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-gray-200 border-t-lime-500 mx-auto mb-4"></div>
+          <p className="text-gray-500 text-sm">Loading…</p>
         </div>
       </div>
     );
   }
 
-  // Redirect to auth if not authenticated
-  if (!adminUser) {
-    return <Navigate to="/auth" replace />;
+  // Not signed in → show the admin login right here (so /admin is the entry point).
+  if (!user) {
+    return <AdminLogin />;
   }
 
-  // Redirect to home if user doesn't have required role
-  if (!allowedRoles.includes(adminUser.role)) {
+  // Signed in but not an admin (e.g. a customer) → no access, whatever localStorage says.
+  if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8">
-          <div className="text-6xl mb-4">🚫</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-          <p className="text-gray-600 mb-4">
-            You don't have permission to access the admin panel.
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAF8] px-4">
+        <div className="text-center p-8 max-w-sm">
+          <div className="text-5xl mb-4">🚫</div>
+          <h1 className="text-2xl font-heading font-bold uppercase tracking-tight text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-500 mb-5 text-sm">
+            You're signed in as <span className="font-medium text-gray-700">{user.email}</span>, which isn't an admin account.
           </p>
-          <button
-            onClick={() => window.location.href = '/'}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Go to Home
-          </button>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={() => signOut()}
+              className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-lime-600 transition-colors"
+            >
+              Sign in as admin
+            </button>
+            <button
+              onClick={() => (window.location.href = '/')}
+              className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+            >
+              Back to store
+            </button>
+          </div>
         </div>
       </div>
     );

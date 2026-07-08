@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAll';
 import { transformImage } from '@/lib/imageTransform';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,19 +71,16 @@ export default function ReviewModeration() {
       // Check authentication first
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Fetch all reviews with product information
-      const { data, error } = await supabase
+      // Fetch all reviews with product information.
+      // Paginated so the moderation list never truncates at Supabase's 1000-row cap.
+      const data = await fetchAllRows(() => supabase
         .from('product_reviews')
         .select(`
           *,
           products_new!product_reviews_product_id_fkey (name)
         `)
-        .order('created_at', { ascending: false });
-
-
-      if (error) {
-        throw error;
-      }
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true }));
 
       // Fetch images for all reviews
       const reviewIds = (data || []).map((r: any) => r.id);

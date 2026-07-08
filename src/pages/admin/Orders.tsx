@@ -138,14 +138,16 @@ export default function Orders() {
     try {
       const allSkus = rows.flatMap((o: any) => o.order_items || []).map((i: any) => i.component_sku).filter(Boolean);
       if (allSkus.length === 0) return rows;
+      const uniqueSkus = Array.from(new Set(allSkus));
+      // Fetch only the SKUs present in these orders — avoids pulling the whole
+      // component_library (which exceeds Supabase's 1000-row cap and broke thumbnails).
       const { data: components, error } = await supabase
         .from('component_library')
-        .select('component_sku, default_image_url');
+        .select('component_sku, default_image_url')
+        .in('component_sku', uniqueSkus);
       if (error || !components) return rows;
-      const uniqueSkus = new Set(allSkus);
       const imageMap = new Map(
-        components.filter((c: any) => uniqueSkus.has(c.component_sku))
-          .map((c: any) => [c.component_sku, c.default_image_url])
+        components.map((c: any) => [c.component_sku, c.default_image_url])
       );
       return rows.map((o: any) => ({
         ...o,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAll';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -58,6 +59,7 @@ export default function Dashboard() {
     todayBestSeller: null
   });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   useEffect(() => {
@@ -67,163 +69,120 @@ export default function Dashboard() {
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
+      setLoadError(false);
 
-      // Fetch orders using the same pattern as Orders.tsx
-      let ordersData: any[] = [];
-
-      const { data: functionData, error: functionError } = await (supabase.rpc as any)('get_admin_orders');
-
-      if (!functionError && functionData) {
-        ordersData = functionData;
-      } else {
-        const { data: viewData, error: viewError } = await supabase
-          .from('admin_orders_enhanced' as any)
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (!viewError && viewData) {
-          ordersData = viewData;
-        } else {
-          const { data: basicData } = await supabase
-            .from('orders' as any)
-            .select('*')
-            .order('created_at', { ascending: false });
-
-          if (basicData) {
-            ordersData = basicData;
-          }
-        }
-      }
-
-      // Fetch products
-      let productsData: any[] = [];
-      try {
-        const { data } = await supabase
-          .from('component_library' as any)
-          .select('*')
-          .eq('is_active', true)
-          .order('created_at', { ascending: false });
-
-        if (data) productsData = data;
-      } catch (error) {
-      }
-
-      // Fetch customers using RPC to bypass RLS
-      let customersData: any[] = [];
-      try {
-        const { data } = await supabase.rpc('get_all_customer_profiles');
-
-        if (data) customersData = data;
-      } catch (error) {
-      }
-
-      // Calculate time-based metrics (Today vs Yesterday)
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
 
-      // Today's orders (only successful payments)
-      const todayOrders = ordersData.filter(o => {
-        const orderDate = new Date(o.created_at);
-        return orderDate >= todayStart && (o.payment_state === 'SUCCESS' || o.payment_state === 'APPROVED');
+      // Uncapped count of orders matching a filter (head:true returns only the count).
+      const countOrders = async (apply: (q: any) => any): Promise<number> => {
+        const { count } = await apply(
+          supabase.from('orders' as any).select('*', { count: 'exact', head: true })
+        );
+        return count || 0;
+      };
+
+      // Revenue & best-seller need actual rows, but only for the last 2 days —
+      // a small window, so no 1000-row-cap risk (and paged for safety).
+      const paidStates = ['SUCCESS', 'APPROVED'];
+      let windowOrders: any[] = [];
+      try {
+        windowOrders = await fetchAllRows(() => supabase
+          .from('orders' as any)
+          .select('total, payment_state, created_at, order_items ( component_name, quantity, unit_price )')
+          .gte('created_at', yesterdayStart.toISOString())
+          .order('created_at', { ascending: false }));
+      } catch { windowOrders = []; }
+
+      const todayOrders = windowOrders.filter(o =>
+        new Date(o.created_at) >= todayStart && paidStates.includes(o.payment_state));
+      const yesterdayOrders = windowOrders.filter(o => {
+        const d = new Date(o.created_at);
+        return d >= yesterdayStart && d < todayStart && paidStates.includes(o.payment_state);
       });
+      const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+      const yesterdayRevenue = yesterdayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
 
-      // Yesterday's orders (only successful payments)
-      const yesterdayOrders = ordersData.filter(o => {
-        const orderDate = new Date(o.created_at);
-        return orderDate >= yesterdayStart && orderDate < todayStart && (o.payment_state === 'SUCCESS' || o.payment_state === 'APPROVED');
-      });
+      // Urgent-action counts across ALL orders — via count queries so they stay
+      // correct past 1000 rows (the previous client-side filter under-counted).
+      const [failedPayments, readyToShipOrders, pendingOrders, processingOrders] = await Promise.all([
+        countOrders(q => q.in('payment_state', ['FAILED', 'PENDING'])),
+        countOrders(q => q.in('status', ['READY_FOR_DELIVERY', 'PACKING'])),
+        countOrders(q => q.in('status', ['PENDING', 'PAYMENT_PENDING'])),
+        countOrders(q => q.in('status', ['PROCESSING', 'PICKING'])),
+      ]);
 
-      const todayRevenue = todayOrders.reduce((sum, order) => sum + (order.total || 0), 0);
-      const yesterdayRevenue = yesterdayOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+      // Today's new customers — count query rather than pulling every profile.
+      let todayNewCustomers = 0;
+      try {
+        const { count } = await supabase
+          .from('customer_profiles' as any)
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', todayStart.toISOString());
+        todayNewCustomers = count || 0;
+      } catch { /* leave 0 */ }
 
-      // Today's new customers
-      const todayCustomers = customersData.filter(c => {
-        const created = new Date(c.created_at);
-        return created >= todayStart;
-      });
+      // Low-stock alerts — paged so the full catalog is checked (was capped at
+      // 1000), and using the real column `reorder_point` (previously the wrong
+      // name, so the threshold silently defaulted to 10 for every item).
+      let lowStockAlerts = 0;
+      try {
+        const products = await fetchAllRows(() => supabase
+          .from('component_library' as any)
+          .select('stock_level, reorder_point')
+          .eq('is_active', true));
+        lowStockAlerts = products.filter((p: any) => (p.stock_level ?? 0) <= (p.reorder_point ?? 10)).length;
+      } catch { /* leave 0 */ }
 
-      // Calculate urgent actions
-      const failedPayments = ordersData.filter(o =>
-        o.payment_state === 'FAILED' || o.payment_state === 'PENDING'
-      ).length;
-
-      const lowStockAlerts = productsData.filter(p =>
-        p.stock_level <= (p.reorder_level || 10)
-      ).length;
-
-      const readyToShipOrders = ordersData.filter(o =>
-        o.status === 'READY_FOR_DELIVERY' || o.status === 'PACKING'
-      ).length;
-
-      const pendingOrders = ordersData.filter(o =>
-        o.status === 'PENDING' || o.status === 'PAYMENT_PENDING'
-      ).length;
-
-      const processingOrders = ordersData.filter(o =>
-        o.status === 'PROCESSING' || o.status === 'PICKING'
-      ).length;
-
-      // Fetch pending merchant applications
+      // Pending merchant applications & reviews (already count queries).
       let pendingMerchants = 0;
       try {
-        const { count } = await supabase
-          .from('premium_partnerships' as any)
+        const { count } = await supabase.from('premium_partnerships' as any)
           .select('*', { count: 'exact', head: true })
-          .eq('subscription_status', 'PENDING')
-          .eq('admin_approved', false);
+          .eq('subscription_status', 'PENDING').eq('admin_approved', false);
         pendingMerchants = count || 0;
-      } catch (error) {
-      }
+      } catch { /* leave 0 */ }
 
-      // Fetch pending reviews
       let pendingReviews = 0;
       try {
-        const { count } = await supabase
-          .from('product_reviews' as any)
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending');
+        const { count } = await supabase.from('product_reviews' as any)
+          .select('*', { count: 'exact', head: true }).eq('status', 'pending');
         pendingReviews = count || 0;
-      } catch (error) {
-      }
+      } catch { /* leave 0 */ }
 
-      // Calculate today's best seller
-      const todayProductSales: { [key: string]: { name: string; count: number; revenue: number } } = {};
+      // 8 most recent orders for the activity list.
+      let recentOrders: any[] = [];
+      try {
+        const { data } = await supabase.from('orders' as any)
+          .select('*, order_items ( component_name, quantity, unit_price )')
+          .order('created_at', { ascending: false }).limit(8);
+        recentOrders = data || [];
+      } catch { /* leave empty */ }
 
+      // Today's best seller (by quantity) from today's paid orders.
+      const sales: Record<string, { name: string; count: number; revenue: number }> = {};
       for (const order of todayOrders) {
-        // Items are in order.order_items (not order.items!)
         let items = order.order_items;
-
-        // If items is a string (JSONB stored as string), parse it
-        if (typeof items === 'string') {
-          try {
-            items = JSON.parse(items);
-          } catch (e) {
-          }
-        }
-
-        if (items && Array.isArray(items)) {
+        if (typeof items === 'string') { try { items = JSON.parse(items); } catch { /* ignore */ } }
+        if (Array.isArray(items)) {
           for (const item of items) {
             const key = item.component_name || 'Unknown';
-            if (!todayProductSales[key]) {
-              todayProductSales[key] = { name: key, count: 0, revenue: 0 };
-            }
-            todayProductSales[key].count += item.quantity || 1;
-            todayProductSales[key].revenue += (item.unit_price || 0) * (item.quantity || 1);
+            if (!sales[key]) sales[key] = { name: key, count: 0, revenue: 0 };
+            sales[key].count += item.quantity || 1;
+            sales[key].revenue += (item.unit_price || 0) * (item.quantity || 1);
           }
         }
       }
-
-      const todayBestSeller = Object.values(todayProductSales)
-        .sort((a, b) => b.count - a.count)[0] || null; // Sort by quantity, not revenue
+      const todayBestSeller = Object.values(sales).sort((a, b) => b.count - a.count)[0] || null;
 
       setStats({
         todayRevenue,
         yesterdayRevenue,
         todayOrders: todayOrders.length,
         yesterdayOrders: yesterdayOrders.length,
-        todayNewCustomers: todayCustomers.length,
-        recentOrders: ordersData.slice(0, 8), // Show 8 most recent orders
+        todayNewCustomers,
+        recentOrders,
         failedPayments,
         lowStockAlerts,
         pendingMerchantApplications: pendingMerchants,
@@ -236,6 +195,7 @@ export default function Dashboard() {
 
       setLastUpdated(new Date());
     } catch (error) {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -283,6 +243,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {loadError && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            Some dashboard data couldn't be loaded. Figures may be incomplete.
+          </span>
+          <Button variant="outline" size="sm" onClick={fetchDashboardStats}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

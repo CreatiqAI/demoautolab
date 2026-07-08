@@ -105,6 +105,7 @@ const navigation: NavigationElement[] = [
     items: [
       { name: 'Vouchers', href: '/admin/vouchers', icon: Tag },
       { name: 'Points & Rewards', href: '/admin/points-rewards', icon: TrendingUp },
+      { name: 'Customer Tiers', href: '/admin/customer-tiers', icon: Award },
     ]
   },
 
@@ -161,6 +162,7 @@ export default function AdminLayout() {
   }, [location.pathname]);
 
   const handleSignOut = async () => {
+    localStorage.removeItem('admin_user');
     await signOut();
     navigate('/');
   };
@@ -184,9 +186,9 @@ export default function AdminLayout() {
   const SidebarContent = () => (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center border-b px-6">
-        <Link to="/admin" className="flex items-center space-x-2">
-          <Package className="h-8 w-8" />
-          <span className="text-xl font-bold">Admin Panel</span>
+        <Link to="/admin" className="flex items-center gap-2 select-none">
+          <img src="/12v-logo.png" alt="12V" className="h-7 w-auto" />
+          <span className="text-[11px] uppercase tracking-[0.22em] text-gray-400 border-l border-gray-200 pl-2">Admin</span>
         </Link>
       </div>
       

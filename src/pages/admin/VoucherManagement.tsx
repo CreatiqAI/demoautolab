@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAll';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -65,12 +66,12 @@ const VoucherManagement = () => {
 
   const fetchVouchers = async () => {
     try {
-      const { data, error } = await supabase
+      // Paginated so the voucher list never truncates at Supabase's 1000-row cap.
+      const data = await fetchAllRows(() => supabase
         .from('vouchers' as any)
         .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true }));
       setVouchers((data as unknown as Voucher[]) || []);
     } catch (error: any) {
       toast({

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAll';
 import { useToast } from '@/hooks/use-toast';
 import { logAdminAction, getCurrentAdmin } from '@/lib/adminAudit';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -116,12 +117,14 @@ export default function VendorPayouts() {
       // Admins are anonymous to Postgres (localStorage auth), so the RLS-scoped
       // ledger/payout tables return nothing on a direct select. These SECURITY
       // DEFINER RPCs expose the admin-wide aggregates/list instead.
-      const [{ data: vendorData }, { data: pendingData }, { data: payoutData }] = await Promise.all([
-        supabase
+      const [vendorData, { data: pendingData }, { data: payoutData }] = await Promise.all([
+        // Paginated so the vendor list never truncates at Supabase's 1000-row cap.
+        fetchAllRows(() => supabase
           .from('vendors' as any)
           .select('id, business_name, bank_name, bank_account_name, bank_account_number, commission_rate, status')
           .eq('status', 'APPROVED')
-          .order('business_name', { ascending: true }),
+          .order('business_name', { ascending: true })
+          .order('id', { ascending: true })),
         supabase.rpc('admin_vendor_pending_balances' as any),
         supabase.rpc('admin_list_vendor_payouts' as any, { p_limit: 500 }),
       ]);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAll';
 import { transformImage } from '@/lib/imageTransform';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -470,48 +471,33 @@ export default function ProductsPro() {
 
       // Soft-deleted rows live in the Recently Deleted tab and must be
       // excluded here, otherwise they pop back into Active on every refresh.
-      let { data, error } = await supabase
-        .from('products_new' as any)
-        .select(`
-          *,
-          categories!products_new_category_id_fkey(
-            id,
-            name,
-            description
-          ),
-          product_components (
-            id
-          ),
-          vendors:vendor_id (
-            id,
-            business_name
-          )
-        `)
-        .is('deleted_at', null)
-        .order('updated_at', { ascending: false, nullsFirst: false });
-
-      // If the category join fails, try without it (still filtering soft-deletes).
-      if (error) {
-        const fallbackResult = await supabase
+      // Paginated so the list never truncates at Supabase's 1000-row cap.
+      let data: any[];
+      try {
+        data = await fetchAllRows(() => supabase
           .from('products_new' as any)
           .select(`
             *,
-            product_components (
-              id
-            ),
-            vendors:vendor_id (
-              id,
-              business_name
-            )
+            categories!products_new_category_id_fkey ( id, name, description ),
+            product_components ( id ),
+            vendors:vendor_id ( id, business_name )
           `)
           .is('deleted_at', null)
-          .order('updated_at', { ascending: false, nullsFirst: false });
-
-        data = fallbackResult.data;
-        error = fallbackResult.error;
+          .order('updated_at', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: true }));
+      } catch {
+        // If the category join fails, retry without it (still excluding soft-deletes).
+        data = await fetchAllRows(() => supabase
+          .from('products_new' as any)
+          .select(`
+            *,
+            product_components ( id ),
+            vendors:vendor_id ( id, business_name )
+          `)
+          .is('deleted_at', null)
+          .order('updated_at', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: true }));
       }
-
-      if (error) throw error;
 
       const productList = (data as any) || [];
       setProducts(productList);

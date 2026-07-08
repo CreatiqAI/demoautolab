@@ -95,11 +95,9 @@ export default function ShopDetails() {
   const fetchShopDetails = async () => {
     try {
       const { data, error } = await supabase
-        .from('premium_partnerships' as any)
+        .from('premium_partners_public' as any)
         .select('*')
         .eq('id', shopId)
-        .eq('subscription_status', 'ACTIVE')
-        .eq('admin_approved', true)
         .maybeSingle();
       if (error) throw error;
       setShop(data as any);

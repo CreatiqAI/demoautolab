@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Star, Upload, X, Image as ImageIcon } from "lucide-react";
+import { Star, Upload, X, Image as ImageIcon, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ReviewFormProps {
   productId: string;
@@ -25,6 +26,28 @@ export const ReviewForm = ({ productId, onSuccess, onCancel }: ReviewFormProps) 
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Logged-in users review under their account — prefill name/email from their
+  // profile so they never retype it, and hide those fields in the form.
+  useEffect(() => {
+    if (!user) return;
+    setCustomerEmail(user.email || "");
+    const metaName =
+      (user.user_metadata?.full_name as string) ||
+      (user.user_metadata?.name as string) ||
+      (user.email ? user.email.split("@")[0] : "");
+    setCustomerName(metaName);
+    (async () => {
+      const { data } = await supabase
+        .from("customer_profiles")
+        .select("full_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const fullName = (data as any)?.full_name;
+      if (fullName) setCustomerName(fullName);
+    })();
+  }, [user]);
 
   const MAX_IMAGES = 5;
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -280,35 +303,50 @@ export const ReviewForm = ({ productId, onSuccess, onCancel }: ReviewFormProps) 
             )}
           </div>
 
-          {/* Customer Name */}
-          <div className="space-y-2">
-            <Label htmlFor="customerName">Your Name *</Label>
-            <Input
-              id="customerName"
-              type="text"
-              placeholder="Enter your name"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              required
-              maxLength={100}
-            />
-          </div>
+          {user ? (
+            /* Logged in: post under the account — no name/email fields needed. */
+            <div className="flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2.5">
+              <UserCheck className="w-4 h-4 text-lime-600 shrink-0" />
+              <p className="text-sm">
+                Posting as <span className="font-medium">{customerName || "your account"}</span>
+                {customerEmail && (
+                  <span className="text-muted-foreground"> · {customerEmail}</span>
+                )}
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Customer Name */}
+              <div className="space-y-2">
+                <Label htmlFor="customerName">Your Name *</Label>
+                <Input
+                  id="customerName"
+                  type="text"
+                  placeholder="Enter your name"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  required
+                  maxLength={100}
+                />
+              </div>
 
-          {/* Customer Email */}
-          <div className="space-y-2">
-            <Label htmlFor="customerEmail">Your Email *</Label>
-            <Input
-              id="customerEmail"
-              type="email"
-              placeholder="your.email@example.com"
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              Your email will not be published
-            </p>
-          </div>
+              {/* Customer Email */}
+              <div className="space-y-2">
+                <Label htmlFor="customerEmail">Your Email *</Label>
+                <Input
+                  id="customerEmail"
+                  type="email"
+                  placeholder="your.email@example.com"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your email will not be published
+                </p>
+              </div>
+            </>
+          )}
 
           {/* Review Title */}
           <div className="space-y-2">

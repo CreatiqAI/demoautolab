@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAll';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,7 @@ const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'
 
 export default function Analytics() {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [activeTab, setActiveTab] = useState('revenue');
   const [data, setData] = useState<any>({
     revenue: [],
@@ -60,6 +62,7 @@ export default function Analytics() {
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
+      setLoadError(false);
 
       // Fetch all data
       const [ordersData, customersData, productsData, merchantsData] = await Promise.all([
@@ -79,6 +82,7 @@ export default function Analytics() {
       processVehicleAnalytics(customersData);
 
     } catch (error) {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -86,47 +90,50 @@ export default function Analytics() {
 
   const fetchOrders = async () => {
     try {
-      const { data: functionData } = await (supabase.rpc as any)('get_admin_orders');
-      if (functionData) return functionData;
-
-      const { data } = await supabase
+      // All orders (paged past Supabase's 1000-row cap) with their items, so the
+      // 12-month revenue trend and category breakdown reflect the full history
+      // instead of only the most recent 1000 orders.
+      return await fetchAllRows(() => supabase
         .from('orders' as any)
-        .select('*')
-        .order('created_at', { ascending: false });
-      return data || [];
+        .select('*, order_items(*)')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true }));
     } catch (error) {
-      return [];
+      throw error;
     }
   };
 
   const fetchCustomers = async () => {
     try {
-      const { data } = await supabase.rpc('get_all_customer_profiles');
-      return data || [];
+      return await fetchAllRows(() => supabase
+        .from('customer_profiles' as any)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true }));
     } catch (error) {
-      return [];
+      throw error;
     }
   };
 
   const fetchProducts = async () => {
     try {
-      const { data } = await supabase
+      return await fetchAllRows(() => supabase
         .from('component_library' as any)
-        .select('*');
-      return data || [];
+        .select('*')
+        .order('id', { ascending: true }));
     } catch (error) {
-      return [];
+      throw error;
     }
   };
 
   const fetchMerchants = async () => {
     try {
-      const { data } = await supabase
+      // Small table — single page, but paged for consistency.
+      return await fetchAllRows(() => supabase
         .from('premium_partnerships' as any)
-        .select('*');
-      return data || [];
+        .select('*'));
     } catch (error) {
-      return [];
+      throw error;
     }
   };
 
@@ -445,6 +452,15 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
+      {loadError && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>Some analytics data couldn't be loaded. Figures may be incomplete.</span>
+          <Button variant="outline" size="sm" onClick={fetchAnalytics}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

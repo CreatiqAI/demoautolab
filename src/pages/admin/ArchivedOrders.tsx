@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAll';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -61,10 +62,9 @@ export default function ArchivedOrders() {
     try {
       setLoading(true);
 
-      let ordersData: any[] = [];
-
-      // Fetch orders with COMPLETED status (uppercase - confirmed to work)
-      const { data, error } = await supabase
+      // Fetch orders with COMPLETED status (uppercase - confirmed to work).
+      // Paginated so the archive never truncates at Supabase's 1000-row cap.
+      const ordersData: any[] = await fetchAllRows(() => supabase
         .from('orders' as any)
         .select(`
           *,
@@ -79,15 +79,8 @@ export default function ArchivedOrders() {
           )
         `)
         .eq('status', 'COMPLETED')
-        .order('updated_at', { ascending: false });
-
-      if (!error && data) {
-        ordersData = data;
-      } else if (error) {
-        ordersData = [];
-      } else {
-        ordersData = [];
-      }
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: true }));
 
       // Transform the data to match the expected interface
       const transformedOrders = ordersData.map((order: any) => ({

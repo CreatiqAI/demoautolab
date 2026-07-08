@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAll';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -148,12 +149,13 @@ export default function Salesmen() {
   const fetchSalesmen = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      // Paginated so the salesmen list never truncates at Supabase's 1000-row cap.
+      const data = await fetchAllRows(() => supabase
         .from('salesmen')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true }));
 
-      if (error) throw error;
       const list = (data as Salesman[] | null) ?? [];
       setSalesmen(list);
 
@@ -180,11 +182,12 @@ export default function Salesmen() {
       const salesmanIds = list.map(s => s.id);
 
       // 1. APPROVED registrations referred by these salesmen
-      const { data: regs } = await supabase
+      const regs = await fetchAllRows(() => supabase
         .from('merchant_registrations' as any)
         .select('customer_id, referred_by_salesman_id, status')
         .in('referred_by_salesman_id', salesmanIds)
-        .eq('status', 'APPROVED');
+        .eq('status', 'APPROVED')
+        .order('id', { ascending: true }));
       const customerToSalesman = new Map<string, string>();
       for (const r of (regs as any[] | null) ?? []) {
         customerToSalesman.set(r.customer_id, r.referred_by_salesman_id);
@@ -195,11 +198,12 @@ export default function Salesmen() {
       }
 
       // 2. Non-cancelled order totals for those merchants
-      const { data: orderRows } = await supabase
+      const orderRows = await fetchAllRows(() => supabase
         .from('orders' as any)
         .select('customer_profile_id, total, status')
         .in('customer_profile_id', Array.from(customerToSalesman.keys()))
-        .neq('status', 'CANCELLED');
+        .neq('status', 'CANCELLED')
+        .order('id', { ascending: true }));
 
       const salesmanOrderTotals = new Map<string, number>();
       for (const o of (orderRows as any[] | null) ?? []) {
@@ -418,12 +422,12 @@ export default function Salesmen() {
     setReferrals([]);
     setReferralsLoading(true);
     try {
-      const { data: regs, error: regErr } = await supabase
+      const regs = await fetchAllRows(() => supabase
         .from('merchant_registrations' as any)
         .select('id, customer_id, company_name, status, created_at, approved_at')
         .eq('referred_by_salesman_id', salesman.id)
-        .order('created_at', { ascending: false });
-      if (regErr) throw regErr;
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true }));
       const registrations = (regs as any[] | null) ?? [];
       if (registrations.length === 0) {
         setReferrals([]);
@@ -432,10 +436,11 @@ export default function Salesmen() {
 
       const customerIds = registrations.map(r => r.customer_id);
 
-      const { data: profiles } = await supabase
+      const profiles = await fetchAllRows(() => supabase
         .from('customer_profiles' as any)
         .select('id, full_name, email, phone')
-        .in('id', customerIds);
+        .in('id', customerIds)
+        .order('id', { ascending: true }));
       const profileById = new Map<string, any>(
         ((profiles as any[] | null) ?? []).map(p => [p.id, p])
       );
@@ -443,12 +448,13 @@ export default function Salesmen() {
       // Pull each non-cancelled order so we can filter by month client-side
       // without re-querying when the user changes the period. Includes full
       // order metadata so the expandable row can show a useful breakdown.
-      const { data: orderRows } = await supabase
+      const orderRows = await fetchAllRows(() => supabase
         .from('orders' as any)
         .select('id, order_no, customer_profile_id, total, status, created_at, delivery_method')
         .in('customer_profile_id', customerIds)
         .neq('status', 'CANCELLED')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true }));
 
       const ordersByCustomer = new Map<string, ReferralOrder[]>();
       for (const o of (orderRows as any[] | null) ?? []) {

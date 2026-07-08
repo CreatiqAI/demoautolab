@@ -104,7 +104,15 @@ const Header = () => {
   }, []);
 
   const handleLogoClick = () => {
-    navigate('/');
+    // Already on the landing page: react-router won't re-navigate to the same
+    // route, so smooth-scroll back to the top ourselves. Otherwise route home
+    // and jump to the top of the fresh page.
+    if (location.pathname === '/') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      navigate('/');
+      window.scrollTo({ top: 0 });
+    }
   };
 
   const handleSignOut = async () => {

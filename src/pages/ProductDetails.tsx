@@ -1,19 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { fetchVendorNames } from '@/lib/vendorNames';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ShoppingCart, Package, Minus, Plus, ArrowLeft, Eye, ChevronDown, Clock, Users, DollarSign, Wrench, Video, Star, Info, PlayCircle, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, Package, Minus, Plus, ArrowLeft, Eye, ChevronDown, Clock, Users, DollarSign, Wrench, Video, Star, Info, PlayCircle, CheckCircle2, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/hooks/useCartDB';
 import { useAuth } from '@/hooks/useAuth';
 import { usePricing } from '@/hooks/usePricing';
 import Header from '@/components/Header';
 import LoginPromptButton from '@/components/LoginPromptButton';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { ProductInstallationGuide } from '@/types/product-types';
@@ -94,6 +95,78 @@ const ProductDetails = () => {
   // store the media type alongside the URL.
   const [lightboxMedia, setLightboxMedia] = useState<Array<{ url: string; mediaType?: string }>>([]);
   const [currentLightboxIndex, setCurrentLightboxIndex] = useState(0);
+  // Lightbox zoom: a photo-viewer model — scroll wheel / +- button changes the
+  // scale, and when zoomed you grab-and-drag to pan. Offset is a screen-px
+  // translation applied before the scale, clamped so the image can't be dragged
+  // off the frame.
+  const [zoomScale, setZoomScale] = useState(1);
+  const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
+  const zoomWrapRef = useRef<HTMLDivElement | null>(null);
+  // `dragging` gates the pan; `moved` marks that an actual drag happened so the
+  // trailing click (which can land on the backdrop) doesn't close the lightbox.
+  const dragRef = useRef({ dragging: false, moved: false });
+  const ZOOM_MIN = 1;
+  const ZOOM_MAX = 4;
+
+  const resetZoom = () => {
+    setZoomScale(1);
+    setZoomOffset({ x: 0, y: 0 });
+    dragRef.current.dragging = false;
+  };
+
+  // Keep the pan within the scaled image's overflow so it never leaves the frame.
+  const clampOffset = (x: number, y: number, scale: number) => {
+    const el = zoomWrapRef.current;
+    if (!el) return { x, y };
+    const rect = el.getBoundingClientRect(); // base (unscaled) frame size
+    const maxX = (rect.width * (scale - 1)) / 2;
+    const maxY = (rect.height * (scale - 1)) / 2;
+    return {
+      x: Math.max(-maxX, Math.min(maxX, x)),
+      y: Math.max(-maxY, Math.min(maxY, y)),
+    };
+  };
+
+  const applyZoom = (nextScale: number) => {
+    const s = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nextScale));
+    setZoomScale(s);
+    setZoomOffset((o) => (s === 1 ? { x: 0, y: 0 } : clampOffset(o.x, o.y, s)));
+  };
+
+  const toggleZoom = () => (zoomScale > 1 ? resetZoom() : applyZoom(2.5));
+
+  // Drag-to-pan via window listeners so the pan keeps tracking even when the
+  // cursor leaves the image, and releasing outside never closes the lightbox.
+  const beginDrag = (e: React.MouseEvent) => {
+    if (zoomScale <= 1) return;
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const originX = zoomOffset.x, originY = zoomOffset.y;
+    const scale = zoomScale;
+    dragRef.current.dragging = true;
+    dragRef.current.moved = false;
+    const onMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragRef.current.moved = true;
+      setZoomOffset(clampOffset(originX + dx, originY + dy, scale));
+    };
+    const onUp = () => {
+      dragRef.current.dragging = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // Backdrop click: if we just panned, ignore it; if zoomed, reset to original
+  // size first; only close when the image is already at its original size.
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target !== e.currentTarget) return;
+    if (dragRef.current.moved) { dragRef.current.moved = false; return; }
+    if (zoomScale > 1) { resetZoom(); return; }
+    closeLightbox();
+  };
   const [installationGuide, setInstallationGuide] = useState<ProductInstallationGuide | null>(null);
   const [installationOpen, setInstallationOpen] = useState(false);
   const [reviewsOpen, setReviewsOpen] = useState(true);
@@ -137,9 +210,8 @@ const ProductDetails = () => {
       const { data, error } = await supabase
         .from('products_new' as any)
         .select(`
-          id, name, slug, brand, model, year_from, year_to, category_id, featured,
+          id, name, slug, brand, model, year_from, year_to, category_id, featured, vendor_id,
           categories:category_id ( name ),
-          vendors:vendor_id ( business_name ),
           product_components ( count ),
           product_images_new ( url, is_primary, sort_order, media_type )
         `)
@@ -166,6 +238,8 @@ const ProductDetails = () => {
         return { url: chosen.url, type: chosen.media_type || 'image' };
       };
 
+      const relatedVendorNames = await fetchVendorNames((data as any[]).map((p) => p.vendor_id));
+
       // Rank by relevance: same model > same brand > same category.
       const scored = (data as any[]).map((p) => {
         const img = pickImage(p.product_images_new);
@@ -183,7 +257,7 @@ const ProductDetails = () => {
             year_from: p.year_from,
             year_to: p.year_to,
             category_name: p.categories?.name ?? null,
-            vendor_name: p.vendors?.business_name ?? null,
+            vendor_name: p.vendor_id ? relatedVendorNames[p.vendor_id] ?? null : null,
             component_count: p.product_components?.[0]?.count ?? 0,
             featured: !!p.featured,
             image_url: img.url,
@@ -330,10 +404,6 @@ const ProductDetails = () => {
             is_primary,
             sort_order,
             media_type
-          ),
-          vendors:vendor_id (
-            id,
-            business_name
           )
         `)
         .eq('id', id)
@@ -346,10 +416,15 @@ const ProductDetails = () => {
         return;
       }
 
+      const vendorId = (data as any).vendor_id as string | null;
+      const vendorNames = await fetchVendorNames([vendorId]);
+
       const productData: Product = {
         ...(data as any),
         product_images: (data as any).product_images_new || [],
-        vendor: (data as any).vendors || null,
+        vendor: vendorId && vendorNames[vendorId]
+          ? { id: vendorId, business_name: vendorNames[vendorId] }
+          : null,
       };
 
       setProduct(productData);
@@ -476,6 +551,7 @@ const ProductDetails = () => {
     setLightboxOpen(false);
     setLightboxMedia([]);
     setCurrentLightboxIndex(0);
+    resetZoom();
   };
 
   const navigateLightbox = (direction: "prev" | "next") => {
@@ -484,7 +560,20 @@ const ProductDetails = () => {
       ? (currentLightboxIndex - 1 + lightboxMedia.length) % lightboxMedia.length
       : (currentLightboxIndex + 1) % lightboxMedia.length;
     setCurrentLightboxIndex(newIndex);
+    resetZoom(); // reset zoom when switching media
   };
+
+  // Keyboard navigation for the lightbox (arrows to move, Radix handles Esc).
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') navigateLightbox('prev');
+      else if (e.key === 'ArrowRight') navigateLightbox('next');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxOpen, lightboxMedia.length, currentLightboxIndex]);
 
   const handleAddToCart = () => {
     if (!user) {
@@ -533,12 +622,12 @@ const ProductDetails = () => {
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#FAFAF8]">
         <Header />
         <div className="container mx-auto px-4 py-12">
           <div className="flex flex-col items-center justify-center h-64 space-y-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-            <p className="text-gray-500">Loading product...</p>
+            <div className="animate-spin rounded-full h-10 w-10 border-2 border-gray-200 border-t-lime-500"></div>
+            <p className="text-gray-500 text-sm">Loading product…</p>
           </div>
         </div>
       </div>
@@ -548,7 +637,7 @@ const ProductDetails = () => {
   const primaryImage = product.product_images.find(img => img.is_primary) || product.product_images[0];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-[#0f172a] font-sans pb-20 md:pb-8">
+    <div className="min-h-screen bg-[#FAFAF8] text-[#0f172a] font-sans pb-20 md:pb-8">
       <Header />
 
       <div className="container mx-auto px-3 sm:px-4 md:px-6 py-4 md:py-12 max-w-7xl">
@@ -557,18 +646,18 @@ const ProductDetails = () => {
           <Button
             variant="ghost"
             onClick={handleBackToCatalog}
-            className="text-xs uppercase tracking-[0.2em] font-bold px-0 text-slate-500 hover:bg-transparent hover:text-gray-900 transition-colors"
+            className="group text-xs uppercase tracking-[0.2em] font-bold px-0 text-slate-500 hover:bg-transparent hover:text-lime-600 transition-colors"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-0.5 transition-transform" />
             Back to Catalog
           </Button>
         </nav>
 
         {/* Main Product Section */}
-        <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6 md:mb-8">
+        <div className="bg-white rounded-2xl md:rounded-3xl shadow-[0_18px_50px_-28px_rgba(0,0,0,0.25)] border border-gray-200/70 overflow-hidden mb-6 md:mb-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
             {/* Left: Product Images */}
-            <div className="bg-white lg:border-r border-slate-100 flex flex-col select-none">
+            <div className="bg-[#f7f7f4] lg:border-r border-gray-200/70 flex flex-col select-none">
               {/* Main Image/Video */}
               {(() => {
                 const currentMedia = product.product_images[selectedImage];
@@ -584,8 +673,8 @@ const ProductDetails = () => {
 
                 return (
                   <div
-                    className="relative w-full min-h-[55vw] sm:min-h-[45vw] lg:min-h-[28vw] max-h-[70vw] sm:max-h-[55vw] lg:max-h-[35vw] bg-white group flex items-center justify-center overflow-hidden"
-                    {...(!isVideo ? { onClick: () => openLightbox(product.product_images.map(img => ({ url: img.url, mediaType: img.media_type })), selectedImage), style: { cursor: 'pointer' } } : {})}
+                    className="relative w-full min-h-[55vw] sm:min-h-[45vw] lg:min-h-[28vw] max-h-[70vw] sm:max-h-[55vw] lg:max-h-[35vw] bg-[#f7f7f4] group flex items-center justify-center overflow-hidden"
+                    {...(!isVideo ? { onClick: () => openLightbox(product.product_images.map(img => ({ url: img.url, mediaType: img.media_type })), selectedImage), style: { cursor: 'zoom-in' } } : {})}
                   >
                     {isVideo ? (
                       embedUrl ? (
@@ -619,9 +708,10 @@ const ProductDetails = () => {
                             target.src = '/placeholder.svg';
                           }}
                         />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
-                        <div className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                          <Eye className="h-4 w-4 text-gray-700" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/[0.03] transition-colors duration-300" />
+                        <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-white/90 backdrop-blur-md border border-white/70 rounded-full pl-2.5 pr-3 py-1.5 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 shadow-[0_8px_20px_-8px_rgba(0,0,0,0.35)]">
+                          <Eye className="h-3.5 w-3.5 text-lime-600" />
+                          <span className="text-[11px] font-semibold text-gray-800">Click to zoom</span>
                         </div>
                       </>
                     )}
@@ -631,16 +721,16 @@ const ProductDetails = () => {
 
               {/* Thumbnails */}
               {product.product_images.length > 1 && (
-                <div className="flex gap-1.5 sm:gap-2 justify-start sm:justify-center p-2 sm:p-4 border-t border-slate-100 bg-white z-10 overflow-x-auto no-scrollbar">
+                <div className="flex gap-1.5 sm:gap-2 justify-start sm:justify-center p-2 sm:p-4 border-t border-gray-200/70 bg-white z-10 overflow-x-auto no-scrollbar">
                   {product.product_images.map((image, index) => (
                     <button
                       key={index}
                       onClick={() => setSelectedImage(index)}
                       className={cn(
-                        "relative w-12 h-12 sm:w-16 sm:h-16 rounded-lg overflow-hidden border-2 transition-all duration-200 flex-shrink-0",
+                        "relative w-12 h-12 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 bg-[#f7f7f4] transition-all duration-200 flex-shrink-0",
                         index === selectedImage
-                          ? 'border-primary ring-2 ring-primary/20'
-                          : 'border-transparent hover:border-gray-300'
+                          ? 'border-lime-400 ring-2 ring-lime-400/25'
+                          : 'border-transparent hover:border-lime-200'
                       )}
                     >
                       {image.media_type === 'video' ? (() => {
@@ -1144,7 +1234,19 @@ const ProductDetails = () => {
                   ) : (
                     <ReviewsSection
                       productId={product.id}
-                      onWriteReview={() => setShowReviewForm(true)}
+                      onWriteReview={() => {
+                        // Reviews are tied to an account: guests must sign in first,
+                        // then they're returned here to write it.
+                        if (!user) {
+                          toast({
+                            title: 'Login required',
+                            description: 'Please sign in to write a review.',
+                          });
+                          navigate(`/auth?redirect=${encodeURIComponent(`/product/${id}`)}`);
+                          return;
+                        }
+                        setShowReviewForm(true);
+                      }}
                     />
                   )}
                 </div>
@@ -1211,11 +1313,15 @@ const ProductDetails = () => {
         </div>
       )}
 
-      {/* Media Lightbox — handles both images and videos */}
-      <Dialog open={lightboxOpen} onOpenChange={closeLightbox}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-0 border-0 bg-transparent" aria-describedby={undefined}>
-          <span className="sr-only"><DialogTitle>Product media</DialogTitle></span>
-          <div className="relative flex items-center justify-center">
+      {/* Media Lightbox — frosted backdrop (matches Shop Details) + full-image zoom.
+          Radix primitives are used directly so the OVERLAY itself carries the
+          backdrop-blur (shadcn's DialogContent renders a fixed solid overlay). */}
+      <DialogPrimitive.Root open={lightboxOpen} onOpenChange={(o) => { if (!o) closeLightbox(); }}>
+        <DialogPrimitive.Portal>
+          {/* Frosted overlay: the product page blurs through, gently tinted. */}
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/45 backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Content className="fixed inset-0 z-[60] flex flex-col outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+            <DialogPrimitive.Title className="sr-only">{product.name} media</DialogPrimitive.Title>
             {(() => {
               const current = lightboxMedia[currentLightboxIndex];
               if (!current) return null;
@@ -1227,70 +1333,113 @@ const ProductDetails = () => {
                 : vimeoMatch
                   ? `https://player.vimeo.com/video/${vimeoMatch[1]}`
                   : null;
+              const canZoom = !isVideo;
+
               return (
                 <>
-                  <div className="bg-black rounded-2xl overflow-hidden shadow-2xl">
+                  {/* Top-right controls — white circles, matching Shop Details */}
+                  <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+                    {canZoom && (
+                      <button
+                        onClick={toggleZoom}
+                        aria-label={zoomScale > 1 ? 'Zoom out' : 'Zoom in'}
+                        className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-gray-900 shadow-xl ring-1 ring-black/10 hover:bg-gray-100 hover:scale-105 transition"
+                      >
+                        {zoomScale > 1 ? <ZoomOut className="w-5 h-5" /> : <ZoomIn className="w-5 h-5" />}
+                      </button>
+                    )}
+                    <button
+                      onClick={closeLightbox}
+                      aria-label="Close"
+                      className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-gray-900 shadow-xl ring-1 ring-black/10 hover:bg-gray-100 hover:scale-105 transition"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Stage */}
+                  <div
+                    className="relative flex-1 min-h-0 flex items-center justify-center p-4 sm:p-10"
+                    onClick={handleBackdropClick}
+                  >
                     {isVideo ? (
-                      embedUrl ? (
-                        <iframe
-                          // re-mount on slide change so the previous iframe stops playing
-                          key={currentLightboxIndex}
-                          src={embedUrl}
-                          className="w-[90vw] max-w-[1280px] aspect-video"
-                          allowFullScreen
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        />
-                      ) : (
-                        <video
-                          key={currentLightboxIndex}
-                          src={current.url}
-                          className="max-w-[90vw] max-h-[85vh] w-auto h-auto"
-                          controls
-                          autoPlay
-                          playsInline
-                        />
-                      )
+                      <div className="bg-black rounded-xl overflow-hidden shadow-2xl">
+                        {embedUrl ? (
+                          <iframe
+                            key={currentLightboxIndex}
+                            src={embedUrl}
+                            className="w-[92vw] max-w-[1280px] aspect-video"
+                            allowFullScreen
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          />
+                        ) : (
+                          <video
+                            key={currentLightboxIndex}
+                            src={current.url}
+                            className="max-w-[92vw] max-h-[86vh] w-auto h-auto"
+                            controls
+                            autoPlay
+                            playsInline
+                          />
+                        )}
+                      </div>
                     ) : (
-                      <img
-                        src={transformImage(current.url, { width: 1600, quality: 80 })}
-                        alt="Product image"
-                        className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain bg-white"
-                      />
+                      // Photo-viewer zoom: scroll wheel or double-click to zoom,
+                      // then grab-and-drag to pan. Offset is clamped to the frame.
+                      <div
+                        ref={zoomWrapRef}
+                        className="relative overflow-hidden rounded-md shadow-2xl"
+                        style={{ cursor: zoomScale > 1 ? 'grab' : 'zoom-in' }}
+                        onWheel={(e) => { e.preventDefault(); applyZoom(zoomScale + (e.deltaY < 0 ? 0.3 : -0.3)); }}
+                        onDoubleClick={toggleZoom}
+                        onMouseDown={beginDrag}
+                      >
+                        <img
+                          src={transformImage(current.url, { width: 2400, quality: 85 })}
+                          alt={product.name}
+                          className="block max-w-[94vw] max-h-[86vh] w-auto h-auto object-contain select-none"
+                          style={{
+                            transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale})`,
+                            transition: dragRef.current.dragging ? 'none' : 'transform 0.18s ease-out',
+                          }}
+                          draggable={false}
+                        />
+                      </div>
+                    )}
+
+                    {/* Prev / Next — white circles */}
+                    {lightboxMedia.length > 1 && (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigateLightbox('prev'); }}
+                          aria-label="Previous"
+                          className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-900 rounded-full p-2.5 shadow-lg hover:scale-105 transition"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigateLightbox('next'); }}
+                          aria-label="Next"
+                          className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-900 rounded-full p-2.5 shadow-lg hover:scale-105 transition"
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                        </button>
+                      </>
                     )}
                   </div>
 
-                  {/* Navigation */}
+                  {/* Counter pill — bottom center */}
                   {lightboxMedia.length > 1 && (
-                    <>
-                      <button
-                        onClick={() => navigateLightbox("prev")}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => navigateLightbox("next")}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-gray-800 rounded-full p-3 transition-all shadow-lg hover:scale-110"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                        </svg>
-                      </button>
-
-                      {/* Counter */}
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm font-medium">
-                        {currentLightboxIndex + 1} / {lightboxMedia.length}
-                      </div>
-                    </>
+                    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20 bg-white/95 text-gray-900 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg">
+                      {currentLightboxIndex + 1} / {lightboxMedia.length}
+                    </div>
                   )}
                 </>
               );
             })()}
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </div>
   );
 };
