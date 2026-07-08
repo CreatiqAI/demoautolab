@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { transformImage } from '@/lib/imageTransform';
+import { SignedDocLink, SignedImage } from '@/components/SignedMerchantDoc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -1618,14 +1619,12 @@ export default function Customers() {
                               </TableCell>
                               <TableCell onClick={(e) => e.stopPropagation()}>
                                 {partnership?.payment_slip_url ? (
-                                  <a
-                                    href={partnership.payment_slip_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                  <SignedDocLink
+                                    url={partnership.payment_slip_url}
                                     className="inline-flex items-center gap-1 text-blue-600 hover:underline text-sm"
                                   >
                                     <FileText className="h-3 w-3" />View
-                                  </a>
+                                  </SignedDocLink>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">—</span>
                                 )}
@@ -2176,10 +2175,8 @@ export default function Customers() {
                       </h4>
                       <div className="grid grid-cols-2 gap-4">
                         {merchantDetails.ssm_document_url && (
-                          <a
-                            href={merchantDetails.ssm_document_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <SignedDocLink
+                            url={merchantDetails.ssm_document_url}
                             className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                           >
                             <FileText className="h-5 w-5 text-blue-600" />
@@ -2188,13 +2185,11 @@ export default function Customers() {
                               <div className="text-xs text-muted-foreground">Click to view</div>
                             </div>
                             <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
-                          </a>
+                          </SignedDocLink>
                         )}
                         {merchantDetails.bank_proof_url && (
-                          <a
-                            href={merchantDetails.bank_proof_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <SignedDocLink
+                            url={merchantDetails.bank_proof_url}
                             className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                           >
                             <FileText className="h-5 w-5 text-green-600" />
@@ -2203,7 +2198,7 @@ export default function Customers() {
                               <div className="text-xs text-muted-foreground">Click to view</div>
                             </div>
                             <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
-                          </a>
+                          </SignedDocLink>
                         )}
                       </div>
                     </div>
@@ -2218,15 +2213,13 @@ export default function Customers() {
                       </h4>
                       <div className="grid grid-cols-4 gap-2">
                         {merchantDetails.workshop_photos.map((photo: string, idx: number) => (
-                          <a
+                          <SignedDocLink
                             key={idx}
-                            href={photo}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            url={photo}
                             className="aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all"
                           >
-                            <img src={transformImage(photo, { width: 240, quality: 65 })} alt={`Workshop ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                          </a>
+                            <SignedImage url={photo} alt={`Workshop ${idx + 1}`} transform={{ width: 240, quality: 65 }} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                          </SignedDocLink>
                         ))}
                       </div>
                     </div>
@@ -2449,46 +2442,40 @@ export default function Customers() {
                     {selectedApplication.ssm_document_url && (
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm font-medium mb-2">SSM Document</div>
-                        <a
-                          href={selectedApplication.ssm_document_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <SignedDocLink
+                          url={selectedApplication.ssm_document_url}
                           className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 text-sm"
                         >
                           <FileText className="h-4 w-4" />
                           View Document
                           <ExternalLink className="h-3 w-3" />
-                        </a>
+                        </SignedDocLink>
                       </div>
                     )}
                     {selectedApplication.bank_proof_url && (
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm font-medium mb-2">Bank Proof</div>
-                        <a
-                          href={selectedApplication.bank_proof_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <SignedDocLink
+                          url={selectedApplication.bank_proof_url}
                           className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 text-sm"
                         >
                           <FileText className="h-4 w-4" />
                           View Document
                           <ExternalLink className="h-3 w-3" />
-                        </a>
+                        </SignedDocLink>
                       </div>
                     )}
                     {(selectedApplication as any).payment_slip_url && (
                       <div className="p-3 border rounded-lg border-amber-200 bg-amber-50/50">
                         <div className="text-sm font-medium mb-2">RM99 Payment Slip</div>
-                        <a
-                          href={(selectedApplication as any).payment_slip_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <SignedDocLink
+                          url={(selectedApplication as any).payment_slip_url}
                           className="inline-flex items-center gap-2 px-3 py-2 bg-amber-100 text-amber-800 rounded hover:bg-amber-200 text-sm"
                         >
                           <FileText className="h-4 w-4" />
                           View Payment Slip
                           <ExternalLink className="h-3 w-3" />
-                        </a>
+                        </SignedDocLink>
                       </div>
                     )}
                   </div>
@@ -2504,15 +2491,14 @@ export default function Customers() {
                   </h4>
                   <div className="grid grid-cols-3 gap-3">
                     {selectedApplication.workshop_photos.map((photo, idx) => (
-                      <a
+                      <SignedDocLink
                         key={idx}
-                        href={photo}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="relative aspect-video rounded-lg overflow-hidden border hover:ring-2 ring-blue-500 transition-all"
+                        url={photo}
+                        className="relative aspect-video rounded-lg overflow-hidden border hover:ring-2 ring-blue-500 transition-all block"
                       >
-                        <img
-                          src={transformImage(photo, { width: 400, quality: 70 })}
+                        <SignedImage
+                          url={photo}
+                          transform={{ width: 400, quality: 70 }}
                           alt={`Workshop photo ${idx + 1}`}
                           className="w-full h-full object-cover"
                           loading="lazy"
@@ -2521,7 +2507,7 @@ export default function Customers() {
                         <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center">
                           <ExternalLink className="h-6 w-6 text-white opacity-0 hover:opacity-100" />
                         </div>
-                      </a>
+                      </SignedDocLink>
                     ))}
                   </div>
                 </div>
@@ -3151,14 +3137,12 @@ export default function Customers() {
                                   </div>
                                 </div>
                                 {p.payment_slip_url?.startsWith('http') ? (
-                                  <a
-                                    href={p.payment_slip_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                  <SignedDocLink
+                                    url={p.payment_slip_url}
                                     className="inline-flex items-center gap-1 text-blue-700 hover:underline flex-shrink-0"
                                   >
                                     <FileText className="h-3 w-3" />Slip
-                                  </a>
+                                  </SignedDocLink>
                                 ) : (
                                   <span className="text-muted-foreground italic flex-shrink-0">no slip</span>
                                 )}
@@ -3223,15 +3207,13 @@ export default function Customers() {
                           Started {formatDateShort(partnership.subscription_start_date) ?? '—'} · Ends {formatDateShort(endDate) ?? '—'}
                         </div>
                         {partnership.payment_slip_url && (
-                          <a
-                            href={partnership.payment_slip_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <SignedDocLink
+                            url={partnership.payment_slip_url}
                             className="inline-flex items-center gap-1.5 text-sm text-blue-700 hover:underline"
                           >
                             <FileText className="h-3.5 w-3.5" />View payment slip
                             <ExternalLink className="h-3 w-3" />
-                          </a>
+                          </SignedDocLink>
                         )}
                         <Button
                           size="sm"
@@ -3256,14 +3238,12 @@ export default function Customers() {
                                     </div>
                                   </div>
                                   {p.payment_slip_url?.startsWith('http') ? (
-                                    <a
-                                      href={p.payment_slip_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                    <SignedDocLink
+                                      url={p.payment_slip_url}
                                       className="inline-flex items-center gap-1 text-blue-700 hover:underline flex-shrink-0"
                                     >
                                       <FileText className="h-3 w-3" />Slip
-                                    </a>
+                                    </SignedDocLink>
                                   ) : (
                                     <span className="text-muted-foreground italic flex-shrink-0">no slip</span>
                                   )}
@@ -3306,40 +3286,34 @@ export default function Customers() {
                       <div className="text-xs font-semibold text-muted-foreground uppercase">Documents</div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {merchantDetails.ssm_document_url && (
-                          <a
-                            href={merchantDetails.ssm_document_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <SignedDocLink
+                            url={merchantDetails.ssm_document_url}
                             className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-muted text-sm"
                           >
                             <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
                             <span className="flex-1">SSM Document</span>
                             <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                          </a>
+                          </SignedDocLink>
                         )}
                         {merchantDetails.bank_proof_url && (
-                          <a
-                            href={merchantDetails.bank_proof_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <SignedDocLink
+                            url={merchantDetails.bank_proof_url}
                             className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-muted text-sm"
                           >
                             <FileText className="h-4 w-4 text-green-600 flex-shrink-0" />
                             <span className="flex-1">Bank Proof</span>
                             <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                          </a>
+                          </SignedDocLink>
                         )}
                         {(merchantDetails as any).payment_slip_url && (
-                          <a
-                            href={(merchantDetails as any).payment_slip_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <SignedDocLink
+                            url={(merchantDetails as any).payment_slip_url}
                             className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-muted text-sm"
                           >
                             <FileText className="h-4 w-4 text-amber-600 flex-shrink-0" />
                             <span className="flex-1">Payment Slip</span>
                             <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                          </a>
+                          </SignedDocLink>
                         )}
                       </div>
                       {merchantDetails.workshop_photos && merchantDetails.workshop_photos.length > 0 && (
@@ -3347,16 +3321,13 @@ export default function Customers() {
                           <div className="text-xs text-muted-foreground">Workshop photos ({merchantDetails.workshop_photos.length})</div>
                           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                             {merchantDetails.workshop_photos.map((photo: string, idx: number) => (
-                              <a
+                              <SignedDocLink
                                 key={idx}
-                                href={photo}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                url={photo}
                                 className="block aspect-square rounded border overflow-hidden hover:ring-2 hover:ring-primary"
-                                title={`Workshop photo ${idx + 1}`}
                               >
-                                <img src={transformImage(photo, { width: 240, quality: 65 })} alt={`Workshop ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                              </a>
+                                <SignedImage url={photo} alt={`Workshop ${idx + 1}`} transform={{ width: 240, quality: 65 }} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                              </SignedDocLink>
                             ))}
                           </div>
                         </div>

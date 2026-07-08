@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { SignedDocLink } from '@/components/SignedMerchantDoc';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import Header from '@/components/Header';
@@ -480,19 +481,19 @@ export default function Settings() {
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Documents</p>
                             <div className="flex flex-wrap gap-2">
                               {merchantReg.ssm_document_url && (
-                                <a href={merchantReg.ssm_document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded text-xs text-gray-700 transition-colors">
+                                <SignedDocLink url={merchantReg.ssm_document_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded text-xs text-gray-700 transition-colors">
                                   <FileText className="w-3 h-3" /> SSM Document
-                                </a>
+                                </SignedDocLink>
                               )}
                               {merchantReg.bank_proof_url && (
-                                <a href={merchantReg.bank_proof_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded text-xs text-gray-700 transition-colors">
+                                <SignedDocLink url={merchantReg.bank_proof_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded text-xs text-gray-700 transition-colors">
                                   <FileText className="w-3 h-3" /> Bank Proof
-                                </a>
+                                </SignedDocLink>
                               )}
                               {merchantReg.payment_slip_url && (
-                                <a href={merchantReg.payment_slip_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded text-xs text-gray-700 transition-colors">
+                                <SignedDocLink url={merchantReg.payment_slip_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded text-xs text-gray-700 transition-colors">
                                   <FileText className="w-3 h-3" /> Payment Slip
-                                </a>
+                                </SignedDocLink>
                               )}
                             </div>
                           </div>

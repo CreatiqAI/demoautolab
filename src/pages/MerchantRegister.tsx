@@ -19,6 +19,9 @@ const MerchantRegister = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Local blob previews for just-picked workshop photos — the merchant-documents
+  // bucket is private, so the uploaded URL can't be shown to the (anon) applicant.
+  const [workshopPreviews, setWorkshopPreviews] = useState<string[]>([]);
   const [step, setStep] = useState(1); // 1: Code validation, 2: Registration form
   const [codeValidated, setCodeValidated] = useState(false);
   const [codeData, setCodeData] = useState<any>(null);
@@ -199,6 +202,7 @@ const MerchantRegister = () => {
 
     setUploading(true);
     const newPhotos: string[] = [];
+    const newPreviews: string[] = [];
 
     for (const file of Array.from(files)) {
       if (file.size > 5 * 1024 * 1024) {
@@ -209,6 +213,7 @@ const MerchantRegister = () => {
       const url = await uploadFile(file, 'workshop-photos');
       if (url) {
         newPhotos.push(url);
+        newPreviews.push(URL.createObjectURL(file));
       }
     }
 
@@ -217,6 +222,7 @@ const MerchantRegister = () => {
         ...merchantForm,
         workshopPhotos: [...merchantForm.workshopPhotos, ...newPhotos]
       });
+      setWorkshopPreviews(prev => [...prev, ...newPreviews]);
       toast.success(`${newPhotos.length} photo(s) uploaded`);
     }
     setUploading(false);
@@ -224,6 +230,11 @@ const MerchantRegister = () => {
 
   // Remove workshop photo
   const removeWorkshopPhoto = (index: number) => {
+    setWorkshopPreviews(prev => {
+      const url = prev[index];
+      if (url) URL.revokeObjectURL(url);
+      return prev.filter((_, i) => i !== index);
+    });
     const newPhotos = merchantForm.workshopPhotos.filter((_, i) => i !== index);
     setMerchantForm({ ...merchantForm, workshopPhotos: newPhotos });
   };
@@ -900,7 +911,7 @@ const MerchantRegister = () => {
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {merchantForm.workshopPhotos.map((photo, index) => (
                           <div key={index} className="relative aspect-video bg-muted rounded-lg overflow-hidden">
-                            <img src={photo} alt={`Workshop ${index + 1}`} className="w-full h-full object-cover" />
+                            <img src={workshopPreviews[index] ?? photo} alt={`Workshop ${index + 1}`} className="w-full h-full object-cover" />
                             <Button
                               type="button"
                               variant="destructive"

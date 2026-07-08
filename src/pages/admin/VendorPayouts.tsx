@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { SignedDocLink } from '@/components/SignedMerchantDoc';
 import { fetchAllRows } from '@/lib/fetchAll';
 import { useToast } from '@/hooks/use-toast';
 import { logAdminAction, getCurrentAdmin } from '@/lib/adminAudit';
@@ -467,11 +468,9 @@ export default function VendorPayouts() {
                       </TableCell>
                       <TableCell>
                         {p.payment_slip_url ? (
-                          <Button asChild variant="ghost" size="sm">
-                            <a href={p.payment_slip_url} target="_blank" rel="noreferrer">
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </a>
-                          </Button>
+                          <SignedDocLink url={p.payment_slip_url} className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent hover:text-accent-foreground">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </SignedDocLink>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
