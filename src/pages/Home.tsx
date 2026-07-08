@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
-import { ArrowRight, ArrowUpRight, ArrowDown } from 'lucide-react';
+import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   motion,
@@ -18,6 +18,7 @@ import {
   Variants
 } from 'framer-motion';
 import { SplitHeading, CountUp, TiltCard, Magnetic, RevealWords } from '@/components/MotionBits';
+import HeroImage from '@/components/HeroImage';
 
 const EASE_OUT: [number, number, number, number] = [0.23, 1, 0.32, 1];
 
@@ -26,54 +27,58 @@ const fadeInUp: Variants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: EASE_OUT } }
 };
 
-const CAR_BRANDS = [
-  "TOYOTA", "HONDA", "NISSAN", "MAZDA", "BMW", "MERCEDES", "AUDI", "VOLKSWAGEN",
-  "HYUNDAI", "KIA", "SUBARU", "MITSUBISHI", "FORD", "PROTON", "PERODUA"
-];
+// Catalog filter per product line (category id, or a search term where a
+// single category doesn't capture the line). Applied on redirect to /catalog.
+const CAT_NINJA = "category=208a3d72-5dc1-4bff-8ab1-322462fdf0a6";
+const CAT_AMBIENT = "category=57530dc7-9e93-4e4f-8008-d685db68c864";
+const CAT_LED = "category=e2ddcabc-4d26-4e39-805e-722f0cc2b94f";
+const SEARCH_CASING = "search=casing";
 
-/* Hero showcase image. Primary is the client's generated 12V cabin shot —
-   drop the file at public/hero/hero.jpg and it is picked up automatically;
-   until then the stock cabin photo below is used as fallback. */
-const HERO_IMAGE_PRIMARY = "/hero/hero.jpg";
-const HERO_IMAGE_FALLBACK = "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&q=80&w=2000";
-
+// The sticky tour tells a coverage story — outside the car, inside the cabin,
+// the sound system, then the wiring that ties it together — rather than a
+// per-category product list.
 const CHAPTERS = [
   {
     index: "01",
-    name: "Ninja Shades",
-    tagline: "Cool cabin. Clear view.",
-    desc: "Custom-fit magnetic sunshades, cut precisely for Malaysian heat.",
-    img: "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&q=80&w=1200"
+    name: "Outside",
+    tagline: "Own the outside.",
+    desc: "Ninja Shades, LED headlights and 360° cameras — every upgrade the exterior of your car can wear.",
+    img: "/hero/prod-shade.jpg"
   },
   {
     index: "02",
-    name: "Casings & Players",
-    tagline: "A factory finish for every dash.",
-    desc: "Precision Android player casings, paired with big-screen head units.",
-    img: "https://images.unsplash.com/photo-1610647752706-3bb12232b3ab?auto=format&fit=crop&q=80&w=1200"
+    name: "Inside",
+    tagline: "Live in the details.",
+    desc: "Ambient lighting and cabin upgrades that transform the space you actually sit in — fitted like OEM.",
+    img: "/hero/prod-ambient.jpg"
   },
   {
     index: "03",
-    name: "Ambient Lighting",
-    tagline: "Set the mood in motion.",
-    desc: "Interior light kits with app-controlled colour, fitted like OEM.",
-    img: "https://images.unsplash.com/photo-1493238792000-8113da705763?auto=format&fit=crop&q=80&w=1200"
+    name: "Sound",
+    tagline: "Turn it all the way up.",
+    desc: "Head units, speakers, amplifiers and subwoofers — a full audio stage built right into your car.",
+    img: "/hero/prod-speaker.png"
   },
   {
     index: "04",
-    name: "LED Bulbs",
-    tagline: "See further. Look sharper.",
-    desc: "Plug-and-play brightness upgrades for every socket and every car.",
-    img: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&q=80&w=1200"
+    name: "Integration",
+    tagline: "Fits like factory.",
+    desc: "Casings, sockets and CANbus adaptors that make every install look and run factory-standard.",
+    img: "/hero/casing%20socket.png"
   }
 ];
 
-const LINEUP = [
-  { num: "01", name: "Ninja Shades", desc: "Custom-fit magnetic sunshades", img: "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&q=80&w=600" },
-  { num: "02", name: "Player Casings", desc: "Precision dash casings, factory-finish fit", img: "https://images.unsplash.com/photo-1610647752706-3bb12232b3ab?auto=format&fit=crop&q=80&w=600" },
-  { num: "03", name: "Android Players", desc: "Big-screen head units, wireless connectivity", img: "/hero/hero.jpg" },
-  { num: "04", name: "Ambient Lighting", desc: "App-controlled interior light kits", img: "https://images.unsplash.com/photo-1493238792000-8113da705763?auto=format&fit=crop&q=80&w=600" },
-  { num: "05", name: "LED Bulbs", desc: "Plug-and-play brightness upgrades", img: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&q=80&w=600" }
+// Full lineup shown in "Everything we make". Items with a `filter` link into
+// the catalog; vendor lines without a category yet are display-only for now.
+const LINEUP: { num: string; name: string; desc: string; img: string; filter?: string }[] = [
+  { num: "01", name: "Ninja Shades", desc: "Custom-fit magnetic sunshades", img: "/hero/prod-shade.jpg", filter: CAT_NINJA },
+  { num: "02", name: "Android Player Casing", desc: "Precision dash casings, factory-finish fit", img: "/hero/casing%20socket.png", filter: SEARCH_CASING },
+  { num: "03", name: "Head Unit", desc: "Big-screen Android head units, wireless CarPlay & Android Auto", img: "/hero/prod-headunit.png" },
+  { num: "04", name: "Car Speaker", desc: "Coaxial & component upgrades for every door", img: "/hero/prod-speaker.png" },
+  { num: "05", name: "Amplifier", desc: "Clean, multi-channel power for your full system", img: "/hero/prod-amplifier.png" },
+  { num: "06", name: "360 Camera", desc: "Surround-view parking safety, all-round vision", img: "/hero/prod-camera.png" },
+  { num: "07", name: "Ambient Lighting", desc: "App-controlled interior light kits", img: "/hero/prod-ambient.jpg", filter: CAT_AMBIENT },
+  { num: "08", name: "LED Bulbs", desc: "Plug-and-play brightness upgrades", img: "/hero/prod-led.jpg", filter: CAT_LED }
 ];
 
 /* One chapter of the sticky product tour. Visibility is driven by the
@@ -82,14 +87,12 @@ const TourChapter = ({
   progress,
   index,
   total,
-  chapter,
-  onShop
+  chapter
 }: {
   progress: MotionValue<number>;
   index: number;
   total: number;
   chapter: typeof CHAPTERS[number];
-  onShop: () => void;
 }) => {
   const start = index / total;
   const end = (index + 1) / total;
@@ -127,13 +130,15 @@ const TourChapter = ({
             className="w-full lg:w-1/2 will-change-transform"
           >
             <TiltCard className="pointer-events-auto">
-              <div className="relative rounded-[2rem] overflow-hidden shadow-[0_40px_100px_-20px_rgba(0,0,0,0.25)] aspect-[4/3] max-h-[46vh] lg:max-h-[60vh] mx-auto">
+              <div className="relative rounded-[2rem] overflow-hidden border border-gray-200/80 shadow-[0_30px_80px_-25px_rgba(0,0,0,0.3)] aspect-[4/3] max-h-[46vh] lg:max-h-[60vh] mx-auto">
                 <img
                   src={chapter.img}
                   alt={chapter.name}
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute bottom-5 left-5 bg-white/85 backdrop-blur-md rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-900">
+                {/* Consistent cinematic gradient so bright and dark shots feel unified */}
+                <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent pointer-events-none"></div>
+                <div className="absolute bottom-5 left-5 bg-white/90 backdrop-blur-md rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-900">
                   {chapter.name}
                 </div>
               </div>
@@ -142,25 +147,22 @@ const TourChapter = ({
 
           {/* Copy */}
           <motion.div style={{ y: textY }} className="w-full lg:w-1/2 pointer-events-auto">
-            <span
-              className="block font-heading font-black text-7xl lg:text-9xl leading-none text-transparent mb-4 select-none"
-              style={{ WebkitTextStroke: '1.5px rgba(0,0,0,0.14)' }}
-            >
-              {chapter.index}
-            </span>
+            {/* Obvious index: big solid numeral + lime total + accent bar */}
+            <div className="flex items-center gap-4 mb-5">
+              <span className="font-heading font-black text-6xl lg:text-8xl leading-none text-gray-900 tracking-tighter">
+                {chapter.index}
+              </span>
+              <div className="flex flex-col gap-2 pt-2">
+                <span className="font-mono text-sm font-bold text-lime-600">/ {String(total).padStart(2, '0')}</span>
+                <span className="block w-10 h-[3px] rounded-full bg-lime-500"></span>
+              </div>
+            </div>
             <h3 className="font-heading font-bold uppercase tracking-tight text-4xl lg:text-6xl text-gray-900 mb-4 leading-[0.95]">
               {chapter.tagline}
             </h3>
-            <p className="text-gray-500 text-base lg:text-lg font-light leading-relaxed mb-8 max-w-md">
+            <p className="text-gray-500 text-base lg:text-lg font-light leading-relaxed max-w-md">
               {chapter.desc}
             </p>
-            <Button
-              onClick={onShop}
-              className="group h-12 px-8 rounded-full bg-gray-900 text-white hover:bg-gray-700 transition-colors duration-300 font-semibold tracking-wide text-sm active:scale-[0.98]"
-            >
-              Shop {chapter.name}
-              <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
-            </Button>
           </motion.div>
         </div>
       </div>
@@ -170,16 +172,6 @@ const TourChapter = ({
 
 const Home = () => {
   const navigate = useNavigate();
-
-  /* Hero scroll: stage zooms slightly and content drifts as the page scrolls away */
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress: heroProgress } = useScroll({
-    target: heroRef,
-    offset: ["start start", "end start"]
-  });
-  const stageScale = useTransform(heroProgress, [0, 1], [1, 1.1]);
-  const contentY = useTransform(heroProgress, [0, 1], ["0%", "30%"]);
-  const contentOpacity = useTransform(heroProgress, [0, 0.6], [1, 0]);
 
   /* Product tour scroll */
   const tourRef = useRef<HTMLDivElement>(null);
@@ -225,156 +217,20 @@ const Home = () => {
       />
       <Header />
 
-      {/* ============ HERO — cinematic stage ============ */}
-      <section ref={heroRef} className="relative h-screen min-h-[680px] bg-[#FAFAF8] pt-[88px] px-3 pb-3 sm:px-4 sm:pb-4">
-        <div className="relative w-full h-full rounded-[1.75rem] sm:rounded-[2.5rem] overflow-hidden bg-gray-900">
-
-          {/* Background image: entrance zoom-out + scroll zoom-in */}
-          <motion.div style={{ scale: stageScale }} className="absolute inset-0 will-change-transform">
-            <motion.img
-              initial={{ scale: 1.18, opacity: 0.4 }}
-              animate={{ scale: 1.04, opacity: 1 }}
-              transition={{ duration: 2, ease: EASE_OUT }}
-              src={HERO_IMAGE_PRIMARY}
-              onError={(e) => {
-                const img = e.currentTarget;
-                if (!img.src.endsWith(HERO_IMAGE_FALLBACK)) img.src = HERO_IMAGE_FALLBACK;
-              }}
-              alt="12V — premium car interior with ambient lighting"
-              className="w-full h-full object-cover blur-[2px]"
-              style={{ objectPosition: '50% 55%' }}
-            />
-          </motion.div>
-
-          {/* Legibility gradients */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/30"></div>
-
-          {/* Rotating badge */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 1.1, duration: 0.7, ease: EASE_OUT }}
-            className="absolute top-7 right-7 lg:top-10 lg:right-10 w-24 h-24 lg:w-28 lg:h-28 hidden md:flex items-center justify-center"
-          >
-            <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full spin-slow">
-              <defs>
-                <path id="hero-circle" d="M 50,50 m -40,0 a 40,40 0 1,1 80,0 a 40,40 0 1,1 -80,0" />
-              </defs>
-              <text className="fill-white/80 uppercase" style={{ fontSize: '8.5px', letterSpacing: '2.4px' }}>
-                <textPath href="#hero-circle">Premium car accessories · by Auto Lab ·</textPath>
-              </text>
-            </svg>
-            <span className="font-heading font-black text-white text-xl tracking-tighter">
-              12<span className="text-lime-400 italic">V</span>
-            </span>
-          </motion.div>
-
-          {/* Main content — bottom left */}
-          <motion.div
-            style={{ y: contentY, opacity: contentOpacity }}
-            className="absolute inset-x-0 bottom-0 p-7 sm:p-10 lg:p-14 will-change-transform"
-          >
-            <motion.p
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35, duration: 0.7, ease: EASE_OUT }}
-              className="text-[11px] uppercase tracking-[0.4em] text-white/70 font-semibold mb-6"
-            >
-              12V · Premium Car Accessories · Supported by Auto Lab
-            </motion.p>
-
-            <h1 className="font-heading font-black uppercase tracking-tighter leading-[0.9] text-white text-5xl sm:text-7xl lg:text-8xl xl:text-9xl mb-8">
-              <span className="block overflow-hidden">
-                <motion.span
-                  initial={{ y: "110%" }}
-                  animate={{ y: 0 }}
-                  transition={{ delay: 0.45, duration: 1, ease: EASE_OUT }}
-                  className="block"
-                >
-                  Upgrade
-                </motion.span>
-              </span>
-              <span className="block overflow-hidden">
-                <motion.span
-                  initial={{ y: "110%" }}
-                  animate={{ y: 0 }}
-                  transition={{ delay: 0.6, duration: 1, ease: EASE_OUT }}
-                  className="block"
-                >
-                  every <span className="text-lime-400 italic">drive.</span>
-                </motion.span>
-              </span>
-            </h1>
-
-            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8">
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.85, duration: 0.8, ease: EASE_OUT }}
-                className="text-white/80 text-base sm:text-lg font-light max-w-sm"
-              >
-                Ninja Shades, Android players, ambient light and LED — accessories that feel factory-fitted.
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1, duration: 0.8, ease: EASE_OUT }}
-                className="flex flex-col sm:flex-row gap-4"
-              >
-                <Button
-                  onClick={() => navigate('/catalog')}
-                  className="group h-14 px-9 rounded-full bg-white text-gray-900 hover:bg-lime-400 transition-colors duration-300 font-semibold tracking-wide text-sm active:scale-[0.98]"
-                >
-                  Shop the Catalog
-                  <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
-                </Button>
-                <Button
-                  onClick={() => navigate('/merchant-register')}
-                  variant="outline"
-                  className="group h-14 px-9 rounded-full border-white/40 bg-white/10 backdrop-blur-sm text-white hover:bg-white hover:text-gray-900 transition-colors duration-300 font-semibold tracking-wide text-sm active:scale-[0.98]"
-                >
-                  Become a Merchant
-                  <ArrowUpRight className="ml-2 w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
-                </Button>
-              </motion.div>
-            </div>
-          </motion.div>
-
-          {/* Scroll cue */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.8, duration: 0.8 }}
-            className="absolute bottom-7 left-1/2 -translate-x-1/2 hidden md:flex items-center gap-2 text-white/70 text-[10px] uppercase tracking-[0.3em] font-medium"
-          >
-            <ArrowDown className="w-3.5 h-3.5 animate-bounce" />
-            Scroll
-          </motion.div>
-
-        </div>
-      </section>
-
-      {/* ============ BRAND MARQUEE ============ */}
-      <section className="py-6 bg-white border-y border-gray-100 overflow-hidden">
-        <div className="flex animate-scroll whitespace-nowrap [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
-          {[...CAR_BRANDS, ...CAR_BRANDS, ...CAR_BRANDS].map((brand, idx) => (
-            <div key={idx} className="flex items-center shrink-0">
-              <span className="mx-8 text-gray-300 font-heading font-bold text-lg uppercase tracking-[0.25em]">{brand}</span>
-              <span className="w-1 h-1 rounded-full bg-lime-500/60 shrink-0"></span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* ============ HERO — scroll-driven 3D car ============ */}
+      <HeroImage />
 
       {/* ============ PRODUCT TOUR (sticky scrollytelling) ============ */}
-      <section ref={tourRef} className="relative h-[480vh] bg-[#FAFAF8]">
+      <section ref={tourRef} className="relative h-[480vh] bg-[#f7f7f4]">
         <div className="sticky top-0 h-screen overflow-hidden flex items-center">
+          {/* Soft ambient glows */}
+          <div aria-hidden className="absolute top-1/3 -left-24 w-[520px] h-[520px] rounded-full bg-lime-300/20 blur-[150px] pointer-events-none"></div>
+          <div aria-hidden className="absolute bottom-10 right-0 w-[420px] h-[420px] rounded-full bg-emerald-200/25 blur-[150px] pointer-events-none"></div>
 
           {/* Section label */}
           <div className="absolute top-24 left-0 right-0 text-center z-20">
             <p className="text-[11px] uppercase tracking-[0.4em] text-gray-400 font-semibold">
-              The 12V Lineup
+              Everything, inside &amp; out
             </p>
           </div>
 
@@ -386,7 +242,6 @@ const Home = () => {
               index={idx}
               total={CHAPTERS.length}
               chapter={chapter}
-              onShop={() => navigate('/catalog')}
             />
           ))}
 
@@ -395,14 +250,14 @@ const Home = () => {
             <div className="relative w-[2px] h-40 bg-gray-200 rounded-full overflow-hidden">
               <motion.div
                 style={{ scaleY: railScale }}
-                className="absolute inset-0 bg-gray-900 origin-top rounded-full"
+                className="absolute inset-0 bg-lime-500 origin-top rounded-full"
               />
             </div>
             <div className="flex flex-col gap-3">
               {CHAPTERS.map((c, idx) => (
                 <span
                   key={idx}
-                  className={`font-mono text-[10px] transition-colors duration-300 ${idx === activeChapter ? 'text-gray-900 font-bold' : 'text-gray-300'}`}
+                  className={`font-mono text-[10px] transition-colors duration-300 ${idx === activeChapter ? 'text-lime-600 font-bold' : 'text-gray-300'}`}
                 >
                   {c.index}
                 </span>
@@ -413,7 +268,7 @@ const Home = () => {
       </section>
 
       {/* ============ LINEUP INDEX ============ */}
-      <section className="py-24 md:py-32 bg-white">
+      <section className="py-24 md:py-32 bg-[#FAFAF8]">
         <div className="container mx-auto px-6">
           <motion.div
             initial="hidden"
@@ -426,7 +281,7 @@ const Home = () => {
               <SplitHeading text="Everything we make." />
             </h2>
             <p className="text-gray-400 text-sm font-light max-w-xs">
-              Five product lines, one standard — vetted by Auto Lab engineers.
+              Eight product lines, one standard — vetted by Auto Lab engineers.
             </p>
           </motion.div>
 
@@ -442,9 +297,9 @@ const Home = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: idx * 0.06, ease: EASE_OUT }}
-                onClick={() => navigate('/catalog')}
+                onClick={() => item.filter && navigate(`/catalog?${item.filter}`)}
                 onMouseEnter={() => setPreviewIdx(idx)}
-                className="group w-full grid grid-cols-12 items-center gap-4 py-7 md:py-9 border-b border-gray-200 text-left hover:bg-[#FAFAF8] transition-colors duration-300 px-2 md:px-4"
+                className={`group w-full grid grid-cols-12 items-center gap-4 py-7 md:py-9 border-b border-gray-200 text-left hover:bg-[#efeee9] transition-colors duration-300 px-2 md:px-4 ${item.filter ? '' : 'cursor-default'}`}
               >
                 <span className="col-span-2 md:col-span-1 font-mono text-xs text-gray-300 group-hover:text-lime-600 transition-colors duration-300">
                   {item.num}
@@ -456,7 +311,11 @@ const Home = () => {
                   {item.desc}
                 </p>
                 <span className="hidden md:flex col-span-1 justify-end">
-                  <ArrowUpRight className="w-5 h-5 text-gray-200 group-hover:text-gray-900 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300" />
+                  {item.filter ? (
+                    <ArrowUpRight className="w-5 h-5 text-gray-200 group-hover:text-gray-900 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300" />
+                  ) : (
+                    <span className="font-mono text-[9px] uppercase tracking-widest text-gray-300">Vendor</span>
+                  )}
                 </span>
               </motion.button>
             ))}
@@ -493,8 +352,8 @@ const Home = () => {
           <div className="grid md:grid-cols-3 gap-12 md:gap-8 max-w-5xl mx-auto">
             {[
               { n: 17, suffix: "+", label: "Years of Auto Lab", desc: "Supply-chain experience behind every order since 2007." },
-              { n: 500, suffix: "+", label: "Merchant Partners", desc: "Wholesale tier pricing for shops across Malaysia." },
-              { n: 24, suffix: "H", label: "Dispatch Window", desc: "Same-day dispatch from the Cheras hub, tracked to your door." }
+              { n: 10, suffix: "+", label: "Merchant Partners", desc: "Wholesale tier pricing for shops across Malaysia." },
+              { n: 100, suffix: "%", label: "Vetted Quality", desc: "Every product line is checked and approved by Auto Lab engineers before it reaches you." }
             ].map((stat, idx) => (
               <motion.div
                 key={idx}
@@ -516,7 +375,7 @@ const Home = () => {
       </section>
 
       {/* ============ SUPPORTED BY AUTO LAB ============ */}
-      <section className="py-24 bg-white">
+      <section className="py-24 bg-[#FAFAF8]">
         <div className="container mx-auto px-6">
           <motion.div
             initial="hidden"
@@ -532,8 +391,8 @@ const Home = () => {
               <SplitHeading text="12V is supported by Auto Lab." />
             </h2>
             <RevealWords
-              text="Every order is picked, packed and dispatched by Auto Lab Sdn Bhd — Malaysia's trusted parts distributor in Cheras, KL since 2007."
-              className="text-gray-500 font-light leading-relaxed mb-8"
+              text="Every product line is curated and vetted by Auto Lab Sdn Bhd — Malaysia's trusted parts distributor in Cheras, KL since 2007."
+              className="text-gray-700 font-light leading-relaxed mb-8"
             />
             <button
               onClick={() => navigate('/about')}
@@ -601,25 +460,36 @@ const Home = () => {
       <Footer />
 
       <style>{`
-        @keyframes scroll {
+        @keyframes marquee {
           0% { transform: translateX(0); }
-          100% { transform: translateX(-33.33%); }
+          100% { transform: translateX(-50%); }
         }
-        .animate-scroll {
-          animation: scroll 45s linear infinite;
+        .animate-marquee {
+          animation: marquee 32s linear infinite;
         }
-        .animate-scroll:hover {
-          animation-play-state: paused;
+        .hero-dots {
+          background-image: radial-gradient(rgba(17,24,39,0.05) 1px, transparent 1px);
+          background-size: 30px 30px;
+          -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 75%);
+          mask-image: radial-gradient(ellipse at center, black 40%, transparent 75%);
         }
-        @keyframes spin-slow {
-          to { transform: rotate(360deg); }
+        @keyframes hero-drift {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(40px, 30px) scale(1.12); }
         }
-        .spin-slow {
-          animation: spin-slow 18s linear infinite;
-          transform-origin: center;
+        @keyframes hero-drift-2 {
+          0%, 100% { transform: translate(0, 0) scale(1.05); }
+          50% { transform: translate(-36px, -28px) scale(1); }
         }
+        .hero-blob { animation: hero-drift 14s ease-in-out infinite; }
+        .hero-blob-2 { animation: hero-drift-2 16s ease-in-out infinite; }
+        @keyframes hero-float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-12px); }
+        }
+        .hero-float { animation: hero-float 6s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
-          .animate-scroll, .spin-slow {
+          .animate-marquee, .hero-blob, .hero-blob-2, .hero-float, .animate-pulse {
             animation: none;
           }
         }

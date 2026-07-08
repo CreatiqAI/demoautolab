@@ -171,35 +171,45 @@ export default function ComponentLibraryPro() {
     try {
       setLoading(true);
 
-      // Use basic query first, then get supplier info separately
-      const { data: basicData, error: basicError } = await supabase
-        .from('component_library' as any)
-        .select(`
-          id,
-          component_sku,
-          name,
-          description,
-          component_type,
-          component_value,
-          stock_level,
-          normal_price,
-          merchant_price,
-          default_image_url,
-          is_active,
-          created_at,
-          updated_at,
-          min_stock_level,
-          max_stock_level,
-          reorder_point,
-          warehouse_location,
-          last_restocked
-        `)
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false, nullsFirst: false });
+      // Supabase caps a single request at 1000 rows, so paginate with .range()
+      // until a short page comes back — otherwise the table silently truncates
+      // once component_library grows past 1000 active rows.
+      const PAGE = 1000;
+      const componentData: any[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data: page, error: basicError } = await supabase
+          .from('component_library' as any)
+          .select(`
+            id,
+            component_sku,
+            name,
+            description,
+            component_type,
+            component_value,
+            stock_level,
+            normal_price,
+            merchant_price,
+            default_image_url,
+            is_active,
+            created_at,
+            updated_at,
+            min_stock_level,
+            max_stock_level,
+            reorder_point,
+            warehouse_location,
+            last_restocked
+          `)
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
 
-      if (basicError) throw basicError;
+        if (basicError) throw basicError;
 
-      const componentData = (basicData as any) || [];
+        const rows = (page as any[]) || [];
+        componentData.push(...rows);
+        if (rows.length < PAGE) break;
+      }
 
       // Add usage stats without supplier information
       const componentsWithUsage = (componentData as any[]).map((comp: any) => {

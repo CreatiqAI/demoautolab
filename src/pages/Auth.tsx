@@ -335,37 +335,48 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen flex relative overflow-hidden">
-      {/* Left Side - Background Image */}
-      <div className="hidden lg:block lg:w-1/2 relative">
+      {/* Left Side - Brand panel */}
+      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden bg-[#0a0a0a]">
         <img
-          src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&q=80&w=2000"
-          alt="Sports Car"
+          src="/hero/hero-static-night.jpg"
+          alt="12V — premium car accessories"
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-gray-900"></div>
-        <div className="absolute inset-0 flex flex-col justify-center px-12">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/55 to-black/40"></div>
+        <div aria-hidden className="pointer-events-none absolute -bottom-20 left-1/4 w-[440px] h-[280px] rounded-full bg-lime-500/15 blur-[120px]"></div>
+
+        {/* Wordmark */}
+        <div className="absolute top-8 left-12 flex items-center gap-2.5 text-white z-10">
+          <span className="font-heading font-black text-2xl tracking-tight">12V</span>
+          <span className="text-white/40 text-[10px] uppercase tracking-[0.2em] border-l border-white/20 pl-2.5">By Auto Lab</span>
+        </div>
+
+        <div className="absolute inset-0 flex flex-col justify-end px-12 pb-14">
           <div className="max-w-md">
-            <h1 className="font-heading text-4xl xl:text-5xl font-bold text-white italic leading-tight mb-6">
-              UPGRADE<br />
-              <span className="text-lime-400">YOUR RIDE</span>
+            <span className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-lime-400 font-semibold mb-5">
+              <span className="w-1.5 h-1.5 rounded-full bg-lime-400"></span> Premium Car Accessories
+            </span>
+            <h1 className="font-heading font-black uppercase text-4xl xl:text-5xl text-white leading-[0.95] mb-6">
+              Upgrade<br />
+              <span className="text-lime-400 italic">your ride.</span>
             </h1>
-            <p className="text-gray-300 text-lg leading-relaxed">
-              Join Malaysia's premier automotive accessories wholesaler. Quality parts, fast delivery, exceptional service since 2007.
+            <p className="text-gray-300 text-base leading-relaxed max-w-sm">
+              Malaysia's premier automotive accessories network — quality parts, fast dispatch, trusted since 2007.
             </p>
             <div className="flex items-center gap-6 mt-8">
-              <div className="text-center">
-                <div className="font-heading text-3xl font-bold text-lime-400">17+</div>
-                <div className="text-xs text-gray-400 uppercase tracking-wider">Years</div>
+              <div>
+                <div className="font-heading text-3xl font-black text-lime-400">17+</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Years</div>
               </div>
-              <div className="w-px h-12 bg-gray-600"></div>
-              <div className="text-center">
-                <div className="font-heading text-3xl font-bold text-lime-400">500+</div>
-                <div className="text-xs text-gray-400 uppercase tracking-wider">Partners</div>
+              <div className="w-px h-10 bg-white/15"></div>
+              <div>
+                <div className="font-heading text-3xl font-black text-lime-400">10+</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Partners</div>
               </div>
-              <div className="w-px h-12 bg-gray-600"></div>
-              <div className="text-center">
-                <div className="font-heading text-3xl font-bold text-lime-400">100+</div>
-                <div className="text-xs text-gray-400 uppercase tracking-wider">Products</div>
+              <div className="w-px h-10 bg-white/15"></div>
+              <div>
+                <div className="font-heading text-3xl font-black text-lime-400">10K+</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Products</div>
               </div>
             </div>
           </div>
@@ -392,13 +403,13 @@ const Auth = () => {
 
           {/* Header */}
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {authStep === 'merchant-otp' ? 'Enter Verification Code' : 'Welcome'}
+            <h2 className="font-heading font-bold uppercase tracking-tight text-3xl text-gray-900 mb-2">
+              {authStep === 'merchant-otp' ? 'Verify Code' : 'Welcome'}
             </h2>
-            <p className="text-gray-500">
+            <p className="text-gray-500 text-sm">
               {authStep === 'merchant-otp'
                 ? `We sent a code to +60${merchantOtpForm.phone}`
-                : 'Sign in to your account'}
+                : 'Sign in to your 12V account'}
             </p>
           </div>
 

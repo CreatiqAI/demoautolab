@@ -23,8 +23,8 @@ interface NewArrivalProduct extends CatalogCardProduct {
 
 function MetaChip({ icon: Icon, children }: { icon: typeof Sparkles; children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 backdrop-blur-sm">
-      <Icon className="h-3.5 w-3.5 text-lime-300" />
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm">
+      <Icon className="h-3.5 w-3.5 text-lime-600" />
       {children}
     </span>
   );
@@ -71,52 +71,47 @@ export default function NewArrivals() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[#FAFAF8] flex flex-col overflow-x-clip">
       <SEOHead
-        title="New Arrivals | AUTO LAB"
-        description="The latest car parts and accessories added to AutoLab — fresh drops from the last 30 days."
+        title="New Arrivals | 12V — Supported by Auto Lab"
+        description="The latest car parts and accessories added to 12V — fresh drops from the last 30 days."
       />
       <Header />
 
       <main className="flex-1">
-        {/* ---- Premium hero (on-brand dark, lime accent) ---- */}
-        <section className="relative overflow-hidden bg-[#0a0a0a] text-white">
-          {/* Ambient glow + faint grid */}
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute -top-28 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-lime-500/20 blur-[130px]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_-10%,rgba(132,204,22,0.16),transparent_45%)]" />
-            <div className="absolute inset-0 opacity-[0.05] [background-image:linear-gradient(to_right,#fff_1px,transparent_1px),linear-gradient(to_bottom,#fff_1px,transparent_1px)] [background-size:46px_46px]" />
-          </div>
-
+        {/* ---- Hero (light, on-brand) ---- */}
+        <section className="relative bg-gradient-to-b from-white to-[#FAFAF8]">
+          <div aria-hidden className="pointer-events-none absolute -top-28 left-1/2 -translate-x-1/2 w-[720px] h-[360px] rounded-full bg-lime-300/25 blur-[140px]" />
           <motion.div
             variants={container}
             initial="hidden"
             animate="visible"
-            className="relative max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-20"
+            className="relative container mx-auto px-4 sm:px-6 lg:px-8 pt-8 md:pt-12 pb-8 text-center"
           >
-            <motion.div variants={fadeUp}>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-lime-400/30 bg-lime-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-lime-300">
-                <Sparkles className="h-3.5 w-3.5" />
-                Just Landed
-              </span>
-            </motion.div>
+            <motion.p
+              variants={fadeUp}
+              className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-lime-600 mb-4"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Just Landed
+            </motion.p>
 
             <motion.h1
               variants={fadeUp}
-              className="mt-5 text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05]"
+              className="font-heading font-bold uppercase tracking-tight text-4xl sm:text-5xl md:text-6xl text-gray-900 mb-4"
             >
-              New Arrivals
+              New <span className="text-lime-600 italic">Arrivals</span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
-              className="mt-4 max-w-2xl text-sm sm:text-lg text-white/60 leading-relaxed"
+              className="max-w-xl mx-auto text-sm md:text-base text-gray-500 leading-relaxed mb-7"
             >
               Fresh drops, straight to the front. Everything here launched in the last 30 days —
-              once the window closes, it rolls into the main catalog. Check back often.
+              once the window closes, it rolls into the main catalog.
             </motion.p>
 
-            <motion.div variants={fadeUp} className="mt-7 flex flex-wrap items-center gap-2.5">
+            <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-2.5">
               {total > 0 && (
                 <MetaChip icon={Sparkles}>
                   {total} new {total === 1 ? 'product' : 'products'}
@@ -126,7 +121,7 @@ export default function NewArrivals() {
               <MetaChip icon={CalendarClock}>30-day window</MetaChip>
               <button
                 onClick={() => navigate('/catalog')}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-white/70 hover:text-white transition-colors ml-1"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors ml-1"
               >
                 Browse full catalog
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -136,11 +131,11 @@ export default function NewArrivals() {
         </section>
 
         {/* ---- Product grid ---- */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+        <div className="container mx-auto px-3 sm:px-6 lg:px-8 py-8 sm:py-10">
           {!isLoading && total > 0 && (
             <div className="mb-5 sm:mb-6">
-              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-gray-900">Latest products</h2>
-              <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+              <h2 className="font-heading font-bold uppercase tracking-tight text-xl sm:text-2xl text-gray-900">Latest products</h2>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">
                 {total} {total === 1 ? 'item' : 'items'} added in the last 30 days
               </p>
             </div>
@@ -149,7 +144,7 @@ export default function NewArrivals() {
           {isLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-5">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div key={i} className="bg-white border border-gray-200/80 rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                   <Skeleton className="aspect-square w-full" />
                   <div className="p-3">
                     <Skeleton className="h-4 w-16 mb-2 rounded" />
@@ -160,11 +155,11 @@ export default function NewArrivals() {
               ))}
             </div>
           ) : total === 0 ? (
-            <div className="bg-white border border-gray-200 rounded-2xl p-12 sm:p-16 text-center shadow-sm max-w-2xl mx-auto">
-              <div className="w-16 h-16 bg-gradient-to-br from-lime-50 to-emerald-50 ring-1 ring-lime-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
-                <PackageOpen className="h-8 w-8 text-lime-600" />
+            <div className="bg-white border border-gray-200/80 rounded-3xl p-12 sm:p-16 text-center shadow-[0_10px_40px_-24px_rgba(0,0,0,0.25)] max-w-2xl mx-auto">
+              <div className="w-16 h-16 bg-[#f7f7f4] ring-1 ring-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                <PackageOpen className="h-8 w-8 text-lime-500" />
               </div>
-              <h3 className="text-xl font-serif font-semibold text-gray-900 mb-2">
+              <h3 className="text-xl font-heading font-bold uppercase tracking-tight text-gray-900 mb-2">
                 No new arrivals right now
               </h3>
               <p className="text-[15px] text-gray-500 mb-6 max-w-md mx-auto leading-relaxed">

@@ -77,6 +77,8 @@ const Catalog = () => {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [showAllBrands, setShowAllBrands] = useState(false);
+  const BRAND_LIMIT = 12;
 
   // Merge updates into the URL. Filter/search/sort changes reset pagination to page 1.
   const updateParams = (updates: Record<string, string | null>, resetPage = true) => {
@@ -217,10 +219,10 @@ const Catalog = () => {
       key={key}
       onClick={onClick}
       className={cn(
-        'whitespace-nowrap px-3.5 py-1.5 text-xs font-semibold rounded-full border transition-all',
+        'whitespace-nowrap px-3.5 py-1.5 text-xs font-semibold rounded-full border transition-all duration-200',
         active
-          ? 'bg-gray-900 text-white border-gray-900 shadow-sm'
-          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900'
+          ? 'bg-gray-900 text-white border-gray-900 shadow-[0_6px_16px_-8px_rgba(0,0,0,0.5)]'
+          : 'bg-white text-gray-600 border-gray-200 hover:border-lime-400 hover:text-gray-900 hover:bg-lime-50/60'
       )}
     >
       {label}
@@ -248,47 +250,60 @@ const Catalog = () => {
 
   return (
     <PageTransition>
-      <div className="bg-gray-50 flex flex-col min-h-screen">
+      <div className="bg-[#FAFAF8] flex flex-col min-h-screen overflow-x-clip">
         <Header />
 
-        <main className="container mx-auto px-3 sm:px-6 lg:px-8 py-4 md:py-8 flex-1">
-          {/* Page Header */}
-          <div className="mb-5 text-center lg:text-left">
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-wide mb-2">
+        {/* Hero header */}
+        <section className="relative bg-gradient-to-b from-white to-[#FAFAF8]">
+          <div aria-hidden className="pointer-events-none absolute -top-28 left-1/2 -translate-x-1/2 w-[720px] h-[360px] rounded-full bg-lime-300/25 blur-[140px]"></div>
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-8 md:pt-12 pb-8 relative text-center">
+            <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-lime-600 font-semibold mb-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-lime-500"></span> The 12V Catalog
+            </p>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-heading font-bold text-gray-900 uppercase tracking-tight mb-3">
               Product <span className="text-lime-600 italic">Catalog</span>
             </h1>
-            <p className="text-xs sm:text-sm md:text-base text-gray-500 uppercase tracking-widest font-medium">
-              Search by car, model, year, or the parts inside
+            <p className="text-sm md:text-base text-gray-500 mb-7 max-w-lg mx-auto">
+              Search by car, model, year, or the parts inside.
             </p>
-          </div>
 
-          {/* Hero Search */}
-          <div className="relative max-w-2xl mx-auto lg:mx-0 mb-4">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <Input
-              placeholder="Search products, models, years, or components..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-12 pr-24 h-12 sm:h-14 bg-white border-gray-200 rounded-2xl text-sm sm:text-base shadow-sm focus-visible:ring-lime-500"
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              {isFetching && <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />}
-              {searchInput && (
-                <button
-                  onClick={() => setSearchInput('')}
-                  className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700"
-                  aria-label="Clear search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
+            {/* Search */}
+            <div className="relative max-w-xl mx-auto">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Input
+                placeholder="Search products, models, years, or components..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="pl-14 pr-24 h-14 bg-white border-gray-200 rounded-full text-sm md:text-base shadow-[0_10px_34px_-14px_rgba(0,0,0,0.25)] focus-visible:ring-lime-500 focus-visible:border-lime-400"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                {isFetching && <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />}
+                {searchInput && (
+                  <button
+                    onClick={() => setSearchInput('')}
+                    className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+        </section>
+
+        <main className="container mx-auto px-3 sm:px-6 lg:px-8 py-5 md:py-7 flex-1">
 
           {/* Toolbar: result count + sort + mobile filter toggle */}
           <div className="flex items-center justify-between gap-3 mb-3">
             <p className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-wide">
-              {isLoading ? 'Searching…' : `${total} Product${total !== 1 ? 's' : ''}`}
+              {isLoading ? (
+                'Searching…'
+              ) : (
+                <>
+                  <span className="text-lime-600">{total}</span> Product{total !== 1 ? 's' : ''}
+                </>
+              )}
             </p>
             <div className="flex items-center gap-2">
               <Select value={sort} onValueChange={(v) => updateParams({ sort: v === 'relevance' ? null : v })}>
@@ -314,24 +329,35 @@ const Catalog = () => {
             </div>
           </div>
 
-          {/* Filter chips */}
+          {/* Quick-select chips — categories + car brands, all visible (wrapped) */}
           <div className={cn('space-y-3 mb-5', !mobileFiltersOpen && 'hidden lg:block')}>
-            {/* Category chips */}
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0 pr-1">Category</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0 pr-1 w-16">Category</span>
               {renderChip('All', selectedCategory === 'all', () => updateParams({ category: null }), 'cat-all')}
               {categories.map((c) =>
                 renderChip(c.name, selectedCategory === c.id, () => updateParams({ category: c.id }), c.id)
               )}
             </div>
 
-            {/* Brand chips */}
             {brands.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0 pr-1">Brand</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0 pr-1 w-16">Brand</span>
                 {renderChip('All', selectedBrand === 'all', () => updateParams({ brand: null }), 'brand-all')}
-                {brands.map((b) =>
+                {(showAllBrands ? brands : brands.slice(0, BRAND_LIMIT)).map((b) =>
                   renderChip(b, selectedBrand === b, () => updateParams({ brand: b }), b)
+                )}
+                {/* Keep the active brand visible even if it's past the collapsed limit */}
+                {!showAllBrands &&
+                  selectedBrand !== 'all' &&
+                  !brands.slice(0, BRAND_LIMIT).includes(selectedBrand) &&
+                  renderChip(selectedBrand, true, () => updateParams({ brand: null }), 'brand-active')}
+                {brands.length > BRAND_LIMIT && (
+                  <button
+                    onClick={() => setShowAllBrands((s) => !s)}
+                    className="whitespace-nowrap px-3.5 py-1.5 text-xs font-semibold rounded-full border border-dashed border-gray-300 text-lime-700 hover:border-lime-400 hover:bg-lime-50/60 transition-all duration-200"
+                  >
+                    {showAllBrands ? 'Show less' : `+${brands.length - BRAND_LIMIT} more`}
+                  </button>
                 )}
               </div>
             )}
@@ -374,7 +400,7 @@ const Catalog = () => {
           {isLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-5">
               {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div key={i} className="bg-white border border-gray-200/80 rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                   <Skeleton className="aspect-square w-full" />
                   <div className="p-3">
                     <Skeleton className="h-4 w-16 mb-2 rounded" />
@@ -385,11 +411,11 @@ const Catalog = () => {
               ))}
             </div>
           ) : total === 0 ? (
-            <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">
-              <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Package className="h-8 w-8 text-gray-400" />
+            <div className="bg-white border border-gray-200/80 rounded-3xl p-12 text-center shadow-[0_10px_40px_-24px_rgba(0,0,0,0.25)] max-w-lg mx-auto">
+              <div className="w-16 h-16 bg-[#f7f7f4] border border-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                <Package className="h-8 w-8 text-lime-500" />
               </div>
-              <h3 className="text-xl font-serif font-semibold text-gray-900 mb-2">No Products Found</h3>
+              <h3 className="text-xl font-heading font-bold uppercase tracking-tight text-gray-900 mb-2">No Products Found</h3>
               <p className="text-[15px] text-gray-500 mb-6">
                 {isError
                   ? 'Something went wrong loading products. Please try again.'

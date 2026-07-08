@@ -23,7 +23,9 @@ import {
   Package,
   RotateCcw,
   Gift,
-  Briefcase
+  Briefcase,
+  ArrowRight,
+  ArrowUpRight
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -63,7 +65,7 @@ const Header = () => {
           .select('id, name, slug')
           .eq('active', true)
           .order('name', { ascending: true })
-          .limit(8);
+          .limit(14);
 
         // Fetch unique brands. Distinct is computed in Postgres via an RPC:
         // deriving it client-side truncates once products_new exceeds
@@ -81,7 +83,7 @@ const Header = () => {
         } else {
           uniqueBrands = [...new Set((brandRows || []).map((item: any) => item.brand).filter(Boolean))];
         }
-        uniqueBrands = uniqueBrands.slice(0, 8);
+        uniqueBrands = uniqueBrands.slice(0, 24);
 
         setCategories(categoriesData || []);
         setBrands(uniqueBrands.map(brand => ({ id: brand, name: brand })));
@@ -253,40 +255,48 @@ const Header = () => {
                 </Link>
 
                 {/* Megamenu Dropdown - Full Width */}
-                <div className="fixed top-20 left-0 right-0 w-full opacity-0 invisible group-hover/megamenu:opacity-100 group-hover/megamenu:visible transition-all duration-300 pointer-events-none group-hover/megamenu:pointer-events-auto">
-                  <div className="bg-white border-b border-gray-200 shadow-md">
-                    <div className="container mx-auto px-4 md:px-8">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 py-6">
-                        {/* Categories Column */}
-                        <div>
-                          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-900 mb-3 pb-2 border-b-2 border-gray-200">
-                            Categories
-                          </h3>
-                          <ul className="space-y-2">
+                <div className="fixed top-16 sm:top-20 left-0 right-0 w-full opacity-0 invisible translate-y-1 group-hover/megamenu:translate-y-0 group-hover/megamenu:opacity-100 group-hover/megamenu:visible transition-all duration-300 pointer-events-none group-hover/megamenu:pointer-events-auto">
+                  <div className="bg-white/95 backdrop-blur-xl border-b border-gray-200/80 shadow-[0_28px_50px_-22px_rgba(0,0,0,0.28)]">
+                    <div className="container mx-auto px-4 md:px-8 py-8">
+                      <div className="grid grid-cols-12 gap-8">
+                        {/* Categories */}
+                        <div className="col-span-12 lg:col-span-3">
+                          <div className="flex items-center gap-2 mb-4">
+                            <span className="w-1.5 h-1.5 rounded-full bg-lime-500"></span>
+                            <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900">Categories</h3>
+                          </div>
+                          <ul className="space-y-0.5">
                             {categories.map((category) => (
                               <li key={category.id}>
                                 <Link
                                   to={`/catalog?category=${category.id}`}
-                                  className="block text-sm text-gray-600 hover:text-gray-900 hover:translate-x-1 transition-all duration-200 py-0.5"
+                                  className="group/mi flex items-center justify-between rounded-lg -mx-2 px-2 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-lime-50 transition-colors duration-200"
                                 >
-                                  {category.name}
+                                  <span className="truncate">{category.name}</span>
+                                  <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-gray-300 opacity-0 -translate-x-1 group-hover/mi:opacity-100 group-hover/mi:translate-x-0 group-hover/mi:text-lime-600 transition-all duration-200" />
                                 </Link>
                               </li>
                             ))}
                           </ul>
                         </div>
 
-                        {/* Brands Column */}
-                        <div>
-                          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-900 mb-3 pb-2 border-b-2 border-gray-200">
-                            Brands
-                          </h3>
-                          <ul className="space-y-2">
+                        {/* Car brands — multi-column */}
+                        <div className="col-span-12 lg:col-span-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-lime-500"></span>
+                              <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900">Shop by Car Brand</h3>
+                            </div>
+                            <Link to="/catalog" className="inline-flex items-center gap-1 text-[11px] font-semibold text-lime-700 hover:text-lime-800 transition-colors">
+                              View all <ArrowRight className="w-3 h-3" />
+                            </Link>
+                          </div>
+                          <ul className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-0.5">
                             {brands.map((brand) => (
                               <li key={brand.id}>
                                 <Link
                                   to={`/catalog?brand=${brand.id}`}
-                                  className="block text-sm text-gray-600 hover:text-gray-900 hover:translate-x-1 transition-all duration-200 py-0.5"
+                                  className="block truncate rounded-lg -mx-2 px-2 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-lime-50 transition-colors duration-200"
                                 >
                                   {brand.name}
                                 </Link>
@@ -295,21 +305,29 @@ const Header = () => {
                           </ul>
                         </div>
 
-                        {/* Call to Action Column */}
-                        <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/40 rounded-lg p-5 flex flex-col justify-center items-center text-center">
-                          <h3 className="text-sm font-bold text-gray-900 mb-1.5 uppercase tracking-wider">
-                            Explore All Products
-                          </h3>
-                          <p className="text-xs text-gray-600 mb-3">
-                            Browse our complete collection of premium automotive parts
-                          </p>
-                          <Link
-                            to="/catalog"
-                            className="px-5 py-2 bg-gray-900 text-white text-xs font-bold uppercase tracking-widest rounded-full hover:bg-gray-800 transition-all duration-300 hover:shadow-lg"
-                          >
-                            View Catalog
-                          </Link>
-                        </div>
+                        {/* Featured CTA card */}
+                        <Link
+                          to="/catalog"
+                          className="group/cta col-span-12 lg:col-span-3 relative rounded-2xl overflow-hidden min-h-[220px] flex flex-col justify-end p-6"
+                        >
+                          <img
+                            src="/hero/hero-static-night.jpg"
+                            alt="Explore the 12V catalog"
+                            className="absolute inset-0 w-full h-full object-cover group-hover/cta:scale-105 transition-transform duration-500"
+                          />
+                          <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/25"></div>
+                          <div className="relative">
+                            <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-lime-400 font-semibold mb-2">
+                              <span className="w-1 h-1 rounded-full bg-lime-400"></span> The full catalog
+                            </span>
+                            <h3 className="font-heading font-bold uppercase text-xl leading-tight text-white mb-4">
+                              Explore all products
+                            </h3>
+                            <span className="inline-flex items-center gap-2 h-9 px-5 rounded-full bg-white text-gray-900 text-[11px] font-bold uppercase tracking-wider group-hover/cta:bg-lime-400 transition-colors duration-300">
+                              View Catalog <ArrowRight className="w-3.5 h-3.5" />
+                            </span>
+                          </div>
+                        </Link>
                       </div>
                     </div>
                   </div>

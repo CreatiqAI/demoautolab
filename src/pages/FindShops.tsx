@@ -144,27 +144,28 @@ export default function FindShops() {
     selectedState !== 'All States' || selectedService !== 'All Services' || !!searchQuery;
 
   return (
-    <div className="bg-gray-50 flex flex-col">
+    <div className="bg-[#FAFAF8] flex flex-col min-h-screen overflow-x-clip">
       <Header />
 
-      <main className="container mx-auto px-3 sm:px-6 lg:px-8 py-6 md:py-8 min-h-[calc(100vh-80px)] flex-1">
-        {/* Page header */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-              Find Authorized Shops
-              <Badge className="bg-amber-500 hover:bg-amber-600 text-white">
-                <Sparkles className="h-3 w-3 mr-1" />Panel
-              </Badge>
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Our top authorized Panel shops across Malaysia — invitation only.
-            </p>
-          </div>
+      {/* Hero header */}
+      <section className="relative bg-gradient-to-b from-white to-[#FAFAF8]">
+        <div aria-hidden className="pointer-events-none absolute -top-28 left-1/2 -translate-x-1/2 w-[720px] h-[340px] rounded-full bg-lime-300/25 blur-[140px]" />
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-8 md:pt-12 pb-8 relative text-center">
+          <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-lime-600 mb-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-lime-500" /> Authorized Panel Network
+          </p>
+          <h1 className="font-heading font-bold uppercase tracking-tight text-3xl sm:text-4xl md:text-5xl text-gray-900 mb-3">
+            Find a <span className="text-lime-600 italic">Shop</span>
+          </h1>
+          <p className="text-sm md:text-base text-gray-500 max-w-lg mx-auto">
+            Our top authorized Panel shops across Malaysia — vetted, invitation-only installers near you.
+          </p>
         </div>
+      </section>
 
+      <main className="container mx-auto px-3 sm:px-6 lg:px-8 pb-12 flex-1">
         {/* Filters card */}
-        <Card className="mb-6">
+        <Card className="mb-6 rounded-2xl border-gray-200/80 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.25)]">
           <CardContent className="p-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               <div className="md:col-span-2 relative">
@@ -221,12 +222,12 @@ export default function FindShops() {
             Finding shops...
           </div>
         ) : filteredShops.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                <MapPin className="h-6 w-6 text-gray-400" />
+          <Card className="rounded-3xl border-gray-200/80 max-w-lg mx-auto">
+            <CardContent className="py-14 text-center">
+              <div className="w-14 h-14 bg-[#f7f7f4] ring-1 ring-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <MapPin className="h-7 w-7 text-lime-500" />
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-1">No shops found</h3>
+              <h3 className="text-lg font-heading font-bold uppercase tracking-tight text-gray-900 mb-1">No shops found</h3>
               <p className="text-sm text-gray-500 mb-4">Try adjusting your filters to see more results.</p>
               {hasActiveFilters && (
                 <Button variant="outline" onClick={handleClearFilters}>
@@ -244,12 +245,12 @@ export default function FindShops() {
                 <Card
                   key={shop.id}
                   onClick={() => navigate(`/shop/${shop.id}`)}
-                  className={`overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${
-                    shop.is_featured ? 'ring-1 ring-amber-300' : ''
+                  className={`group overflow-hidden rounded-2xl border-gray-200/80 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:border-lime-300 hover:shadow-[0_22px_48px_-20px_rgba(0,0,0,0.25)] ${
+                    shop.is_featured ? 'ring-1 ring-lime-300' : ''
                   }`}
                 >
                   {/* Photo */}
-                  <div className="relative h-40 sm:h-44 bg-gray-100 overflow-hidden">
+                  <div className="relative h-40 sm:h-44 bg-[#f7f7f4] overflow-hidden">
                     {hasPhotos ? (
                       <>
                         <img
@@ -257,7 +258,7 @@ export default function FindShops() {
                           alt={shop.business_name}
                           loading="lazy"
                           decoding="async"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                         {shop.shop_photos.length > 1 && (
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
@@ -278,10 +279,10 @@ export default function FindShops() {
                       </div>
                     )}
                     {shop.is_featured && (
-                      <Badge className="absolute top-2 right-2 bg-amber-500 hover:bg-amber-500 text-white text-[10px]">
-                        <Award className="h-3 w-3 mr-1" />
+                      <span className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-gray-900 text-lime-400 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 shadow-sm">
+                        <Award className="h-3 w-3" />
                         Featured
-                      </Badge>
+                      </span>
                     )}
                   </div>
 

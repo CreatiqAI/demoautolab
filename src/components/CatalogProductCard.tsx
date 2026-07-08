@@ -1,4 +1,5 @@
 import { transformImage } from '@/lib/imageTransform';
+import { ArrowRight } from 'lucide-react';
 
 // Shared product card used by the catalog grid and the "Similar Products"
 // recommendations, so both render identically (incl. the desktop hover specs
@@ -33,10 +34,10 @@ const CatalogProductCard = ({ product, onClick }: CatalogProductCardProps) => {
   return (
     <div
       onClick={onClick}
-      className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group relative flex flex-col"
+      className="bg-white border border-gray-200/80 rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-[0_22px_48px_-20px_rgba(0,0,0,0.28)] hover:-translate-y-1 hover:border-lime-300 transition-all duration-300 cursor-pointer group relative flex flex-col"
     >
       {/* Product Image */}
-      <div className="relative aspect-square overflow-hidden bg-gray-50">
+      <div className="relative aspect-square overflow-hidden bg-[#f7f7f4]">
         {isVideo ? (
           <video
             src={`${imageUrl}#t=0.1`}
@@ -61,12 +62,12 @@ const CatalogProductCard = ({ product, onClick }: CatalogProductCardProps) => {
         {(product.is_new_arrival || product.featured) && (
           <div className="absolute top-1.5 left-1.5 flex flex-col items-start gap-1">
             {product.is_new_arrival && (
-              <span className="px-1.5 py-0.5 bg-lime-600 text-white text-[9px] font-bold rounded shadow-lg">
+              <span className="px-2 py-0.5 bg-lime-500 text-gray-900 text-[9px] font-bold rounded-full shadow-sm uppercase tracking-wide">
                 New
               </span>
             )}
             {product.featured && (
-              <span className="px-1.5 py-0.5 bg-amber-600 text-white text-[9px] font-bold rounded shadow-lg">
+              <span className="px-2 py-0.5 bg-gray-900 text-lime-400 text-[9px] font-bold rounded-full shadow-sm uppercase tracking-wide">
                 Premium
               </span>
             )}
@@ -83,49 +84,53 @@ const CatalogProductCard = ({ product, onClick }: CatalogProductCardProps) => {
             </span>
           </div>
         )}
-      </div>
 
-      {/* Hover specs overlay — desktop only (hidden on touch where hover sticks and breaks the layout) */}
-      <div className="absolute top-[50%] left-0 right-0 bottom-0 hidden [@media(hover:hover)]:flex items-center justify-center px-2 py-1.5 pointer-events-none">
-        <div className="backdrop-blur-lg bg-black/5 rounded-lg p-2.5 border-2 border-white/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out w-full h-full flex flex-col justify-center overflow-y-auto shadow-lg no-scrollbar">
-          <div className="mb-1.5">
-            <div className="flex items-center gap-1 mb-1">
-              <div className="w-1 h-3 bg-gray-400 rounded-full shadow-sm"></div>
-              <h4 className="text-black font-bold text-[10px] uppercase tracking-wide">Specifications</h4>
+        {/* Hover specs overlay — desktop only (hidden on touch where hover sticks and breaks the layout) */}
+        <div className="absolute inset-0 hidden [@media(hover:hover)]:flex items-end p-2.5 pointer-events-none">
+          {/* soft dim behind the card for depth */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          {/* frosted-glass spec card */}
+          <div className="relative w-full rounded-xl bg-white/90 backdrop-blur-md border border-white/70 shadow-[0_14px_34px_-14px_rgba(0,0,0,0.45)] p-3 translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 ease-out">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-4 h-[2px] bg-lime-500 rounded-full"></span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-lime-600">Specifications</span>
             </div>
-            <div className="h-0.5 bg-gradient-to-r from-gray-400 via-gray-300/70 to-transparent rounded-full"></div>
-          </div>
-          <div className="space-y-1">
-            {product.brand && (
-              <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-300/60 shadow-sm">
-                <span className="text-[9px] font-medium text-gray-700 uppercase tracking-wide">Brand</span>
-                <span className="text-[10px] font-bold text-black truncate ml-2 max-w-[60%] text-right">{product.brand}</span>
-              </div>
-            )}
-            {product.model && (
-              <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-300/60 shadow-sm">
-                <span className="text-[9px] font-medium text-gray-700 uppercase tracking-wide">Model</span>
-                <span className="text-[10px] font-bold text-black truncate ml-2 max-w-[60%] text-right">{product.model}</span>
-              </div>
-            )}
-            {product.category_name && (
-              <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-300/60 shadow-sm">
-                <span className="text-[9px] font-medium text-gray-700 uppercase tracking-wide">Category</span>
-                <span className="text-[10px] font-bold text-black truncate ml-2 max-w-[50%] text-right">{product.category_name}</span>
-              </div>
-            )}
-            {product.year_from && product.year_to && (
-              <div className="flex items-center justify-between bg-white/40 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-300/60 shadow-sm">
-                <span className="text-[9px] font-medium text-gray-700 uppercase tracking-wide">Year</span>
-                <span className="text-[10px] font-bold text-black truncate ml-2">{product.year_from}-{product.year_to}</span>
-              </div>
-            )}
-            {componentCount > 0 && (
-              <div className="flex items-center justify-between bg-gray-800/80 backdrop-blur-sm rounded px-1.5 py-1 border border-gray-600/60 shadow-sm">
-                <span className="text-[9px] font-bold text-gray-200 uppercase tracking-wide">Components</span>
-                <span className="text-[10px] font-bold text-white truncate ml-2">{componentCount} Included</span>
-              </div>
-            )}
+            <div className="space-y-1">
+              {product.brand && (
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-gray-500 font-medium uppercase tracking-wide">Brand</span>
+                  <span className="text-gray-900 font-semibold truncate max-w-[62%] text-right">{product.brand}</span>
+                </div>
+              )}
+              {product.model && (
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-gray-500 font-medium uppercase tracking-wide">Model</span>
+                  <span className="text-gray-900 font-semibold truncate max-w-[62%] text-right">{product.model}</span>
+                </div>
+              )}
+              {product.category_name && (
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-gray-500 font-medium uppercase tracking-wide">Category</span>
+                  <span className="text-gray-900 font-semibold truncate max-w-[62%] text-right">{product.category_name}</span>
+                </div>
+              )}
+              {product.year_from && product.year_to && (
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-gray-500 font-medium uppercase tracking-wide">Year</span>
+                  <span className="text-gray-900 font-semibold text-right">{product.year_from}–{product.year_to}</span>
+                </div>
+              )}
+              {componentCount > 0 && (
+                <div className="flex items-center justify-between gap-2 text-[11px] pt-1.5 mt-1 border-t border-gray-200">
+                  <span className="text-lime-600 uppercase tracking-wide font-semibold">Components</span>
+                  <span className="text-gray-900 font-bold">{componentCount} Included</span>
+                </div>
+              )}
+            </div>
+            <div className="mt-2.5 inline-flex items-center gap-1.5 text-gray-900 text-[11px] font-semibold">
+              View Details
+              <ArrowRight className="w-3.5 h-3.5 text-lime-600 group-hover:translate-x-0.5 transition-transform duration-300" />
+            </div>
           </div>
         </div>
       </div>
