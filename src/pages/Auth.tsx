@@ -9,12 +9,15 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Eye, EyeOff, ArrowLeft, Shield, Phone, Loader2, ArrowRight, Store, Briefcase } from 'lucide-react';
 import OTPInput from '@/components/OTPInput';
+import RegisterForm from '@/components/auth/RegisterForm';
+import MerchantRegisterForm from '@/components/auth/MerchantRegisterForm';
+import AuthBrandPanel from '@/components/auth/AuthBrandPanel';
 import { registerDeviceSession } from '@/hooks/useSessionEnforcement';
 import { getVendorByUserId } from '@/lib/vendorAuth';
 
 type AuthStep = 'contact' | 'password' | 'otp' | 'partner' | 'register-choice';
 
-const Auth = () => {
+const Auth = ({ initialMode = 'login' }: { initialMode?: 'login' | 'register' | 'merchant' }) => {
   const [searchParams] = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,8 +25,24 @@ const Auth = () => {
   const [resendTimer, setResendTimer] = useState(0);
   const [authStep, setAuthStep] = useState<AuthStep>('contact');
   const [isNewUser, setIsNewUser] = useState(false);
+  // login | register | merchant — the right-hand form panel slides between the three.
+  const [mode, setMode] = useState<'login' | 'register' | 'merchant'>(initialMode);
   // The account resolved from the entered phone number (drives password vs OTP).
   const [resolved, setResolved] = useState<{ email: string; account_type: string } | null>(null);
+
+  // Slide between panels and keep the URL honest, without a remount.
+  const switchToRegister = () => {
+    setMode('register');
+    window.history.replaceState(null, '', '/register');
+  };
+  const switchToMerchant = () => {
+    setMode('merchant');
+    window.history.replaceState(null, '', '/merchant-register');
+  };
+  const switchToLogin = () => {
+    setMode('login');
+    window.history.replaceState(null, '', '/auth');
+  };
 
   const {
     sendPhoneOTP,
@@ -302,57 +321,35 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen flex relative overflow-hidden">
-      {/* Left Side - Brand panel */}
-      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden bg-[#0a0a0a]">
-        <img
-          src="/hero/hero-static-night.jpg"
-          alt="12V — premium car accessories"
-          className="w-full h-full object-cover"
+      {/* Left Side - Brand panel (copy follows the active mode) */}
+      {mode === 'merchant' ? (
+        <AuthBrandPanel
+          eyebrow="Merchant Partner Program"
+          title={<>Grow<br /><span className="text-lime-400 italic">your business.</span></>}
+          subtitle="Join Malaysia's premier automotive accessories network — wholesale pricing, fast dispatch and dedicated partner support."
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/55 to-black/40"></div>
-        <div aria-hidden className="pointer-events-none absolute -bottom-20 left-1/4 w-[440px] h-[280px] rounded-full bg-lime-500/15 blur-[120px]"></div>
+      ) : (
+        <AuthBrandPanel />
+      )}
 
-        {/* Wordmark */}
-        <div className="absolute top-8 left-12 flex items-center gap-2.5 text-white z-10">
-          <span className="font-heading font-black text-2xl tracking-tight">12V</span>
-          <span className="text-white/40 text-[10px] uppercase tracking-[0.2em] border-l border-white/20 pl-2.5">By Auto Lab</span>
-        </div>
-
-        <div className="absolute inset-0 flex flex-col justify-end px-12 pb-14">
-          <div className="max-w-md">
-            <span className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-lime-400 font-semibold mb-5">
-              <span className="w-1.5 h-1.5 rounded-full bg-lime-400"></span> Premium Car Accessories
-            </span>
-            <h1 className="font-heading font-black uppercase text-4xl xl:text-5xl text-white leading-[0.95] mb-6">
-              Upgrade<br />
-              <span className="text-lime-400 italic">your ride.</span>
-            </h1>
-            <p className="text-gray-300 text-base leading-relaxed max-w-sm">
-              Malaysia's premier automotive accessories network — quality parts, fast dispatch, trusted since 2007.
-            </p>
-            <div className="flex items-center gap-6 mt-8">
-              <div>
-                <div className="font-heading text-3xl font-black text-lime-400">17+</div>
-                <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Years</div>
-              </div>
-              <div className="w-px h-10 bg-white/15"></div>
-              <div>
-                <div className="font-heading text-3xl font-black text-lime-400">10+</div>
-                <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Partners</div>
-              </div>
-              <div className="w-px h-10 bg-white/15"></div>
-              <div>
-                <div className="font-heading text-3xl font-black text-lime-400">10K+</div>
-                <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Products</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Right Side - Form */}
-      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 lg:p-12">
-        <div className="w-full max-w-[400px]">
+      {/* Right Side — sliding form track (login ⇄ register ⇄ merchant) */}
+      <div className="w-full lg:w-1/2 bg-white relative overflow-hidden h-[100dvh] lg:h-screen">
+        <div
+          className="flex h-full transition-transform duration-500 ease-in-out"
+          style={{
+            width: '300%',
+            transform:
+              mode === 'merchant'
+                ? 'translateX(-66.6667%)'
+                : mode === 'register'
+                ? 'translateX(-33.3333%)'
+                : 'translateX(0%)',
+          }}
+        >
+          {/* Login panel */}
+          <div className="w-1/3 h-full overflow-y-auto">
+            <div className="min-h-full flex items-center justify-center p-4 sm:p-6 lg:p-12">
+              <div className="w-full max-w-[400px]">
           {/* Mobile Logo */}
           <div className="lg:hidden flex justify-center mb-8">
             <img src="/12v-logo.png" alt="12V" className="h-10 w-auto object-contain" />
@@ -481,7 +478,7 @@ const Auth = () => {
               <div className="text-center">
                 <p className="text-sm text-gray-500">
                   Don't have an account?{' '}
-                  <button type="button" onClick={() => navigate('/register')} className="text-lime-600 font-medium hover:text-lime-700">
+                  <button type="button" onClick={switchToRegister} className="text-lime-600 font-medium hover:text-lime-700">
                     Register here
                   </button>
                 </p>
@@ -490,7 +487,7 @@ const Auth = () => {
               <div className="p-4 bg-lime-50 border border-lime-100 rounded-xl">
                 <p className="text-sm text-gray-700">
                   Are you a business?{' '}
-                  <button type="button" onClick={() => navigate('/merchant-register')} className="text-lime-600 font-medium hover:text-lime-700">
+                  <button type="button" onClick={switchToMerchant} className="text-lime-600 font-medium hover:text-lime-700">
                     Register as a Merchant
                   </button>
                 </p>
@@ -553,10 +550,10 @@ const Auth = () => {
           {authStep === 'register-choice' && (
             <div className="space-y-4">
               <p className="text-sm text-gray-600">We couldn't find an account for that number. How would you like to join?</p>
-              <Button onClick={() => navigate('/register')} className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg">
+              <Button onClick={switchToRegister} className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg">
                 <Phone className="h-4 w-4 mr-2" /> Register as a Customer
               </Button>
-              <Button onClick={() => navigate('/merchant-register')} variant="outline" className="w-full h-11 rounded-lg border-gray-200">
+              <Button onClick={switchToMerchant} variant="outline" className="w-full h-11 rounded-lg border-gray-200">
                 <Store className="h-4 w-4 mr-2" /> Register as a Merchant
               </Button>
               <div className="text-center">
@@ -596,6 +593,27 @@ const Auth = () => {
               </div>
             </div>
           )}
+              </div>
+            </div>
+          </div>
+
+          {/* Customer register panel */}
+          <div className="w-1/3 h-full overflow-y-auto">
+            <div className="min-h-full flex items-start justify-center p-4 sm:p-6 lg:p-12">
+              <div className="w-full max-w-[480px]">
+                <RegisterForm onBackToLogin={switchToLogin} />
+              </div>
+            </div>
+          </div>
+
+          {/* Merchant register panel */}
+          <div className="w-1/3 h-full overflow-y-auto">
+            <div className="min-h-full flex flex-col justify-center p-4 sm:p-6 lg:p-12">
+              <div className="w-full max-w-[520px] mx-auto">
+                <MerchantRegisterForm onBackToLogin={switchToLogin} />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
