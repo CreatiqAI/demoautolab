@@ -71,11 +71,9 @@ export default function AdminLogin({ onAuthenticated }: { onAuthenticated?: () =
     <div className="min-h-screen bg-[#FAFAF8] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         {/* Wordmark */}
-        <div className="flex items-center justify-center gap-2 mb-8 select-none">
-          <span className="font-heading font-extrabold text-2xl tracking-tight text-gray-900">
-            12<span className="text-lime-600">V</span>
-          </span>
-          <span className="text-gray-400 text-xs uppercase tracking-[0.25em] border-l border-gray-300 pl-2">
+        <div className="flex items-center justify-center gap-2.5 mb-8 select-none">
+          <img src="/12v-logo.png" alt="12V" className="h-8 w-auto object-contain" />
+          <span className="text-gray-400 text-xs uppercase tracking-[0.25em] border-l border-gray-300 pl-2.5">
             Admin
           </span>
         </div>
