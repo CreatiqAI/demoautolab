@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, Trash2, Shield, User, Phone, Mail, Calendar, UserPlus, Loader2 } from 'lucide-react';
+import { Search, Trash2, Shield, User, Phone, Mail, Calendar, UserPlus, Loader2, Link2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AdminProfile {
@@ -183,6 +183,27 @@ export default function UserManagement() {
     }
   };
 
+  // Mint a fresh set-password link for an existing admin (original expired / was
+  // consumed by an email link-scanner). Opens the same link dialog to copy.
+  const handleGetInviteLink = async (u: { username: string }) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('regenerate-admin-invite', {
+        body: { email: u.username, redirectTo: `${window.location.origin}/admin/set-password` },
+      });
+      if (error) throw error;
+      if (data?.success === false || !data?.inviteLink) {
+        toast({ title: 'Could not create link', description: data?.message || 'Failed to create link.', variant: 'destructive' });
+        return;
+      }
+      setInviteLink(data.inviteLink);
+      setInvitedEmail(u.username);
+      setIsAddOpen(true);
+      toast({ title: 'Fresh invite link ready', description: `Copy it and send it to ${u.username}.` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create link.', variant: 'destructive' });
+    }
+  };
+
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
     setIsDeleting(true);
@@ -337,17 +358,28 @@ export default function UserManagement() {
                       </TableCell>
                       <TableCell className="text-right">
                         {canManageAdmins && user.role !== 'super_admin' ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleGetInviteLink(user)}
+                              title="Get a fresh set-password link"
+                            >
+                              <Link2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              className="text-destructive hover:text-destructive"
+                              title="Remove admin"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
@@ -383,7 +415,7 @@ export default function UserManagement() {
                   <Button type="button" onClick={copyInviteLink}>Copy</Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  This link expires and can only be used once. If it expires, the invitee can use “Forgot password” on the sign-in page.
+                  Single-use and time-limited. Send it directly (e.g. paste into a chat) rather than an email that auto-scans links — link scanners can “open” and consume it before the invitee does. If it stops working, click the link icon next to their name to generate a fresh one.
                 </p>
               </div>
               <div className="flex justify-end pt-2">

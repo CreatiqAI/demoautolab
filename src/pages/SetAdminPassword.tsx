@@ -11,12 +11,25 @@ export default function SetAdminPassword() {
   const navigate = useNavigate();
   const [ready, setReady] = useState<'checking' | 'ok' | 'invalid'>('checking');
   const [email, setEmail] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    // An expired / already-used link comes back with an error in the URL hash,
+    // e.g. #error=access_denied&error_code=otp_expired. We MUST treat that as
+    // invalid and NOT fall back to whatever session is already signed in (that
+    // could be the master admin — showing their email and, worse, letting their
+    // password be changed here).
+    const params = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+    if (params.get('error') || params.get('error_code')) {
+      setErrorMsg((params.get('error_description') || '').replace(/\+/g, ' ').trim() || null);
+      setReady('invalid');
+      return;
+    }
+
     let settled = false;
     const accept = (userEmail: string | null) => {
       settled = true;
@@ -24,18 +37,22 @@ export default function SetAdminPassword() {
       setReady('ok');
     };
 
-    // supabase-js parses the recovery token in the URL hash and emits a session.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) accept(session.user.email ?? null);
+    // A valid recovery link establishes the invited admin's session (replacing
+    // any existing one). Catch it via the recovery event, or the already-set
+    // session if supabase-js processed the token before this mounted.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session?.user) {
+        accept(session.user.email ?? null);
+      }
     });
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) accept(data.session.user.email ?? null);
+      if (!settled && data.session?.user) accept(data.session.user.email ?? null);
     });
 
     // If no valid session materialises shortly, the link is bad/expired.
     const t = setTimeout(() => {
       if (!settled) setReady('invalid');
-    }, 3000);
+    }, 4000);
     return () => {
       sub.subscription.unsubscribe();
       clearTimeout(t);
@@ -76,8 +93,11 @@ export default function SetAdminPassword() {
               <h1 className="text-lg font-heading font-bold uppercase tracking-tight text-gray-900 mb-2">
                 Link invalid or expired
               </h1>
-              <p className="text-sm text-gray-500 mb-5">
-                This set-password link is no longer valid. Ask the admin who invited you to send a fresh one.
+              <p className="text-sm text-gray-500 mb-2">
+                {errorMsg || 'This set-password link is no longer valid.'}
+              </p>
+              <p className="text-xs text-gray-400 mb-5">
+                Invite links are single-use and expire after a short time. Ask the master admin to generate a fresh link for you.
               </p>
               <button
                 onClick={() => navigate('/admin')}
