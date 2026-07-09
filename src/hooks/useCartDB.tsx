@@ -306,36 +306,23 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Immediately update local state for instant UI feedback (already sorted, just filter)
       setCartItems(prevItems => prevItems.filter(item => item.id !== itemId));
 
-      // Extract component_sku from the line (fall back to the id prefix)
-      const component_sku = removed?.component_sku ?? itemId.split('_')[0];
+      if (!removed) return;
 
-      // Find component_id
-      const { data: componentData, error: componentError } = await supabase
-        .from('component_library')
-        .select('id')
-        .eq('component_sku', component_sku)
-        .single();
-
-      if (componentError || !componentData) {
-        // State was already updated above for instant feedback
-        return;
-      }
-
-      // Authentication is now required for all cart operations
-
-      const { error } = await supabase
-        .rpc('remove_item_from_cart', {
-          p_component_id: componentData.id,
-          p_user_id: user.id,
-          p_guest_session: null,
-          p_product_context: removed?.product_name ?? null,
-          p_is_foc: removed?.is_foc ?? null,
-        } as any);
-
-      if (error) {
-        // State was already updated above for instant feedback
-        return;
-      }
+      // Delete the exact cart row directly. We intentionally do NOT look up
+      // component_library first: an orphaned SKU whose component was deleted has
+      // no library row, and the old lookup-then-RPC path bailed out before the
+      // delete — so the row silently persisted and reappeared on refresh.
+      // user_cart RLS already scopes deletes to the owner.
+      let del = supabase
+        .from('user_cart')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('component_sku', removed.component_sku)
+        .eq('is_foc', removed.is_foc ?? false);
+      del = removed.product_name
+        ? del.eq('product_context', removed.product_name)
+        : del.is('product_context', null);
+      await del;
     } catch (error) {
       // State was already updated above for instant feedback
     }
@@ -373,39 +360,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const existingItem = cartItems.find(item => item.id === itemId);
       if (!existingItem) return;
 
-      // Find component_id
-      const { data: componentData, error: componentError } = await supabase
-        .from('component_library')
-        .select('id')
+      // Update the exact row's quantity directly. Avoids the component_library
+      // lookup that silently no-ops for orphaned SKUs. RLS scopes the write to
+      // the owner.
+      let upd = supabase
+        .from('user_cart')
+        .update({ quantity })
+        .eq('user_id', user.id)
         .eq('component_sku', existingItem.component_sku)
-        .single();
-
-      if (componentError || !componentData) {
-        return;
-      }
-
-      // Remove the specific line and re-add it with the updated quantity,
-      // preserving its free/paid (is_foc) identity so it stays separate.
-      await supabase.rpc('remove_item_from_cart', {
-        p_component_id: componentData.id,
-        p_user_id: user.id,
-        p_guest_session: null,
-        p_product_context: existingItem.product_name,
-        p_is_foc: existingItem.is_foc ?? false,
-      } as any);
-
-      await supabase.rpc('add_item_to_cart', {
-        p_component_id: componentData.id,
-        p_component_sku: existingItem.component_sku,
-        p_component_name: existingItem.name,
-        p_product_context: existingItem.product_name,
-        p_quantity: quantity,
-        p_unit_price: existingItem.normal_price,
-        p_user_id: user.id,
-        p_guest_session: null,
-        p_is_foc: existingItem.is_foc ?? false,
-        p_is_foc_trigger: existingItem.is_foc_trigger ?? false,
-      } as any);
+        .eq('is_foc', existingItem.is_foc ?? false);
+      upd = existingItem.product_name
+        ? upd.eq('product_context', existingItem.product_name)
+        : upd.is('product_context', null);
+      await upd;
     } catch (error) {
       // Silently fail - state already updated for instant feedback
     }
