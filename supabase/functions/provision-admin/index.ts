@@ -38,12 +38,13 @@ Deno.serve(async (req) => {
     const fullName = String(body.fullName || '').trim();
     const role = ALLOWED_ROLES.includes(body.role) ? body.role : 'admin';
     const redirectTo = String(body.redirectTo || '').trim() || undefined;
+    // Business-logic failures return 200 with { success:false } so the UI can show
+    // the message (supabase-js hides the body of non-2xx responses).
     if (!email || !fullName) {
-      return j({ success: false, message: 'Email and full name are required.' }, 400);
+      return j({ success: false, message: 'Email and full name are required.' });
     }
 
-    // Create the real Supabase Auth user with the admin role in app_metadata and a
-    // random password (the invitee replaces it via the set-password link below).
+    // Try to create the real Supabase Auth user with the admin role + a random password.
     const { error: cErr } = await admin.auth.admin.createUser({
       email,
       password: randomPassword(),
@@ -51,12 +52,28 @@ Deno.serve(async (req) => {
       user_metadata: { full_name: fullName },
       app_metadata: { role, provider: 'email', providers: ['email'] },
     });
-    if (cErr) return j({ success: false, message: cErr.message }, 400);
 
-    // Mirror into admin_profiles so the Staff Management list shows them.
-    const { error: pErr } = await admin
-      .from('admin_profiles')
-      .insert({ username: email, full_name: fullName, role, is_active: true, password_hash: 'supabase_auth' });
+    let alreadyExisted = false;
+    if (cErr) {
+      const msg = (cErr.message || '').toLowerCase();
+      const exists = msg.includes('already') || msg.includes('registered') || msg.includes('exists');
+      if (!exists) return j({ success: false, message: cErr.message });
+      // Email already exists — only proceed if it's already an admin; otherwise block.
+      const { data: prof } = await admin
+        .from('admin_profiles')
+        .select('id')
+        .eq('username', email)
+        .maybeSingle();
+      if (!prof) {
+        return j({ success: false, message: 'That email already belongs to a non-admin account. Use a different email.' });
+      }
+      alreadyExisted = true;
+    } else {
+      // New account → mirror into admin_profiles so the Staff list shows them.
+      await admin
+        .from('admin_profiles')
+        .insert({ username: email, full_name: fullName, role, is_active: true, password_hash: 'supabase_auth' });
+    }
 
     // Generate a one-time set-password (recovery) link to hand to the invitee.
     const { data: linkData, error: lErr } = await admin.auth.admin.generateLink({
@@ -69,14 +86,16 @@ Deno.serve(async (req) => {
       return j({
         success: true,
         inviteLink: null,
-        message: 'Admin created, but the invite link could not be generated: ' + (lErr?.message || 'unknown'),
+        message: 'Account ready, but the invite link could not be generated: ' + (lErr?.message || 'unknown'),
       });
     }
 
     return j({
       success: true,
       inviteLink,
-      message: pErr ? 'Admin invited (profile row skipped: ' + pErr.message + ')' : 'Admin invited',
+      message: alreadyExisted
+        ? 'That admin already existed — generated a fresh set-password link.'
+        : 'Admin invited',
     });
   } catch (e) {
     return j({ success: false, message: String((e as Error)?.message || e) }, 500);
