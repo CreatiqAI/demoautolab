@@ -31,9 +31,6 @@ import Register from './pages/Register';
 import MerchantRegister from './pages/MerchantRegister';
 import MerchantConsole from './pages/MerchantConsole';
 import ShopDetails from './pages/ShopDetails';
-import CreateAdmin from './pages/CreateAdmin';
-import CreateFirstAdmin from './pages/CreateFirstAdmin';
-import DirectAdminSetup from './pages/DirectAdminSetup';
 import UserSettings from './pages/Settings';
 
 // Admin Components
@@ -146,9 +143,6 @@ const App = () => (
                   <Route path="/merchant-console" element={<MerchantConsole />} />
                   <Route path="/find-shops" element={<FindShops />} />
                   <Route path="/shop/:shopId" element={<ShopDetails />} />
-                  <Route path="/create-admin" element={<CreateAdmin />} />
-                  <Route path="/create-first-admin" element={<CreateFirstAdmin />} />
-                  <Route path="/direct-admin-setup" element={<DirectAdminSetup />} />
 
                   {/* Phase 2 - New Routes */}
                   <Route path="/secondhand-marketplace" element={<SecondhandMarketplace />} />
