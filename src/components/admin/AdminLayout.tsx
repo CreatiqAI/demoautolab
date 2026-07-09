@@ -109,9 +109,6 @@ const navigation: NavigationElement[] = [
     ]
   },
 
-  // Secondhand Marketplace (standalone)
-  { name: 'Secondhand Marketplace', href: '/admin/secondhand-moderation', icon: ShoppingCart },
-
   // System group
   {
     name: 'System',
