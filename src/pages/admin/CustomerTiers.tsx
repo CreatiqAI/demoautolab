@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import {
   Crown,
@@ -18,7 +19,6 @@ import {
   Trash2,
   Plus,
   Save,
-  X,
   TrendingUp,
   Gift,
   Zap
@@ -420,9 +420,16 @@ export default function CustomerTiers() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={tier.is_active ? 'default' : 'secondary'}>
-                        {tier.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={tier.is_active}
+                          onCheckedChange={() => toggleActive(tier)}
+                          aria-label={`Toggle ${tier.tier_name} tier`}
+                        />
+                        <span className={`text-sm font-medium ${tier.is_active ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {tier.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -432,13 +439,6 @@ export default function CustomerTiers() {
                           onClick={() => handleEdit(tier)}
                         >
                           <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => toggleActive(tier)}
-                        >
-                          {tier.is_active ? <X className="h-4 w-4" /> : <Star className="h-4 w-4" />}
                         </Button>
                         <Button
                           size="sm"

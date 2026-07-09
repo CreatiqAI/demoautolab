@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tag, Plus, Edit, Trash2, Copy, ToggleLeft, ToggleRight, Calendar } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tag, Plus, Edit, Trash2, Copy, ToggleLeft, ToggleRight, Calendar, Gift, Sparkles, User } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
 interface Voucher {
@@ -32,10 +33,18 @@ interface Voucher {
   is_active: boolean;
   created_at: string;
   admin_notes: string | null;
+  assigned_to_customer_id: string | null;
+  specific_customer_ids: string[] | null;
 }
+
+// A voucher is "auto-assigned" when the system generated it for one specific
+// merchant (the RM50 welcome voucher created on merchant approval).
+const isAutoAssigned = (v: Voucher) =>
+  !!v.assigned_to_customer_id && /^WELCOME-/i.test(v.code);
 
 const VoucherManagement = () => {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [merchantNames, setMerchantNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
@@ -72,7 +81,25 @@ const VoucherManagement = () => {
         .select('*')
         .order('created_at', { ascending: false })
         .order('id', { ascending: true }));
-      setVouchers((data as unknown as Voucher[]) || []);
+      const list = (data as unknown as Voucher[]) || [];
+      setVouchers(list);
+
+      // Resolve merchant names for auto-assigned vouchers so admins can see who
+      // each welcome voucher belongs to.
+      const assignedIds = Array.from(
+        new Set(list.filter(isAutoAssigned).map(v => v.assigned_to_customer_id).filter(Boolean))
+      ) as string[];
+      if (assignedIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('customer_profiles' as any)
+          .select('id, full_name, email')
+          .in('id', assignedIds);
+        const map: Record<string, string> = {};
+        (profiles as any[] | null)?.forEach(p => {
+          map[p.id] = p.full_name || p.email || p.id;
+        });
+        setMerchantNames(map);
+      }
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -279,6 +306,127 @@ const VoucherManagement = () => {
       return `${voucher.discount_value}%${voucher.max_discount_amount ? ` (max RM ${voucher.max_discount_amount})` : ''}`;
     }
     return `RM ${voucher.discount_value}`;
+  };
+
+  const autoVouchers = vouchers.filter(isAutoAssigned);
+  const manualVouchers = vouchers.filter(v => !isAutoAssigned(v));
+
+  const renderVoucherTable = (list: Voucher[], showAssignee: boolean, emptyText: string) => {
+    if (list.length === 0) {
+      return (
+        <div className="text-center py-12 text-muted-foreground">
+          <Tag className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <p>{emptyText}</p>
+        </div>
+      );
+    }
+    return (
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>{showAssignee ? 'Assigned To' : 'Name'}</TableHead>
+              <TableHead>Discount</TableHead>
+              <TableHead>Usage</TableHead>
+              <TableHead>Valid Until</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {list.map((voucher) => (
+              <TableRow key={voucher.id}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <code className="font-mono font-bold">{voucher.code}</code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopyCode(voucher.code)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {showAssignee ? (
+                    <div className="flex items-center gap-2">
+                      <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm font-medium">
+                        {voucher.assigned_to_customer_id
+                          ? (merchantNames[voucher.assigned_to_customer_id] || 'Loading…')
+                          : '—'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="font-medium">{voucher.name}</p>
+                      {voucher.description && (
+                        <p className="text-xs text-muted-foreground">{voucher.description}</p>
+                      )}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>{getDiscountDisplay(voucher)}</TableCell>
+                <TableCell>
+                  <div className="text-sm">
+                    <p>{voucher.current_usage_count} / {voucher.max_usage_total || '∞'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {voucher.max_usage_per_user} per user
+                    </p>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1 text-sm">
+                    <Calendar className="h-3 w-3" />
+                    {voucher.valid_until ? formatDate(voucher.valid_until) : 'No expiry'}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={voucher.is_active ? 'default' : 'secondary'}>
+                    {voucher.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleToggleActive(voucher)}
+                      className="h-8 w-8 p-0"
+                    >
+                      {voucher.is_active ? (
+                        <ToggleRight className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <ToggleLeft className="h-4 w-4 text-gray-400" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEdit(voucher)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(voucher.id)}
+                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
   };
 
 
@@ -506,120 +654,62 @@ const VoucherManagement = () => {
         </Dialog>
       </div>
 
-      {/* Vouchers Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Vouchers ({vouchers.length})</CardTitle>
-          <CardDescription>Manage and monitor voucher usage</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            </div>
-          ) : vouchers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Tag className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p>No vouchers created yet</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Discount</TableHead>
-                  <TableHead>Usage</TableHead>
-                  <TableHead>Valid Until</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {vouchers.map((voucher) => (
-                  <TableRow key={voucher.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <code className="font-mono font-bold">{voucher.code}</code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCopyCode(voucher.code)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{voucher.name}</p>
-                        {voucher.description && (
-                          <p className="text-xs text-muted-foreground">{voucher.description}</p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{getDiscountDisplay(voucher)}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <p>{voucher.current_usage_count} / {voucher.max_usage_total || '∞'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {voucher.max_usage_per_user} per user
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-sm">
-                        <Calendar className="h-3 w-3" />
-                        {voucher.valid_until ? formatDate(voucher.valid_until) : 'No expiry'}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={voucher.is_active ? 'default' : 'secondary'}>
-                        {voucher.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleActive(voucher)}
-                          className="h-8 w-8 p-0"
-                        >
-                          {voucher.is_active ? (
-                            <ToggleRight className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <ToggleLeft className="h-4 w-4 text-gray-400" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(voucher)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(voucher.id)}
-                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Vouchers — split into manual (admin-created) vs auto-assigned (merchant welcome) */}
+      {loading ? (
+        <Card>
+          <CardContent className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Tabs defaultValue="manual">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="manual" className="gap-2">
+              <Tag className="h-4 w-4" />
+              Manual & Campaign ({manualVouchers.length})
+            </TabsTrigger>
+            <TabsTrigger value="auto" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              Merchant Welcome ({autoVouchers.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="manual" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Tag className="h-5 w-5 text-primary" />
+                  Manual & Campaign Vouchers
+                </CardTitle>
+                <CardDescription>
+                  Vouchers you create here for promotions and campaigns (e.g. SAVE50, WELCOME10).
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {renderVoucherTable(manualVouchers, false, 'No manual vouchers yet. Click "Create Voucher" to add one.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="auto" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Gift className="h-5 w-5 text-primary" />
+                  Merchant Welcome Vouchers (Auto-Assigned)
+                </CardTitle>
+                <CardDescription>
+                  Generated automatically when a merchant registration is approved — one RM50 voucher
+                  per merchant. These are system-managed; edit or deactivate only if needed.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {renderVoucherTable(autoVouchers, true, 'No merchant welcome vouchers yet. They appear here once a merchant is approved.')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 };

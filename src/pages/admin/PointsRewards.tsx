@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { transformImage } from '@/lib/imageTransform';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -46,7 +45,6 @@ import {
 } from 'lucide-react';
 
 export default function PointsRewards() {
-  const [activeTab, setActiveTab] = useState('analytics');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -268,29 +266,10 @@ export default function PointsRewards() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="analytics" className="gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Analytics
-          </TabsTrigger>
-          <TabsTrigger value="items" className="gap-2">
-            <Gift className="h-4 w-4" />
-            Reward Items
-          </TabsTrigger>
-          <TabsTrigger value="redemptions" className="gap-2">
-            <ShoppingBag className="h-4 w-4" />
-            Redemptions
-          </TabsTrigger>
-          <TabsTrigger value="customers" className="gap-2">
-            <Users className="h-4 w-4" />
-            Customer Points
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Tab 1: Analytics */}
-        <TabsContent value="analytics" className="space-y-4">
+      {/* Single-page layout — all sections stacked, no tabs */}
+      <div className="space-y-8">
+        {/* Section: Analytics KPIs */}
+        <section className="space-y-4">
           <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -336,10 +315,15 @@ export default function PointsRewards() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
+        </section>
 
-        {/* Tab 2: Reward Items */}
-        <TabsContent value="items" className="space-y-4">
+        {/* Section: Reward Items */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 border-b pb-2">
+            <Gift className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Reward Items</h3>
+            <Badge variant="secondary" className="ml-1">{rewardItems.length}</Badge>
+          </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {rewardItems.length === 0 ? (
               <Card className="col-span-full">
@@ -425,13 +409,17 @@ export default function PointsRewards() {
               ))
             )}
           </div>
-        </TabsContent>
+        </section>
 
-        {/* Tab 3: Redemptions */}
-        <TabsContent value="redemptions" className="space-y-4">
+        {/* Section: Redemptions */}
+        <section className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Recent Redemptions</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingBag className="h-5 w-5 text-primary" />
+                Recent Redemptions
+                <Badge variant="secondary" className="ml-1">{redemptions.length}</Badge>
+              </CardTitle>
               <CardDescription>View and manage customer reward redemptions</CardDescription>
             </CardHeader>
             <CardContent>
@@ -498,13 +486,17 @@ export default function PointsRewards() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </section>
 
-        {/* Tab 4: Customer Points */}
-        <TabsContent value="customers" className="space-y-4">
+        {/* Section: Customer Points */}
+        <section className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Customer Points Overview</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                Customer Points Overview
+                <Badge variant="secondary" className="ml-1">{customers.length}</Badge>
+              </CardTitle>
               <CardDescription>View customer point balances and activity</CardDescription>
             </CardHeader>
             <CardContent>
@@ -537,9 +529,9 @@ export default function PointsRewards() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </section>
 
-      </Tabs>
+      </div>
 
       {/* Create/Edit Reward Item Dialog */}
       <CreateRewardItemDialog
