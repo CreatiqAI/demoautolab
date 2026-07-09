@@ -18,45 +18,42 @@ export default function SetAdminPassword() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // An expired / already-used link comes back with an error in the URL hash,
-    // e.g. #error=access_denied&error_code=otp_expired. We MUST treat that as
-    // invalid and NOT fall back to whatever session is already signed in (that
-    // could be the master admin — showing their email and, worse, letting their
-    // password be changed here).
     const params = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+
+    // Expired / already-used link → error is returned in the hash.
     if (params.get('error') || params.get('error_code')) {
       setErrorMsg((params.get('error_description') || '').replace(/\+/g, ' ').trim() || null);
       setReady('invalid');
       return;
     }
 
-    let settled = false;
-    const accept = (userEmail: string | null) => {
-      settled = true;
-      setEmail(userEmail);
-      setReady('ok');
-    };
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const type = params.get('type');
 
-    // A valid recovery link establishes the invited admin's session (replacing
-    // any existing one). Catch it via the recovery event, or the already-set
-    // session if supabase-js processed the token before this mounted.
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session?.user) {
-        accept(session.user.email ?? null);
-      }
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      if (!settled && data.session?.user) accept(data.session.user.email ?? null);
-    });
+    // The Supabase client runs with detectSessionInUrl:false, so it does NOT
+    // auto-process the recovery token. We MUST adopt it explicitly — otherwise
+    // getSession() returns whatever account is already signed in (e.g. the
+    // master admin) and we'd show, and patch, the WRONG user's password.
+    if (accessToken && refreshToken && (type === 'recovery' || type === 'invite')) {
+      supabase.auth
+        .setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ data, error }) => {
+          if (error || !data.session?.user) {
+            setErrorMsg('This link is invalid or has expired.');
+            setReady('invalid');
+            return;
+          }
+          setEmail(data.session.user.email ?? null);
+          setReady('ok');
+          // Strip the token out of the address bar.
+          window.history.replaceState(null, '', '/admin/set-password');
+        });
+      return;
+    }
 
-    // If no valid session materialises shortly, the link is bad/expired.
-    const t = setTimeout(() => {
-      if (!settled) setReady('invalid');
-    }, 4000);
-    return () => {
-      sub.subscription.unsubscribe();
-      clearTimeout(t);
-    };
+    // No recovery token in the URL → never fall back to an existing session.
+    setReady('invalid');
   }, []);
 
   const submit = async (e: React.FormEvent) => {
