@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Eye, EyeOff, ArrowLeft, Shield, Phone, Loader2, ArrowRight, Store, Briefcase } from 'lucide-react';
@@ -13,7 +12,7 @@ import OTPInput from '@/components/OTPInput';
 import { registerDeviceSession } from '@/hooks/useSessionEnforcement';
 import { getVendorByUserId } from '@/lib/vendorAuth';
 
-type AuthStep = 'contact' | 'otp' | 'details' | 'merchant-otp';
+type AuthStep = 'contact' | 'password' | 'otp' | 'partner' | 'register-choice';
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -23,7 +22,8 @@ const Auth = () => {
   const [resendTimer, setResendTimer] = useState(0);
   const [authStep, setAuthStep] = useState<AuthStep>('contact');
   const [isNewUser, setIsNewUser] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>(searchParams.get('tab') || 'customer');
+  // The account resolved from the entered phone number (drives password vs OTP).
+  const [resolved, setResolved] = useState<{ email: string; account_type: string } | null>(null);
 
   const {
     sendPhoneOTP,
@@ -89,9 +89,12 @@ const Auth = () => {
   };
 
   // ==========================================
-  // CUSTOMER LOGIN - Phone + Password (simple)
+  // STEP 1 — Enter phone, detect account type, branch to the right method.
+  //   B2C customer  -> password
+  //   B2B merchant  -> OTP
+  //   unknown       -> offer to register
   // ==========================================
-  const handleCustomerLogin = async (e: React.FormEvent) => {
+  const handleContinue = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validatePhone(customerForm.phone)) {
@@ -99,52 +102,49 @@ const Auth = () => {
       return;
     }
 
-    if (!customerForm.password) {
-      toast.error('Please enter your password');
-      return;
-    }
-
     setLoading(true);
     const normalizedPhone = normalizePhone(customerForm.phone);
 
-    // Resolve the account by phone via a SECURITY DEFINER RPC — customer_profiles
-    // is no longer anon-readable, so the direct table lookup would 401.
     try {
+      // customer_profiles is no longer anon-readable, so resolve via SECURITY DEFINER RPC.
       const { data: acct, error: lookupErr } = await (supabase.rpc as any)('lookup_account_by_phone', {
         p_phone: normalizedPhone,
       });
 
-      if (lookupErr || !acct?.exists || !acct?.email) {
-        toast.error('No account found with this phone number. Please register first.');
+      if (lookupErr) {
+        toast.error('Something went wrong. Please try again.');
         setLoading(false);
         return;
       }
 
-      // Block merchant accounts from logging in through the customer portal.
+      if (!acct?.exists || !acct?.email) {
+        // Unknown number — let them pick how to register.
+        setResolved(null);
+        setAuthStep('register-choice');
+        setLoading(false);
+        return;
+      }
+
       if (acct.account_type === 'merchant') {
-        toast.error('This is a merchant account. Please use the Merchant tab and verify with OTP.');
-        setLoading(false);
-        return;
-      }
-
-      // Sign in with email + password
-      const { error } = await signInWithPassword(acct.email, customerForm.password);
-
-      if (error) {
-        if (error.message?.includes('Invalid login credentials')) {
-          toast.error('Incorrect password. Please try again.');
-        } else {
-          toast.error(error.message || 'Failed to sign in. Please try again.');
+        // Merchant (B2B) → send OTP and go to the verify step.
+        const { error } = await sendPhoneOTP(normalizedPhone, { testMode: testOtpMode });
+        if (error) {
+          toast.error(error.message || 'Failed to send OTP. Please try again.');
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-        return;
+        toast.success(testOtpMode ? 'Test mode: Use OTP 123456' : 'OTP sent to your phone!');
+        setResolved({ email: acct.email, account_type: 'merchant' });
+        setMerchantOtpForm({ phone: customerForm.phone, otp: '' });
+        setOtpSent(true);
+        setResendTimer(60);
+        setAuthStep('otp');
+      } else {
+        // Normal customer (B2C) → ask for their password.
+        setResolved({ email: acct.email, account_type: acct.account_type || 'normal' });
+        setCustomerForm((f) => ({ ...f, password: '' }));
+        setAuthStep('password');
       }
-
-      toast.success('Welcome back!');
-      // Return the user to wherever they came from (e.g. a product page to
-      // write a review, or the cart). Only allow internal paths.
-      const dest = searchParams.get('redirect');
-      navigate(dest && dest.startsWith('/') ? dest : '/');
     } catch (err) {
       toast.error('An error occurred. Please try again.');
     }
@@ -152,55 +152,38 @@ const Auth = () => {
     setLoading(false);
   };
 
-  // ==========================================
-  // MERCHANT LOGIN - Phone OTP (secure)
-  // ==========================================
-  const handleMerchantSendOTP = async (e: React.FormEvent) => {
+  // STEP 2a — Customer signs in with the password for the resolved account.
+  const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!validatePhone(merchantOtpForm.phone)) {
-      toast.error('Please enter a valid Malaysian phone number');
+    if (!resolved?.email) {
+      setAuthStep('contact');
+      return;
+    }
+    if (!customerForm.password) {
+      toast.error('Please enter your password');
       return;
     }
 
     setLoading(true);
-    const normalizedPhone = normalizePhone(merchantOtpForm.phone);
-
-    // Only send an OTP to a registered MERCHANT number. Don't SMS unknown numbers,
-    // and route customers/new users to the right place first.
-    const { data: acct } = await (supabase.rpc as any)('lookup_account_by_phone', {
-      p_phone: normalizedPhone,
-    });
-    if (!acct?.exists) {
-      toast.error('No account found for this number. Please register as a merchant first.');
-      setLoading(false);
-      navigate('/merchant-register');
-      return;
-    }
-    if (acct.account_type !== 'merchant') {
-      toast.error('This number is registered as a customer. Please use the Customer tab to log in with your password.');
-      setLoading(false);
-      return;
-    }
-
-    const { error } = await sendPhoneOTP(normalizedPhone, { testMode: testOtpMode });
-
+    const { error } = await signInWithPassword(resolved.email, customerForm.password);
     if (error) {
-      toast.error(error.message || 'Failed to send OTP. Please try again.');
+      toast.error(
+        error.message?.includes('Invalid login credentials')
+          ? 'Incorrect password. Please try again.'
+          : error.message || 'Failed to sign in. Please try again.',
+      );
       setLoading(false);
       return;
     }
-
-    toast.success(testOtpMode ? 'Test mode: Use OTP 123456' : 'OTP sent to your phone!');
-
-    setOtpSent(true);
-    setAuthStep('merchant-otp');
-    setResendTimer(60);
+    toast.success('Welcome back!');
+    // Return the user to wherever they came from (only allow internal paths).
+    const dest = searchParams.get('redirect');
+    navigate(dest && dest.startsWith('/') ? dest : '/');
     setLoading(false);
   };
 
-  // Handle Merchant OTP Verification
-  const handleMerchantVerifyOTP = async (e: React.FormEvent) => {
+  // STEP 2b — Merchant verifies the OTP and is signed in via magic-link token.
+  const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (merchantOtpForm.otp.length !== 6) {
@@ -209,7 +192,7 @@ const Auth = () => {
     }
 
     setLoading(true);
-    const normalizedPhone = normalizePhone(merchantOtpForm.phone);
+    const normalizedPhone = normalizePhone(customerForm.phone);
     const { error, isNewUser: newUser, tokenHash } = await verifyPhoneOTP(normalizedPhone, merchantOtpForm.otp);
 
     if (error) {
@@ -219,20 +202,16 @@ const Auth = () => {
     }
 
     if (newUser) {
-      // New merchant - redirect to merchant registration
       toast.info('No account found. Please register as a merchant first.');
       navigate('/merchant-register');
     } else if (tokenHash) {
-      // Existing merchant — auto sign-in using magic link token (no password needed)
       const { error: signInError, userId } = await signInWithToken(tokenHash);
       if (signInError) {
         toast.error('Failed to sign in. Please try again.');
       } else {
-        // Register device session for single-device enforcement
-        // Wait briefly for Supabase client to propagate the JWT from signInWithToken
-        // (RLS requires auth.uid() to be set for the INSERT to succeed)
         if (userId) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Wait for the client to propagate the JWT before the RLS-guarded insert.
+          await new Promise((resolve) => setTimeout(resolve, 500));
           const { error: sessionError } = await registerDeviceSession(userId);
           if (sessionError) {
             console.error('[Session] Failed to register device session:', sessionError);
@@ -248,12 +227,11 @@ const Auth = () => {
     setLoading(false);
   };
 
-  // Resend OTP for merchant
-  const handleMerchantResendOTP = async () => {
+  const handleResendOTP = async () => {
     if (resendTimer > 0) return;
 
     setLoading(true);
-    const normalizedPhone = normalizePhone(merchantOtpForm.phone);
+    const normalizedPhone = normalizePhone(customerForm.phone);
     const { error } = await sendPhoneOTP(normalizedPhone, { testMode: testOtpMode });
 
     if (error) {
@@ -316,7 +294,9 @@ const Auth = () => {
   const handleBackToContact = () => {
     setAuthStep('contact');
     setOtpSent(false);
-    setMerchantOtpForm(prev => ({ ...prev, otp: '' }));
+    setMerchantOtpForm((prev) => ({ ...prev, otp: '' }));
+    setCustomerForm((f) => ({ ...f, password: '' }));
+    setResolved(null);
     setIsNewUser(false);
   };
 
@@ -391,18 +371,32 @@ const Auth = () => {
           {/* Header */}
           <div className="mb-8">
             <h2 className="font-heading font-bold uppercase tracking-tight text-3xl text-gray-900 mb-2">
-              {authStep === 'merchant-otp' ? 'Verify Code' : 'Welcome'}
+              {authStep === 'otp'
+                ? 'Verify Code'
+                : authStep === 'password'
+                ? 'Enter Password'
+                : authStep === 'partner'
+                ? 'Partner Login'
+                : authStep === 'register-choice'
+                ? 'Create an account'
+                : 'Welcome'}
             </h2>
             <p className="text-gray-500 text-sm">
-              {authStep === 'merchant-otp'
-                ? `We sent a code to +60${merchantOtpForm.phone}`
+              {authStep === 'otp'
+                ? `We sent a code to +60${customerForm.phone}`
+                : authStep === 'password'
+                ? `Signing in as +60${customerForm.phone}`
+                : authStep === 'partner'
+                ? 'Vendor & partner accounts issued by AutoLab'
+                : authStep === 'register-choice'
+                ? `No account found for +60${customerForm.phone}`
                 : 'Sign in to your 12V account'}
             </p>
           </div>
 
-          {/* Merchant OTP Verification Form */}
-          {authStep === 'merchant-otp' && (
-            <form onSubmit={handleMerchantVerifyOTP} className="space-y-6">
+          {/* STEP 2b — Merchant OTP Verification */}
+          {authStep === 'otp' && (
+            <form onSubmit={handleVerifyOTP} className="space-y-6">
               <div className="space-y-4">
                 <OTPInput
                   value={merchantOtpForm.otp}
@@ -418,7 +412,7 @@ const Auth = () => {
                   ) : (
                     <button
                       type="button"
-                      onClick={handleMerchantResendOTP}
+                      onClick={handleResendOTP}
                       disabled={loading}
                       className="text-sm text-lime-600 hover:text-lime-700 font-medium"
                     >
@@ -445,279 +439,162 @@ const Auth = () => {
             </form>
           )}
 
-          {/* Contact Entry & Tabs (Initial Step) */}
+          {/* STEP 1 — Enter phone number (single flow for customer + merchant) */}
           {authStep === 'contact' && (
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 gap-1 mb-6 bg-gray-100 p-1 rounded-lg h-auto">
-                <TabsTrigger value="customer" className="min-h-9 py-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] sm:text-xs text-gray-600 px-1">
-                  <Phone className="h-3.5 w-3.5 mr-1" />
-                  Customer
-                </TabsTrigger>
-                <TabsTrigger value="merchant" className="min-h-9 py-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] sm:text-xs text-gray-600 px-1">
-                  <Store className="h-3.5 w-3.5 mr-1" />
-                  Merchant
-                </TabsTrigger>
-                <TabsTrigger value="partner" className="min-h-9 py-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-[11px] sm:text-xs text-gray-600 px-1">
-                  <Briefcase className="h-3.5 w-3.5 mr-1" />
-                  Partner
-                </TabsTrigger>
-              </TabsList>
-
-              {/* ===================== */}
-              {/* Customer Login Tab    */}
-              {/* Phone + Password      */}
-              {/* ===================== */}
-              <TabsContent value="customer">
-                <div className="space-y-5">
-                  <form onSubmit={handleCustomerLogin} className="space-y-4">
-                    {/* Phone Number */}
-                    <div className="space-y-2">
-                      <Label htmlFor="customer-phone" className="text-gray-700 text-sm font-medium">Phone Number</Label>
-                      <div className="flex">
-                        <div className="flex items-center bg-gray-50 border border-r-0 border-gray-200 rounded-l-lg px-4 text-sm text-gray-500 font-medium">
-                          +60
-                        </div>
-                        <Input
-                          id="customer-phone"
-                          type="tel"
-                          placeholder="12345678"
-                          value={customerForm.phone}
-                          onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value.replace(/\D/g, '') })}
-                          required
-                          className="rounded-l-none border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
-                        />
-                      </div>
+            <div className="space-y-5">
+              <form onSubmit={handleContinue} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="login-phone" className="text-gray-700 text-sm font-medium">Phone Number</Label>
+                  <div className="flex">
+                    <div className="flex items-center bg-gray-50 border border-r-0 border-gray-200 rounded-l-lg px-4 text-sm text-gray-500 font-medium">
+                      +60
                     </div>
-
-                    {/* Password */}
-                    <div className="space-y-2">
-                      <Label htmlFor="customer-password" className="text-gray-700 text-sm font-medium">Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="customer-password"
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="Enter your password"
-                          value={customerForm.password}
-                          onChange={(e) => setCustomerForm({ ...customerForm, password: e.target.value })}
-                          required
-                          className="pr-10 border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-gray-400"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors"
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Signing in...
-                        </>
-                      ) : (
-                        <>
-                          Sign In
-                          <ArrowRight className="h-4 w-4 ml-2" />
-                        </>
-                      )}
-                    </Button>
-                  </form>
-
-                  {/* Register Link */}
-                  <div className="text-center">
-                    <p className="text-sm text-gray-500">
-                      Don't have an account?{' '}
-                      <button
-                        type="button"
-                        onClick={() => navigate('/register')}
-                        className="text-lime-600 font-medium hover:text-lime-700"
-                      >
-                        Register here
-                      </button>
-                    </p>
+                    <Input
+                      id="login-phone"
+                      type="tel"
+                      autoComplete="tel"
+                      placeholder="12345678"
+                      value={customerForm.phone}
+                      onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value.replace(/\D/g, '') })}
+                      required
+                      autoFocus
+                      className="rounded-l-none border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
+                    />
                   </div>
+                  <p className="text-xs text-gray-500">Enter your number — we'll continue with your password or a one-time code.</p>
+                </div>
 
-                  {/* Merchant Registration Link */}
-                  <div className="mt-4 p-4 bg-lime-50 border border-lime-100 rounded-xl">
-                    <p className="text-sm text-gray-700">
-                      Are you a business?{' '}
-                      <button
-                        type="button"
-                        onClick={() => navigate('/merchant-register')}
-                        className="text-lime-600 font-medium hover:text-lime-700"
-                      >
-                        Register as a Merchant
-                      </button>
-                    </p>
+                <Button
+                  type="submit"
+                  className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Checking...</>
+                  ) : (
+                    <>Continue<ArrowRight className="h-4 w-4 ml-2" /></>
+                  )}
+                </Button>
+              </form>
+
+              {/* Register links */}
+              <div className="text-center">
+                <p className="text-sm text-gray-500">
+                  Don't have an account?{' '}
+                  <button type="button" onClick={() => navigate('/register')} className="text-lime-600 font-medium hover:text-lime-700">
+                    Register here
+                  </button>
+                </p>
+              </div>
+
+              <div className="p-4 bg-lime-50 border border-lime-100 rounded-xl">
+                <p className="text-sm text-gray-700">
+                  Are you a business?{' '}
+                  <button type="button" onClick={() => navigate('/merchant-register')} className="text-lime-600 font-medium hover:text-lime-700">
+                    Register as a Merchant
+                  </button>
+                </p>
+              </div>
+
+              {/* Partner / vendor entry */}
+              <div className="text-center">
+                <button type="button" onClick={() => setAuthStep('partner')} className="text-xs text-gray-500 hover:text-gray-800 inline-flex items-center gap-1">
+                  <Briefcase className="h-3.5 w-3.5" /> Partner / Vendor login
+                </button>
+              </div>
+
+              {/* Dev-only test-mode toggle for the merchant OTP path */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <div>
+                  <span className="text-xs font-medium text-gray-700">Test Mode (merchant OTP)</span>
+                  <p className="text-[10px] text-gray-500">{testOtpMode ? 'OTP fixed to 123456 (no SMS sent)' : 'Real SMS will be sent'}</p>
+                </div>
+                <Switch checked={testOtpMode} onCheckedChange={setTestOtpMode} />
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2a — Customer password */}
+          {authStep === 'password' && (
+            <form onSubmit={handlePasswordLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="login-password" className="text-gray-700 text-sm font-medium">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    value={customerForm.password}
+                    onChange={(e) => setCustomerForm({ ...customerForm, password: e.target.value })}
+                    required
+                    autoFocus
+                    className="pr-10 border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
+                  />
+                  <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-gray-400" onClick={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <Button type="submit" className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors" disabled={loading}>
+                {loading ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Signing in...</>) : (<>Sign In<ArrowRight className="h-4 w-4 ml-2" /></>)}
+              </Button>
+
+              <div className="text-center">
+                <button type="button" onClick={handleBackToContact} className="text-sm text-gray-500 hover:text-gray-800">
+                  Use a different number
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Unknown number — choose how to register */}
+          {authStep === 'register-choice' && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">We couldn't find an account for that number. How would you like to join?</p>
+              <Button onClick={() => navigate('/register')} className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg">
+                <Phone className="h-4 w-4 mr-2" /> Register as a Customer
+              </Button>
+              <Button onClick={() => navigate('/merchant-register')} variant="outline" className="w-full h-11 rounded-lg border-gray-200">
+                <Store className="h-4 w-4 mr-2" /> Register as a Merchant
+              </Button>
+              <div className="text-center">
+                <button type="button" onClick={handleBackToContact} className="text-sm text-gray-500 hover:text-gray-800">Try a different number</button>
+              </div>
+            </div>
+          )}
+
+          {/* Partner / vendor login (admin-issued username + password) */}
+          {authStep === 'partner' && (
+            <div className="space-y-5">
+              <div className="p-3 bg-lime-50 border border-lime-200 rounded-lg">
+                <p className="text-xs text-lime-900 font-medium">
+                  Partner accounts are issued by AutoLab admin. Use the username &amp; password your admin shared with you.
+                </p>
+              </div>
+              <form onSubmit={handlePartnerLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="partner-username" className="text-gray-700 text-sm font-medium">Username</Label>
+                  <Input id="partner-username" type="text" autoComplete="username" placeholder="e.g. soundstream" value={partnerForm.username} onChange={(e) => setPartnerForm({ ...partnerForm, username: e.target.value })} required className="border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="partner-password" className="text-gray-700 text-sm font-medium">Password</Label>
+                  <div className="relative">
+                    <Input id="partner-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" value={partnerForm.password} onChange={(e) => setPartnerForm({ ...partnerForm, password: e.target.value })} required className="pr-10 border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11" />
+                    <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-gray-400" onClick={() => setShowPassword(!showPassword)}>
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
                   </div>
                 </div>
-              </TabsContent>
-
-              {/* ===================== */}
-              {/* Merchant Login Tab    */}
-              {/* Phone OTP (secure)    */}
-              {/* ===================== */}
-              <TabsContent value="merchant">
-                <div className="space-y-5">
-                  {/* Info banner */}
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-xs text-amber-800 font-medium">
-                      Merchant accounts require OTP verification for security.
-                    </p>
-                  </div>
-
-                  {/* Test mode toggle */}
-                  <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <div>
-                      <span className="text-xs font-medium text-gray-700">Test Mode</span>
-                      <p className="text-[10px] text-gray-500">{testOtpMode ? 'OTP fixed to 123456 (no SMS sent)' : 'Real SMS will be sent'}</p>
-                    </div>
-                    <Switch checked={testOtpMode} onCheckedChange={setTestOtpMode} />
-                  </div>
-
-                  <form onSubmit={handleMerchantSendOTP} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="merchant-phone" className="text-gray-700 text-sm font-medium">Phone Number</Label>
-                      <div className="flex">
-                        <div className="flex items-center bg-gray-50 border border-r-0 border-gray-200 rounded-l-lg px-4 text-sm text-gray-500 font-medium">
-                          +60
-                        </div>
-                        <Input
-                          id="merchant-phone"
-                          type="tel"
-                          placeholder="12345678"
-                          value={merchantOtpForm.phone}
-                          onChange={(e) => setMerchantOtpForm({ ...merchantOtpForm, phone: e.target.value.replace(/\D/g, '') })}
-                          required
-                          className="rounded-l-none border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500">We'll send you a 6-digit verification code</p>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors"
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Sending OTP...
-                        </>
-                      ) : (
-                        <>
-                          Request OTP
-                          <ArrowRight className="h-4 w-4 ml-2" />
-                        </>
-                      )}
-                    </Button>
-                  </form>
-
-                  {/* Merchant Registration Link */}
-                  <div className="mt-4 p-4 bg-lime-50 border border-lime-100 rounded-xl">
-                    <p className="text-sm text-gray-700">
-                      Not yet a merchant?{' '}
-                      <button
-                        type="button"
-                        onClick={() => navigate('/merchant-register')}
-                        className="text-lime-600 font-medium hover:text-lime-700"
-                      >
-                        Register as a Merchant
-                      </button>
-                    </p>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* ===================== */}
-              {/* Partner Login Tab     */}
-              {/* Username + password (admin-issued) */}
-              {/* ===================== */}
-              <TabsContent value="partner">
-                <div className="space-y-5">
-                  <div className="p-3 bg-lime-50 border border-lime-200 rounded-lg">
-                    <p className="text-xs text-lime-900 font-medium">
-                      Partner accounts are issued by AutoLab admin. Use the username & password your admin shared with you.
-                    </p>
-                  </div>
-
-                  <form onSubmit={handlePartnerLogin} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="partner-username" className="text-gray-700 text-sm font-medium">Username</Label>
-                      <Input
-                        id="partner-username"
-                        type="text"
-                        autoComplete="username"
-                        placeholder="e.g. soundstream"
-                        value={partnerForm.username}
-                        onChange={(e) => setPartnerForm({ ...partnerForm, username: e.target.value })}
-                        required
-                        className="border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="partner-password" className="text-gray-700 text-sm font-medium">Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="partner-password"
-                          type={showPassword ? 'text' : 'password'}
-                          autoComplete="current-password"
-                          placeholder="Enter your password"
-                          value={partnerForm.password}
-                          onChange={(e) => setPartnerForm({ ...partnerForm, password: e.target.value })}
-                          required
-                          className="pr-10 border-gray-200 focus:border-lime-500 focus:ring-lime-500 h-11"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-gray-400"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors"
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Signing in...
-                        </>
-                      ) : (
-                        <>
-                          Sign In
-                          <ArrowRight className="h-4 w-4 ml-2" />
-                        </>
-                      )}
-                    </Button>
-                  </form>
-
-                  <div className="text-center text-xs text-gray-500">
-                    Want to become a partner? Email AutoLab support.
-                  </div>
-                </div>
-              </TabsContent>
-
-            </Tabs>
+                <Button type="submit" className="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold h-11 rounded-lg transition-colors" disabled={loading}>
+                  {loading ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Signing in...</>) : (<>Sign In<ArrowRight className="h-4 w-4 ml-2" /></>)}
+                </Button>
+              </form>
+              <div className="text-center">
+                <button type="button" onClick={handleBackToContact} className="text-xs text-gray-500 hover:text-gray-800">Back to phone login</button>
+              </div>
+            </div>
           )}
         </div>
       </div>
