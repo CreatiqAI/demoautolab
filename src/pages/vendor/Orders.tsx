@@ -860,12 +860,12 @@ export default function VendorOrders() {
                     )}
                     {activeFulfilment.shipping_fee != null && (
                       <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Your shipping fee</span>
+                        <span className="text-muted-foreground">Delivery fee</span>
                         <span className="tabular-nums">
-                          {Number(activeFulfilment.shipping_fee) === 0 ? (
-                            <span className="text-green-600">Free</span>
-                          ) : (
+                          {Number(activeFulfilment.shipping_fee) > 0 ? (
                             formatRM(Number(activeFulfilment.shipping_fee))
+                          ) : (
+                            <span className="text-amber-700">Paid to courier on delivery</span>
                           )}
                         </span>
                       </div>

@@ -405,7 +405,7 @@ export default function ArchivedOrders() {
                                   <div className="text-sm space-y-1">
                                     <p><strong>Items:</strong> {order.order_items.reduce((sum, item) => sum + item.quantity, 0)} items</p>
                                     <p><strong>Subtotal:</strong> {formatCurrency(order.subtotal)}</p>
-                                    <p><strong>Delivery:</strong> {order.delivery_fee === 0 ? 'FREE' : formatCurrency(order.delivery_fee)}</p>
+                                    <p><strong>Delivery:</strong> {order.delivery_fee > 0 ? formatCurrency(order.delivery_fee) : 'Pay on delivery'}</p>
                                     <p><strong>Total:</strong> <span className="font-semibold">{formatCurrency(order.total)}</span></p>
                                   </div>
                                 </div>
@@ -572,7 +572,7 @@ export default function ArchivedOrders() {
                   )}
                   <div className="flex justify-between">
                     <span>Delivery Fee:</span>
-                    <span>{selectedOrder.delivery_fee === 0 ? 'FREE' : formatCurrency(selectedOrder.delivery_fee)}</span>
+                    <span>{selectedOrder.delivery_fee > 0 ? formatCurrency(selectedOrder.delivery_fee) : 'Pay on delivery'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>SST (6%):</span>

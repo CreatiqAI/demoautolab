@@ -1138,7 +1138,7 @@ export default function WarehouseOperations() {
                                         </div>
                                         <div>
                                           <p className="text-xs font-semibold text-gray-500 mb-2">DELIVERY</p>
-                                          <p className="text-sm font-medium capitalize">{order.delivery_method?.replace('-', ' ')} | {order.delivery_fee === 0 ? 'FREE' : formatCurrency(order.delivery_fee)}</p>
+                                          <p className="text-sm font-medium capitalize">{order.delivery_method?.replace('-', ' ')} | {order.delivery_fee > 0 ? formatCurrency(order.delivery_fee) : 'Pay on delivery'}</p>
                                           {order.delivery_address?.address && (
                                             <p className="text-sm text-muted-foreground mt-1 bg-white border rounded px-2 py-1.5">{order.delivery_address.address}</p>
                                           )}

@@ -721,7 +721,7 @@ export default function Orders() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Fee</span>
-                <span className="tabular-nums">{order.delivery_fee === 0 ? <span className="text-green-600">Free</span> : formatCurrency(order.delivery_fee)}</span>
+                <span className="tabular-nums">{order.delivery_fee > 0 ? formatCurrency(order.delivery_fee) : <span className="text-amber-700">Pay on delivery</span>}</span>
               </div>
               {formatAddress(order.delivery_address) && (
                 <div className="text-muted-foreground flex items-start gap-1.5 pt-1">
@@ -873,7 +873,7 @@ export default function Orders() {
               )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Delivery</span>
-                <span className="tabular-nums">{order.delivery_fee === 0 ? 'Free' : formatCurrency(order.delivery_fee)}</span>
+                <span className="tabular-nums">{order.delivery_fee > 0 ? formatCurrency(order.delivery_fee) : 'Pay on delivery'}</span>
               </div>
               <div className="flex justify-between"><span className="text-muted-foreground">SST</span><span className="tabular-nums">{formatCurrency(order.tax)}</span></div>
               <div className="flex justify-between pt-2 mt-1 border-t font-medium"><span>Total</span><span className="tabular-nums">{formatCurrency(order.total)}</span></div>

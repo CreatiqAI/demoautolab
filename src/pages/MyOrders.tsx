@@ -1256,7 +1256,7 @@ export default function MyOrders() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Fee</span>
-                    <span className="text-gray-900">{selectedOrder.delivery_fee === 0 ? <span className="text-green-600">Free</span> : formatCurrency(selectedOrder.delivery_fee)}</span>
+                    <span className="text-gray-900">{selectedOrder.delivery_fee > 0 ? formatCurrency(selectedOrder.delivery_fee) : <span className="text-amber-700">Pay on delivery</span>}</span>
                   </div>
                   {selectedOrder.delivery_address && selectedOrder.delivery_method !== 'self-pickup' && (
                     <div className="pt-2">
@@ -1373,7 +1373,7 @@ export default function MyOrders() {
                   {selectedOrder.discount > 0 && (
                     <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(selectedOrder.discount)}</span></div>
                   )}
-                  <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span>{selectedOrder.delivery_fee === 0 ? 'Free' : formatCurrency(selectedOrder.delivery_fee)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span>{selectedOrder.delivery_fee > 0 ? formatCurrency(selectedOrder.delivery_fee) : 'Pay on delivery'}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">SST (6%)</span><span>{formatCurrency(selectedOrder.tax)}</span></div>
                   <div className="flex justify-between pt-3 mt-2 border-t font-medium"><span>Total</span><span>{formatCurrency(selectedOrder.total)}</span></div>
                   <p className="text-xs text-muted-foreground pt-1">via {selectedOrder.payment_method.replace('-', ' ')}</p>
