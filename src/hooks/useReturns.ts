@@ -19,9 +19,46 @@ export type ReturnStatus =
   | 'COMPLETED'
   | 'CANCELLED';
 
-export type ReturnReason = 'DEFECTIVE' | 'WRONG_ITEM';
+export type ReturnReason =
+  | 'NOT_RECEIVED'
+  | 'DAMAGED_ON_ARRIVAL'
+  | 'DEFECTIVE'
+  | 'WRONG_ITEM'
+  | 'MISSING_PARTS'
+  | 'NOT_AS_DESCRIBED'
+  | 'CHANGE_OF_MIND';
 
 export type RefundMethod = 'ORIGINAL_PAYMENT' | 'EXCHANGE';
+export type ResolutionType = 'REFUND_ONLY' | 'RETURN_REFUND' | 'EXCHANGE';
+
+export interface ReasonConfig {
+  value: ReturnReason;
+  label: string;
+  hint: string;
+  requiresReturn: boolean;    // must the item be shipped back?
+  requiresEvidence: boolean;  // is a photo/video mandatory?
+  shippingPaidBy: 'VENDOR' | 'CUSTOMER';
+  allowExchange: boolean;
+}
+
+// Reason taxonomy modelled on Shopee MY: each reason drives evidence needs,
+// whether a physical return is required, and who pays return shipping.
+export const RETURN_REASONS: ReasonConfig[] = [
+  { value: 'NOT_RECEIVED', label: "Didn't receive my order", hint: 'The parcel never arrived.', requiresReturn: false, requiresEvidence: false, shippingPaidBy: 'VENDOR', allowExchange: false },
+  { value: 'DAMAGED_ON_ARRIVAL', label: 'Arrived damaged', hint: 'Item or packaging was damaged in transit.', requiresReturn: true, requiresEvidence: true, shippingPaidBy: 'VENDOR', allowExchange: true },
+  { value: 'DEFECTIVE', label: 'Defective / not working', hint: 'Item is faulty or stopped working.', requiresReturn: true, requiresEvidence: true, shippingPaidBy: 'VENDOR', allowExchange: true },
+  { value: 'WRONG_ITEM', label: 'Wrong item received', hint: 'You received a different item from what you ordered.', requiresReturn: true, requiresEvidence: true, shippingPaidBy: 'VENDOR', allowExchange: true },
+  { value: 'MISSING_PARTS', label: 'Missing items / parts', hint: 'Something was missing from the parcel.', requiresReturn: false, requiresEvidence: true, shippingPaidBy: 'VENDOR', allowExchange: false },
+  { value: 'NOT_AS_DESCRIBED', label: 'Not as described', hint: 'Materially different from the listing.', requiresReturn: true, requiresEvidence: true, shippingPaidBy: 'VENDOR', allowExchange: true },
+  { value: 'CHANGE_OF_MIND', label: 'Change of mind', hint: 'No longer needed — return shipping is paid by you.', requiresReturn: true, requiresEvidence: false, shippingPaidBy: 'CUSTOMER', allowExchange: false },
+];
+
+export function reasonConfig(r: ReturnReason): ReasonConfig {
+  return RETURN_REASONS.find((x) => x.value === r) ?? RETURN_REASONS[2];
+}
+
+// A customer may only have this many open (non-terminal) returns at once.
+export const MAX_OPEN_RETURNS = 5;
 
 export interface ReturnItem {
   id: string;
@@ -92,6 +129,8 @@ export interface CreateReturnData {
   reason: ReturnReason;
   reason_details?: string;
   refund_method: RefundMethod;
+  resolution_type?: ResolutionType;
+  return_shipping_paid_by?: 'VENDOR' | 'CUSTOMER';
   items: {
     order_item_id: string;
     component_sku: string;
@@ -100,6 +139,7 @@ export interface CreateReturnData {
     unit_price: number;
     item_condition?: string;
   }[];
+  evidence?: { url: string; description?: string }[];
 }
 
 // ============================================================================
@@ -202,10 +242,10 @@ export function useReturns() {
         (Date.now() - new Date(deliveryDate).getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      if (daysSinceDelivery > 7) {
+      if (daysSinceDelivery > 14) {
         return {
           eligible: false,
-          reason: 'Return window has expired. Returns must be requested within 7 days of delivery.',
+          reason: 'Return window has expired. Returns must be requested within 14 days of delivery.',
           days_remaining: 0,
           order_status: order.status,
           delivery_date: deliveryDate
@@ -232,7 +272,7 @@ export function useReturns() {
       return {
         eligible: true,
         reason: 'Eligible for return',
-        days_remaining: 7 - daysSinceDelivery,
+        days_remaining: 14 - daysSinceDelivery,
         order_status: order.status,
         delivery_date: deliveryDate
       };
@@ -268,6 +308,21 @@ export function useReturns() {
         return null;
       }
 
+      // Anti-abuse: cap the number of open (non-terminal) returns per customer.
+      const { count: openCount } = await supabase
+        .from('returns' as any)
+        .select('id', { count: 'exact', head: true })
+        .eq('customer_id', user.id)
+        .not('status', 'in', '(CANCELLED,REJECTED,COMPLETED)');
+      if ((openCount ?? 0) >= MAX_OPEN_RETURNS) {
+        toast({
+          title: 'Too many open returns',
+          description: `You already have ${MAX_OPEN_RETURNS} return requests in progress. Please wait for them to be resolved.`,
+          variant: 'destructive'
+        });
+        return null;
+      }
+
       // Create the return record
       const { data: returnRecord, error: returnError } = await supabase
         .from('returns' as any)
@@ -277,6 +332,8 @@ export function useReturns() {
           reason: data.reason,
           reason_details: data.reason_details || null,
           refund_method: data.refund_method,
+          resolution_type: data.resolution_type ?? null,
+          return_shipping_paid_by: data.return_shipping_paid_by ?? null,
           status: 'PENDING'
         })
         .select()
@@ -301,6 +358,17 @@ export function useReturns() {
 
       if (itemsError) {
         // Don't fail the whole operation, items might be added manually
+      }
+
+      // Attach evidence photos/videos (if any were uploaded).
+      if (data.evidence && data.evidence.length > 0) {
+        await supabase.from('return_images' as any).insert(
+          data.evidence.map((e) => ({
+            return_id: returnRecord.id,
+            image_url: e.url,
+            description: e.description ?? null,
+          })),
+        );
       }
 
       toast({
@@ -791,11 +859,7 @@ export function getReturnStatusColor(status: ReturnStatus): {
 }
 
 export function getReturnReasonLabel(reason: ReturnReason): string {
-  const labels: Record<ReturnReason, string> = {
-    DEFECTIVE: 'Defective / Damaged',
-    WRONG_ITEM: 'Wrong Item Received'
-  };
-  return labels[reason] || reason;
+  return RETURN_REASONS.find((r) => r.value === reason)?.label ?? reason;
 }
 
 export function getRefundMethodLabel(method: RefundMethod): string {
