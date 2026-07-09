@@ -1,173 +1,225 @@
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  ArrowLeft,
-  MessageCircle,
-  Phone,
-  Mail,
-  Clock,
-  Shield,
-  Package,
-  AlertTriangle
-} from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/lib/supabase';
+import { useReturns, type ReturnReason, type RefundMethod } from '@/hooks/useReturns';
+import { toast } from 'sonner';
+import { ArrowLeft, Loader2, PackageOpen, ShieldCheck, Minus, Plus } from 'lucide-react';
+
+interface OrderItemRow {
+  id: string;
+  component_sku: string;
+  component_name: string;
+  product_context: string | null;
+  quantity: number;
+  unit_price: number;
+}
+
+const REASONS: { value: ReturnReason; label: string; hint: string }[] = [
+  { value: 'DEFECTIVE', label: 'Defective or damaged', hint: 'The item arrived faulty, broken or not working.' },
+  { value: 'WRONG_ITEM', label: 'Wrong item received', hint: 'You received a different item from what you ordered.' },
+];
+
+const REFUND_METHODS: { value: RefundMethod; label: string; hint: string }[] = [
+  { value: 'ORIGINAL_PAYMENT', label: 'Refund to original payment', hint: 'Money back to how you paid.' },
+  { value: 'EXCHANGE', label: 'Exchange for the same item', hint: 'We ship a replacement.' },
+];
+
+const fmtRM = (n: number) => new Intl.NumberFormat('en-MY', { style: 'currency', currency: 'MYR' }).format(n);
 
 export default function ReturnRequest() {
-  const whatsappNumber = '60342977668';
-  const whatsappMessage = encodeURIComponent(
-    'Hi, I would like to request a return/refund for my order. My order details:\n\nOrder No: \nReason: '
-  );
+  const [params] = useSearchParams();
+  const orderId = params.get('order');
+  const navigate = useNavigate();
+  const { createReturn, checkEligibility, loading: submitting } = useReturns();
+
+  const [loadingOrder, setLoadingOrder] = useState(true);
+  const [order, setOrder] = useState<{ id: string; order_no: string; status: string } | null>(null);
+  const [items, setItems] = useState<OrderItemRow[]>([]);
+  const [eligibility, setEligibility] = useState<{ eligible: boolean; reason: string; days_remaining: number } | null>(null);
+  const [selected, setSelected] = useState<Record<string, { checked: boolean; qty: number }>>({});
+  const [reason, setReason] = useState<ReturnReason>('DEFECTIVE');
+  const [details, setDetails] = useState('');
+  const [refundMethod, setRefundMethod] = useState<RefundMethod>('ORIGINAL_PAYMENT');
+
+  useEffect(() => {
+    if (!orderId) { setLoadingOrder(false); return; }
+    (async () => {
+      setLoadingOrder(true);
+      const { data: o } = await supabase
+        .from('orders')
+        .select('id, order_no, status')
+        .eq('id', orderId)
+        .maybeSingle();
+      setOrder(o as any);
+
+      const { data: its } = await supabase
+        .from('order_items')
+        .select('id, component_sku, component_name, product_context, quantity, unit_price')
+        .eq('order_id', orderId);
+      const rows = (its as OrderItemRow[] | null) ?? [];
+      setItems(rows);
+      const sel: Record<string, { checked: boolean; qty: number }> = {};
+      rows.forEach((it) => { sel[it.id] = { checked: false, qty: it.quantity }; });
+      setSelected(sel);
+
+      setEligibility(await checkEligibility(orderId));
+      setLoadingOrder(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId]);
+
+  const chosen = items.filter((it) => selected[it.id]?.checked);
+  const refundEstimate = chosen.reduce((s, it) => s + Number(it.unit_price) * (selected[it.id]?.qty ?? 0), 0);
+
+  const setQty = (id: string, delta: number, max: number) =>
+    setSelected((prev) => ({ ...prev, [id]: { ...prev[id], qty: Math.min(max, Math.max(1, (prev[id]?.qty ?? 1) + delta)) } }));
+
+  const submit = async () => {
+    if (chosen.length === 0) { toast.error('Select at least one item to return.'); return; }
+    if (reason === 'DEFECTIVE' && details.trim().length < 5) {
+      toast.error('Please briefly describe the defect so our team can help.');
+      return;
+    }
+    const res = await createReturn({
+      order_id: orderId!,
+      reason,
+      reason_details: details.trim() || undefined,
+      refund_method: refundMethod,
+      items: chosen.map((it) => ({
+        order_item_id: it.id,
+        component_sku: it.component_sku,
+        component_name: it.component_name,
+        quantity: selected[it.id].qty,
+        unit_price: Number(it.unit_price),
+      })),
+    });
+    if (res) navigate('/my-returns');
+  };
 
   return (
-    <div className="flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-[#FAFAF8]">
       <Header />
-
-      <main className="min-h-[calc(100vh-80px)] flex-1 container mx-auto px-3 sm:px-4 py-4 sm:py-6 md:py-8 max-w-3xl">
-        {/* Back button */}
-        <Link
-          to="/my-orders"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-lime-700 mb-6 text-sm font-medium transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to My Orders
+      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-8">
+        <Link to="/my-orders" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-6">
+          <ArrowLeft className="h-4 w-4" /> Back to my orders
         </Link>
 
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="w-16 h-16 bg-lime-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Package className="h-8 w-8 text-lime-600" />
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900 uppercase italic mb-3">
-            Return & Refund
-          </h1>
-          <p className="text-gray-600 max-w-lg mx-auto">
-            For all returns and refunds, please contact our admin team directly.
-            We'll handle your request personally to ensure the best resolution.
-          </p>
+        <div className="flex items-center gap-3 mb-2">
+          <PackageOpen className="h-7 w-7 text-lime-600" />
+          <h1 className="font-heading font-bold uppercase tracking-tight text-2xl text-gray-900">Request a Return</h1>
         </div>
+        <p className="text-gray-500 text-sm mb-6">
+          Submit a return or refund request online — no need to message anyone. Our team reviews it and you can track the status in{' '}
+          <Link to="/my-returns" className="text-lime-600 font-medium hover:underline">My Returns</Link>.
+        </p>
 
-        {/* Contact Admin Card */}
-        <Card className="mb-6 border-2 border-lime-200 bg-lime-50/50">
-          <CardContent className="pt-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">
-              Contact Us for Returns
-            </h2>
+        {loadingOrder ? (
+          <div className="flex items-center justify-center py-16 text-gray-500"><Loader2 className="h-5 w-5 animate-spin mr-2" />Loading order…</div>
+        ) : !orderId || !order ? (
+          <Card><CardContent className="p-6 text-center">
+            <p className="text-gray-600 mb-4">Choose which order you'd like to return from your order history.</p>
+            <Button onClick={() => navigate('/my-orders')} className="bg-lime-600 hover:bg-lime-700 text-white">Go to My Orders</Button>
+          </CardContent></Card>
+        ) : eligibility && !eligibility.eligible ? (
+          <Card><CardContent className="p-6">
+            <p className="text-sm font-medium text-gray-900 mb-1">Order #{order.order_no}</p>
+            <div className="mt-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">{eligibility.reason}</div>
+            <Button variant="outline" onClick={() => navigate('/my-orders')} className="mt-4">Back to orders</Button>
+          </CardContent></Card>
+        ) : (
+          <div className="space-y-5">
+            <Card><CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Order #{order.order_no}</p>
+                  <p className="text-xs text-gray-500">Delivered · return window {eligibility?.days_remaining ?? 0} day(s) left</p>
+                </div>
+                <span className="inline-flex items-center gap-1 text-xs text-lime-700 bg-lime-50 border border-lime-200 rounded-full px-2.5 py-1">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Free return shipping
+                </span>
+              </div>
+            </CardContent></Card>
 
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 mb-6">
-              {/* WhatsApp - Primary */}
-              <a
-                href={`https://wa.me/${whatsappNumber}?text=${whatsappMessage}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block"
-              >
-                <div className="p-5 bg-green-50 border-2 border-green-200 rounded-xl hover:border-green-400 hover:shadow-md transition-all text-center group">
-                  <div className="w-14 h-14 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
-                    <MessageCircle className="h-7 w-7 text-white" />
+            {/* Items */}
+            <Card><CardContent className="p-5 space-y-3">
+              <p className="text-sm font-semibold text-gray-900">Which items are you returning?</p>
+              {items.map((it) => {
+                const s = selected[it.id];
+                return (
+                  <div key={it.id} className={`flex items-center gap-3 p-3 rounded-lg border ${s?.checked ? 'border-lime-300 bg-lime-50/40' : 'border-gray-200'}`}>
+                    <Checkbox
+                      checked={s?.checked ?? false}
+                      onCheckedChange={(c) => setSelected((prev) => ({ ...prev, [it.id]: { ...prev[it.id], checked: !!c } }))}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{it.component_name}</p>
+                      <p className="text-xs text-gray-500 truncate">{it.component_sku}{it.product_context ? ` · ${it.product_context}` : ''}</p>
+                      <p className="text-xs text-gray-500">{fmtRM(Number(it.unit_price))} · ordered {it.quantity}</p>
+                    </div>
+                    {s?.checked && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => setQty(it.id, -1, it.quantity)}><Minus className="h-3.5 w-3.5" /></Button>
+                        <span className="w-6 text-center text-sm tabular-nums">{s.qty}</span>
+                        <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => setQty(it.id, 1, it.quantity)}><Plus className="h-3.5 w-3.5" /></Button>
+                      </div>
+                    )}
                   </div>
-                  <h3 className="font-bold text-green-800 text-lg mb-1">WhatsApp</h3>
-                  <p className="text-sm text-green-700 font-medium">Fastest Response</p>
-                  <p className="text-xs text-green-600 mt-2">Tap to chat with us</p>
-                </div>
-              </a>
+                );
+              })}
+            </CardContent></Card>
 
-              {/* Phone */}
-              <a href="tel:+60342977668" className="block">
-                <div className="p-5 bg-blue-50 border-2 border-blue-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all text-center group">
-                  <div className="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
-                    <Phone className="h-7 w-7 text-white" />
-                  </div>
-                  <h3 className="font-bold text-blue-800 text-lg mb-1">Call Us</h3>
-                  <p className="text-sm text-blue-700 font-medium">03-4297 7668</p>
-                  <p className="text-xs text-blue-600 mt-2">Mon-Fri, 9am-6pm</p>
-                </div>
-              </a>
-            </div>
+            {/* Reason */}
+            <Card><CardContent className="p-5 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-gray-900">Reason for return</Label>
+                <Select value={reason} onValueChange={(v) => setReason(v as ReturnReason)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {REASONS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">{REASONS.find((r) => r.value === reason)?.hint}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-gray-900">Details {reason === 'DEFECTIVE' && <span className="text-red-500">*</span>}</Label>
+                <Textarea value={details} onChange={(e) => setDetails(e.target.value)} placeholder="Tell us what's wrong (and anything that helps us resolve it faster)…" rows={3} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-gray-900">Preferred resolution</Label>
+                <Select value={refundMethod} onValueChange={(v) => setRefundMethod(v as RefundMethod)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {REFUND_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">{REFUND_METHODS.find((m) => m.value === refundMethod)?.hint}</p>
+              </div>
+            </CardContent></Card>
 
-            {/* Email */}
-            <a
-              href="mailto:support@autolab.my?subject=Return%20Request&body=Order%20No%3A%20%0AReason%3A%20"
-              className="block w-full"
-            >
-              <div className="p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:shadow-sm transition-all flex items-center gap-4">
-                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Mail className="h-6 w-6 text-gray-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-800">Email Support</h3>
-                  <p className="text-sm text-gray-600">support@autolab.my</p>
-                </div>
-                <span className="text-xs text-gray-400">Reply within 24hrs</span>
+            {/* Summary + submit */}
+            <Card><CardContent className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-sm text-gray-600">{chosen.length} item(s) selected</span>
+                {refundMethod === 'ORIGINAL_PAYMENT' && (
+                  <span className="text-sm">Estimated refund: <span className="font-semibold">{fmtRM(refundEstimate)}</span></span>
+                )}
               </div>
-            </a>
-          </CardContent>
-        </Card>
-
-        {/* What to prepare */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Shield className="h-5 w-5 text-lime-600" />
-              When Contacting Us, Please Prepare:
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
-                <div>
-                  <p className="font-medium text-gray-800">Your Order Number</p>
-                  <p className="text-sm text-gray-500">Found in your order history or confirmation email</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
-                <div>
-                  <p className="font-medium text-gray-800">Reason for Return</p>
-                  <p className="text-sm text-gray-500">Defective product, wrong item received, etc.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                <span className="w-6 h-6 bg-lime-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
-                <div>
-                  <p className="font-medium text-gray-800">Photos of the Issue</p>
-                  <p className="text-sm text-gray-500">Take clear photos showing the defect or wrong item</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Policy summary */}
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="pt-6">
-            <h3 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
-              Return Policy Summary
-            </h3>
-            <ul className="space-y-2 text-sm text-amber-800">
-              <li className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-amber-600 flex-shrink-0" />
-                Returns accepted within 7 days of delivery
-              </li>
-              <li className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-amber-600 flex-shrink-0" />
-                Only for defective or wrong items (no change of mind)
-              </li>
-              <li className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-amber-600 flex-shrink-0" />
-                Items must be in original condition
-              </li>
-            </ul>
-            <Link to="/return-policy" className="inline-block mt-4">
-              <Button variant="outline" size="sm" className="border-amber-300 text-amber-800 hover:bg-amber-100">
-                View Full Return Policy
+              <Button onClick={submit} disabled={submitting || chosen.length === 0} className="w-full bg-lime-600 hover:bg-lime-700 text-white h-11">
+                {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting…</> : 'Submit return request'}
               </Button>
-            </Link>
-          </CardContent>
-        </Card>
+              <p className="text-[11px] text-gray-400 text-center mt-2">The final refund amount is confirmed by our team after review.</p>
+            </CardContent></Card>
+          </div>
+        )}
       </main>
-
       <Footer />
     </div>
   );

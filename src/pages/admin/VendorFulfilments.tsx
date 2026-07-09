@@ -13,8 +13,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from '@/components/ui/sheet';
+import {
   Truck, CheckCircle2, Clock, PlayCircle, XCircle, Package, Search, Loader2,
-  AlertTriangle, ExternalLink, RefreshCw,
+  AlertTriangle, ExternalLink, RefreshCw, Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -105,6 +108,24 @@ export default function VendorFulfilments() {
   const [vendorFilter, setVendorFilter] = useState<string>('all');
   const [stuckThreshold, setStuckThreshold] = useState<'off' | '24' | '72' | '168'>('off');
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+
+  // Inline detail drawer (view a fulfilment without leaving the page).
+  const [detailRow, setDetailRow] = useState<FulfilmentRow | null>(null);
+  const [detailItems, setDetailItems] = useState<{ component_name: string; component_sku: string; quantity: number; unit_price: number; total_price: number }[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const openDetail = async (r: FulfilmentRow) => {
+    setDetailRow(r);
+    setDetailItems([]);
+    setDetailLoading(true);
+    const { data } = await supabase
+      .from('order_items' as any)
+      .select('component_name, component_sku, quantity, unit_price, total_price')
+      .eq('order_id', r.order_id)
+      .eq('vendor_id', r.vendor_id);
+    setDetailItems((data as any[]) ?? []);
+    setDetailLoading(false);
+  };
 
   // Live tick to keep relative times honest
   const [, setTick] = useState(0);
@@ -364,10 +385,8 @@ export default function VendorFulfilments() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button asChild size="sm" variant="ghost" className="h-8 w-8 p-0" title="Open in Orders">
-                            <Link to={`/admin/orders?expand=${r.order_id}`}>
-                              <ExternalLink className="h-4 w-4" />
-                            </Link>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" title="View details" onClick={() => openDetail(r)}>
+                            <Eye className="h-4 w-4" />
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -379,6 +398,73 @@ export default function VendorFulfilments() {
           )}
         </CardContent>
       </Card>
+
+      {/* Inline fulfilment detail */}
+      <Sheet open={!!detailRow} onOpenChange={(o) => !o && setDetailRow(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          {detailRow && (
+            <>
+              <SheetHeader>
+                <SheetTitle>Order #{detailRow.orders?.order_no ?? detailRow.order_id.slice(0, 8).toUpperCase()}</SheetTitle>
+                <SheetDescription>
+                  {detailRow.vendors?.business_name ?? 'Vendor'} · {STATUS_META[detailRow.status].label}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="mt-4 space-y-4 text-sm">
+                <div className="rounded-lg border p-3">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">Customer</div>
+                  <div className="font-medium">{detailRow.orders?.customer_name ?? '—'}</div>
+                  {detailRow.orders?.customer_phone && (
+                    <a href={`tel:${detailRow.orders.customer_phone}`} className="text-lime-700 hover:underline">{detailRow.orders.customer_phone}</a>
+                  )}
+                </div>
+
+                <div className="rounded-lg border p-3 space-y-1.5">
+                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={detailRow.status} /></div>
+                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Placed</span><span>{formatRelative(detailRow.orders?.created_at)}</span></div>
+                  {detailRow.shipped_at && <div className="flex items-center justify-between"><span className="text-muted-foreground">Shipped</span><span>{formatRelative(detailRow.shipped_at)}</span></div>}
+                  {detailRow.delivered_at && <div className="flex items-center justify-between"><span className="text-muted-foreground">Delivered</span><span>{formatRelative(detailRow.delivered_at)}</span></div>}
+                  {detailRow.tracking_number && (
+                    <div className="flex items-center justify-between"><span className="text-muted-foreground">Tracking</span><span className="font-mono text-xs">{detailRow.tracking_number}{detailRow.tracking_provider ? ` · ${detailRow.tracking_provider}` : ''}</span></div>
+                  )}
+                </div>
+
+                <div className="rounded-lg border">
+                  <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase border-b">Items in this fulfilment</div>
+                  {detailLoading ? (
+                    <div className="p-3 text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Loading…</div>
+                  ) : detailItems.length === 0 ? (
+                    <div className="p-3 text-muted-foreground">No items.</div>
+                  ) : (
+                    <div className="divide-y">
+                      {detailItems.map((it, i) => (
+                        <div key={i} className="flex items-center justify-between px-3 py-2 gap-3">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{it.component_name}</div>
+                            <div className="text-xs text-muted-foreground">{it.component_sku} · × {it.quantity}</div>
+                          </div>
+                          <div className="text-right whitespace-nowrap">{formatRM(Number(it.total_price ?? it.unit_price * it.quantity))}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-3 py-2 border-t font-semibold">
+                    <span>Subtotal</span>
+                    <span>{formatRM(detailItems.reduce((s, i) => s + Number(i.total_price ?? i.unit_price * i.quantity), 0))}</span>
+                  </div>
+                </div>
+
+                <Button asChild variant="outline" className="w-full">
+                  <Link to={`/admin/orders?expand=${detailRow.order_id}`}>
+                    <ExternalLink className="h-4 w-4 mr-2" />Open full order
+                  </Link>
+                </Button>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

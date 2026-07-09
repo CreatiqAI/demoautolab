@@ -78,6 +78,8 @@ export default function Vendors() {
 
   // Drawer
   const [drawerVendor, setDrawerVendor] = useState<VendorRow | null>(null);
+  const [commForm, setCommForm] = useState({ commission_rate: '', default_shipping_fee: '' });
+  const [savingComm, setSavingComm] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Reject dialog
@@ -259,7 +261,39 @@ export default function Vendors() {
 
   const openDrawer = (vendor: VendorRow) => {
     setDrawerVendor(vendor);
+    setCommForm({
+      commission_rate: String(vendor.commission_rate ?? ''),
+      default_shipping_fee: String(vendor.default_shipping_fee ?? ''),
+    });
     setDrawerOpen(true);
+  };
+
+  const saveCommercial = async () => {
+    if (!drawerVendor) return;
+    const comm = Number(commForm.commission_rate);
+    const ship = Number(commForm.default_shipping_fee);
+    if (isNaN(comm) || comm < 0 || comm > 100) {
+      toast({ title: 'Invalid commission', description: 'Commission must be between 0 and 100.', variant: 'destructive' });
+      return;
+    }
+    if (isNaN(ship) || ship < 0) {
+      toast({ title: 'Invalid shipping fee', description: 'Shipping fee must be 0 or more.', variant: 'destructive' });
+      return;
+    }
+    setSavingComm(true);
+    try {
+      const { error } = await supabase
+        .from('vendors' as any)
+        .update({ commission_rate: comm, default_shipping_fee: ship } as any)
+        .eq('id', drawerVendor.id);
+      if (error) throw error;
+      patch(drawerVendor.id, { commission_rate: comm, default_shipping_fee: ship });
+      toast({ title: 'Commercial terms updated', description: `${drawerVendor.business_name}: ${comm}% commission.`, variant: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Update failed', description: err?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setSavingComm(false);
+    }
   };
 
   const handleApprove = async () => {
@@ -602,11 +636,47 @@ export default function Vendors() {
                   )}
                 </div>
 
-                {/* Commercial */}
-                <div className="rounded-lg border p-4 space-y-2 bg-purple-50/30">
+                {/* Commercial — editable */}
+                <div className="rounded-lg border p-4 space-y-3 bg-purple-50/30">
                   <div className="text-xs font-semibold text-muted-foreground uppercase">Commercial terms</div>
-                  <Row label="Commission rate">{drawerVendor.commission_rate}%</Row>
-                  <Row label="Default shipping fee">RM {drawerVendor.default_shipping_fee.toFixed(2)}</Row>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="vd-comm" className="text-xs text-gray-500">Commission rate (%)</Label>
+                      <Input
+                        id="vd-comm"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.01}
+                        value={commForm.commission_rate}
+                        onChange={(e) => setCommForm((f) => ({ ...f, commission_rate: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="vd-ship" className="text-xs text-gray-500">Default shipping fee (RM)</Label>
+                      <Input
+                        id="vd-ship"
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={commForm.default_shipping_fee}
+                        onChange={(e) => setCommForm((f) => ({ ...f, default_shipping_fee: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  {(() => {
+                    const changed =
+                      Number(commForm.commission_rate) !== Number(drawerVendor.commission_rate) ||
+                      Number(commForm.default_shipping_fee) !== Number(drawerVendor.default_shipping_fee);
+                    return (
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={saveCommercial} disabled={savingComm || !changed}>
+                          {savingComm ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                          Save terms
+                        </Button>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Past rejection / suspension reason */}

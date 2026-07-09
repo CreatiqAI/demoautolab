@@ -75,6 +75,9 @@ export default function ComponentLibraryPro() {
   const [deletedComponents, setDeletedComponents] = useState<ComponentItem[]>([]);
   const [activeTab, setActiveTab] = useState('active');
   const [duplicateSkus, setDuplicateSkus] = useState<{sku: string; count: number; items: ComponentItem[]}[]>([]);
+  // Render the list in windows so 1,000+ components don't all mount at once.
+  const PAGE_SIZE = 80;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -166,6 +169,11 @@ export default function ComponentLibraryPro() {
 
     return () => clearTimeout(delayedSearch);
   }, [searchTerm, components]);
+
+  // Reset the visible window whenever the result set changes (new search / tab).
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchResults]);
 
   const fetchComponents = async () => {
     try {
@@ -796,7 +804,7 @@ export default function ComponentLibraryPro() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {searchResults.map((component, index) => {
+                {searchResults.slice(0, visibleCount).map((component, index) => {
                   const typeIcon = getTypeIcon(component.component_type);
                   return (
                     <TableRow key={component.id} id={`component-row-${component.id}`} className={`transition-colors duration-700 ${highlightedId === component.id ? 'bg-lime-100' : batchDeleteIds.has(component.id) ? 'bg-red-50/50' : ''}`}>
@@ -914,6 +922,17 @@ export default function ComponentLibraryPro() {
                 })}
               </TableBody>
             </Table>
+            </div>
+          )}
+
+          {!loading && searchResults.length > visibleCount && (
+            <div className="flex flex-col items-center gap-2 py-5 border-t">
+              <p className="text-xs text-muted-foreground">
+                Showing {Math.min(visibleCount, searchResults.length)} of {searchResults.length}
+              </p>
+              <Button variant="outline" size="sm" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
+                Load more
+              </Button>
             </div>
           )}
 
