@@ -45,6 +45,8 @@ export default function UserManagement() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ email: '', fullName: '', password: '', role: 'admin' });
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Only the master admin (super_admin) may provision new admin accounts.
@@ -122,35 +124,62 @@ export default function UserManagement() {
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     const email = form.email.trim().toLowerCase();
-    if (!email || !form.fullName.trim() || form.password.length < 8) {
+    if (!email || !form.fullName.trim()) {
       toast({
         title: 'Missing details',
-        description: 'Enter an email, a full name, and a password of at least 8 characters.',
+        description: 'Enter an email and a full name.',
         variant: 'destructive',
       });
       return;
     }
     setCreating(true);
     try {
-      // Provision a REAL Supabase Auth user (with the admin role in app_metadata)
-      // via a service-role edge function that verifies the caller is an admin.
-      // The caller's JWT is attached automatically by functions.invoke.
+      // Provision a REAL Supabase Auth user (admin role in app_metadata) with NO
+      // known password; the edge function returns a one-time set-password link the
+      // invitee uses to choose their own. The caller's JWT is attached automatically.
       const { data, error } = await supabase.functions.invoke('provision-admin', {
-        body: { email, password: form.password, fullName: form.fullName.trim(), role: form.role },
+        body: {
+          email,
+          fullName: form.fullName.trim(),
+          role: form.role,
+          redirectTo: `${window.location.origin}/admin/set-password`,
+        },
       });
       if (error) throw error;
       if (data && data.success === false) {
         toast({ title: 'Could not create admin', description: data.message || 'Failed to create admin.', variant: 'destructive' });
         return;
       }
-      toast({ title: 'Admin created', description: `${email} can now sign in at /admin-login with their password.` });
-      setIsAddOpen(false);
-      setForm({ email: '', fullName: '', password: '', role: 'admin' });
       fetchUsers();
+      if (data?.inviteLink) {
+        setInviteLink(data.inviteLink);
+        setInvitedEmail(email);
+        toast({ title: 'Admin invited', description: `Copy the set-password link and send it to ${email}.` });
+      } else {
+        toast({ title: 'Admin created', description: data?.message || 'Invite link unavailable — the invitee can use "Forgot password" on the sign-in page.' });
+        closeAddDialog();
+      }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message || 'Failed to create admin.', variant: 'destructive' });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const closeAddDialog = () => {
+    setIsAddOpen(false);
+    setInviteLink(null);
+    setInvitedEmail(null);
+    setForm({ email: '', fullName: '', password: '', role: 'admin' });
+  };
+
+  const copyInviteLink = async () => {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      toast({ title: 'Copied', description: 'Set-password link copied to clipboard.' });
+    } catch {
+      toast({ title: 'Copy failed', description: 'Select and copy the link manually.', variant: 'destructive' });
     }
   };
 
@@ -230,7 +259,7 @@ export default function UserManagement() {
         <Shield className="h-4 w-4" />
         <AlertDescription>
           {canManageAdmins
-            ? 'As the master admin you can add new admin accounts here. New admins sign in with their email and password.'
+            ? 'As the master admin you can invite new admins here. Each invitee gets a one-time link to set their own password.'
             : 'Only the master admin can create or remove admin accounts.'}
         </AlertDescription>
       </Alert>
@@ -334,50 +363,65 @@ export default function UserManagement() {
       </Card>
 
       {/* Add Admin Dialog — master admin only */}
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+      <Dialog open={isAddOpen} onOpenChange={(open) => { if (!open) closeAddDialog(); else setIsAddOpen(true); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Admin</DialogTitle>
+            <DialogTitle>{inviteLink ? 'Admin invited' : 'Add Admin'}</DialogTitle>
             <DialogDescription>
-              Create a new admin account. They sign in on the admin tab with this email and password.
+              {inviteLink
+                ? 'Send this one-time link to the new admin. They open it to set their own password — then sign in on the admin tab.'
+                : 'Enter the new admin’s email, name and role. They’ll get a link to set their own password (no password needed from you).'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateAdmin} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="admin-email">Email</Label>
-              <Input id="admin-email" type="email" required value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="name@company.com" />
+
+          {inviteLink ? (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Set-password link{invitedEmail ? ` for ${invitedEmail}` : ''}</Label>
+                <div className="flex gap-2">
+                  <Input readOnly value={inviteLink} onFocus={(e) => e.currentTarget.select()} className="text-xs" />
+                  <Button type="button" onClick={copyInviteLink}>Copy</Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This link expires and can only be used once. If it expires, the invitee can use “Forgot password” on the sign-in page.
+                </p>
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button type="button" onClick={closeAddDialog}>Done</Button>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="admin-name">Full name</Label>
-              <Input id="admin-name" required value={form.fullName}
-                onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
-                placeholder="Jane Doe" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="admin-pass">Password</Label>
-              <Input id="admin-pass" type="password" required minLength={8} value={form.password}
-                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                placeholder="At least 8 characters" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Role</Label>
-              <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="support">Support</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={creating}>
-                {creating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Admin'}
-              </Button>
-            </div>
-          </form>
+          ) : (
+            <form onSubmit={handleCreateAdmin} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="admin-email">Email</Label>
+                <Input id="admin-email" type="email" required value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="name@company.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="admin-name">Full name</Label>
+                <Input id="admin-name" required value={form.fullName}
+                  onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                  placeholder="Jane Doe" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="support">Support</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={closeAddDialog}>Cancel</Button>
+                <Button type="submit" disabled={creating}>
+                  {creating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Inviting…</> : 'Send Invite'}
+                </Button>
+              </div>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 

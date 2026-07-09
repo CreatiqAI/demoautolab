@@ -39,6 +39,7 @@ import UserSettings from './pages/Settings';
 // Admin Components
 import AdminLayout from './components/admin/AdminLayout';
 import ProtectedAdminRoute from './components/admin/ProtectedAdminRoute';
+import SetAdminPassword from './pages/SetAdminPassword';
 import Dashboard from './pages/admin/Dashboard';
 import ComponentLibraryPro from './pages/admin/ComponentLibraryPro';
 import ProductsPro from './pages/admin/ProductsPro';
@@ -137,6 +138,8 @@ const App = () => (
                   <Route path="/payment-gateway" element={<PaymentGateway />} />
                   <Route path="/register" element={<Register />} />
                   <Route path="/admin-login" element={<Navigate to="/admin" replace />} />
+                  {/* Invited admins set their own password here (recovery link target) */}
+                  <Route path="/admin/set-password" element={<SetAdminPassword />} />
                   <Route path="/merchant-register" element={<MerchantRegister />} />
                   <Route path="/premium-partner" element={<PremiumPartner />} />
                   <Route path="/merchant/dashboard" element={<MerchantConsole />} />
