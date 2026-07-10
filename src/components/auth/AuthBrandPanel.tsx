@@ -48,13 +48,13 @@ export default function AuthBrandPanel({
           <p className="text-gray-300 text-base leading-relaxed max-w-sm">{subtitle}</p>
           <div className="flex items-center gap-6 mt-8">
             <div>
-              <div className="font-heading text-3xl font-black text-lime-400">17+</div>
+              <div className="font-heading text-3xl font-black text-lime-400">19+</div>
               <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Years</div>
             </div>
             <div className="w-px h-10 bg-white/15"></div>
             <div>
-              <div className="font-heading text-3xl font-black text-lime-400">10+</div>
-              <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Partners</div>
+              <div className="font-heading text-3xl font-black text-lime-400">500+</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Dealers</div>
             </div>
             <div className="w-px h-10 bg-white/15"></div>
             <div>

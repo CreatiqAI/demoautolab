@@ -22,13 +22,13 @@ const staggerContainer: Variants = {
 
 const MILESTONES = [
     { year: "2007", title: "Auto Lab is founded", desc: "A parts distribution centre opens in Cheras, KL." },
-    { year: "Today", title: "10+ partners", desc: "From boutique shops to major service centres nationwide." },
-    { year: "2026", title: "12V switches on", desc: "Seventeen years of supply, one premium accessories brand." }
+    { year: "Today", title: "500+ dealers", desc: "From boutique shops to major service centres nationwide." },
+    { year: "2026", title: "12V switches on", desc: "Nineteen years of supply, one premium accessories brand." }
 ];
 
 const STATS = [
-    { to: 17, suffix: "+", label: "Years Experience" },
-    { to: 10, suffix: "+", label: "Retail Partners" },
+    { to: 19, suffix: "+", label: "Years Experience" },
+    { to: 500, suffix: "+", label: "Dealers" },
     { to: 10, suffix: "K+", label: "Products Supplied" },
     { to: 100, suffix: "%", label: "Vetted Quality" }
 ];
@@ -212,7 +212,7 @@ const About = () => {
                                     right across Malaysia.
                                 </p>
                                 <p>
-                                    Seventeen years of sourcing and testing built a network we trust and an eye for what lasts.
+                                    Nineteen years of sourcing and testing built a network we trust and an eye for what lasts.
                                     <span className="text-white"> 12V is that experience, meeting you directly — same warehouse,
                                     same engineers, a higher standard.</span>
                                 </p>
@@ -308,7 +308,7 @@ const About = () => {
                     >
                         <p className="text-[11px] uppercase tracking-[0.4em] text-gray-400 font-semibold mb-5">The journey</p>
                         <h2 className="font-heading font-bold uppercase tracking-tight text-4xl md:text-5xl text-gray-900">
-                            Seventeen years, three chapters.
+                            Nineteen years, three chapters.
                         </h2>
                     </motion.div>
                     <JourneyTimeline />
@@ -398,7 +398,7 @@ const About = () => {
                     >
                         <span aria-hidden className="font-heading font-black text-6xl text-lime-500 leading-none block mb-4 select-none">&ldquo;</span>
                         <blockquote className="font-heading font-medium normal-case text-2xl sm:text-3xl md:text-[2.4rem] text-gray-900 leading-[1.3] tracking-tight">
-                            We spent seventeen years making sure other people's shelves held the right parts.
+                            We spent nineteen years making sure other people's shelves held the right parts.
                             <span className="text-gray-400"> 12V is us finally putting our own name on the standard we always kept.</span>
                         </blockquote>
                         <figcaption className="mt-9 flex items-center gap-4">

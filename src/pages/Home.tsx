@@ -351,8 +351,8 @@ const Home = () => {
         <div className="container mx-auto px-6">
           <div className="grid md:grid-cols-3 gap-12 md:gap-8 max-w-5xl mx-auto">
             {[
-              { n: 17, suffix: "+", label: "Years of Auto Lab", desc: "Supply-chain experience behind every order since 2007." },
-              { n: 10, suffix: "+", label: "Merchant Partners", desc: "Wholesale tier pricing for shops across Malaysia." },
+              { n: 19, suffix: "+", label: "Years of Auto Lab", desc: "Supply-chain experience behind every order since 2007." },
+              { n: 500, suffix: "+", label: "Dealers", desc: "Wholesale tier pricing for shops across Malaysia." },
               { n: 100, suffix: "%", label: "Vetted Quality", desc: "Every product line is checked and approved by Auto Lab engineers before it reaches you." }
             ].map((stat, idx) => (
               <motion.div

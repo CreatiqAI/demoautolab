@@ -91,9 +91,9 @@ export default function HeroImage() {
 
           {/* Trust row */}
           <motion.div variants={item} className="flex items-center gap-6 sm:gap-8 mt-11 font-mono text-[11px] tracking-widest text-white/55">
-            <span><span className="text-lime-400">17+</span> YEARS</span>
+            <span><span className="text-lime-400">19+</span> YEARS</span>
             <span className="w-px h-3 bg-white/20"></span>
-            <span><span className="text-lime-400">10+</span> MERCHANTS</span>
+            <span><span className="text-lime-400">500+</span> DEALERS</span>
             <span className="w-px h-3 bg-white/20"></span>
             <span><span className="text-lime-400">100%</span> VETTED</span>
           </motion.div>
