@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import ImageUpload from '@/components/ui/image-upload';
 import { transformImage } from '@/lib/imageTransform';
-import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock, RotateCcw, AlertTriangle, Copy, ChevronUp, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Tag, Layers, Search, DollarSign, PackagePlus, Clock, RotateCcw, AlertTriangle, Copy, ChevronUp, X, Pencil } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -55,6 +55,13 @@ function formatTimeAgo(dateString: string): string {
   return date.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
 }
 
+type PriceField = 'normal_price' | 'merchant_price';
+
+const PRICE_LABEL: Record<PriceField, string> = {
+  normal_price: 'Normal price',
+  merchant_price: 'Merchant price'
+};
+
 export default function ComponentLibraryPro() {
   const [components, setComponents] = useState<ComponentItem[]>([]);
   const [componentTypes, setComponentTypes] = useState<string[]>([]);
@@ -67,6 +74,13 @@ export default function ComponentLibraryPro() {
   const [newTypeName, setNewTypeName] = useState('');
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
   const [selectedComponent, setSelectedComponent] = useState<ComponentItem | null>(null);
+  // Inline price editing straight from the listing (no dialog round-trip).
+  const [editingPrice, setEditingPrice] = useState<{ id: string; field: PriceField } | null>(null);
+  const [priceDraft, setPriceDraft] = useState('');
+  const [savingPrice, setSavingPrice] = useState(false);
+  // Enter/Escape close the editor themselves; swallow the blur they trigger so
+  // the value is never saved twice (or saved after an explicit cancel).
+  const skipPriceBlur = useRef(false);
   const [stockAdjustment, setStockAdjustment] = useState({ type: 'add', quantity: 0, reason: '' });
   const [batchDeleteIds, setBatchDeleteIds] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
@@ -372,6 +386,123 @@ export default function ComponentLibraryPro() {
         });
       }
     }
+  };
+
+  const startPriceEdit = (component: ComponentItem, field: PriceField) => {
+    skipPriceBlur.current = false;
+    setEditingPrice({ id: component.id, field });
+    setPriceDraft(String(component[field] ?? 0));
+  };
+
+  const cancelPriceEdit = () => {
+    setEditingPrice(null);
+    setPriceDraft('');
+  };
+
+  const commitPriceEdit = async (component: ComponentItem, field: PriceField) => {
+    if (savingPrice) return;
+    const next = parseFloat(priceDraft);
+
+    if (Number.isNaN(next) || next < 0) {
+      toast({
+        title: 'Invalid price',
+        description: 'Enter a number of 0 or more.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Nothing changed — just close the editor without a round-trip.
+    if (next === Number(component[field])) {
+      cancelPriceEdit();
+      return;
+    }
+
+    setSavingPrice(true);
+    try {
+      const updatedAt = new Date().toISOString();
+      const { error } = await supabase
+        .from('component_library' as any)
+        .update({ [field]: next, updated_at: updatedAt })
+        .eq('id', component.id);
+
+      if (error) throw error;
+
+      const patch = (list: ComponentItem[]) =>
+        list.map(c => (c.id === component.id ? { ...c, [field]: next, updated_at: updatedAt } : c));
+      setComponents(patch);
+      setSearchResults(patch);
+
+      toast({
+        title: 'Price updated',
+        description: `${component.component_sku} — ${PRICE_LABEL[field]} set to RM${next.toFixed(2)}`
+      });
+      cancelPriceEdit();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update price',
+        variant: 'destructive'
+      });
+    } finally {
+      setSavingPrice(false);
+    }
+  };
+
+  const renderPriceCell = (component: ComponentItem, field: PriceField) => {
+    const isActive = editingPrice?.id === component.id && editingPrice.field === field;
+    const muted = field === 'merchant_price';
+
+    if (isActive) {
+      return (
+        <div className="flex items-center gap-1">
+          <span className="text-sm text-muted-foreground">RM</span>
+          <Input
+            autoFocus
+            type="number"
+            step="0.01"
+            min="0"
+            disabled={savingPrice}
+            value={priceDraft}
+            onChange={(e) => setPriceDraft(e.target.value)}
+            onBlur={() => {
+              if (skipPriceBlur.current) {
+                skipPriceBlur.current = false;
+                return;
+              }
+              commitPriceEdit(component, field);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                skipPriceBlur.current = true;
+                commitPriceEdit(component, field);
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                skipPriceBlur.current = true;
+                cancelPriceEdit();
+              }
+            }}
+            className="h-8 w-24 tabular-nums"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => startPriceEdit(component, field)}
+        title={`Click to edit ${PRICE_LABEL[field].toLowerCase()}`}
+        className={`group flex items-center gap-1 rounded px-1 -mx-1 py-0.5 text-left transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${muted ? 'text-muted-foreground' : ''}`}
+      >
+        <span className="text-sm">RM</span>
+        <span className={`tabular-nums ${muted ? '' : 'font-medium'}`}>
+          {Number(component[field] ?? 0).toFixed(2)}
+        </span>
+        <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+      </button>
+    );
   };
 
   const handleEdit = (component: ComponentItem) => {
@@ -864,16 +995,10 @@ export default function ComponentLibraryPro() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center">
-                          <span className="text-sm">RM</span>
-                          <span className="ml-1 font-medium">{component.normal_price.toFixed(2)}</span>
-                        </div>
+                        {renderPriceCell(component, 'normal_price')}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center text-muted-foreground">
-                          <span className="text-sm">RM</span>
-                          <span className="ml-1">{component.merchant_price.toFixed(2)}</span>
-                        </div>
+                        {renderPriceCell(component, 'merchant_price')}
                       </TableCell>
                       <TableCell>
                         {component.updated_at ? (
