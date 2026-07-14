@@ -61,13 +61,15 @@ CREATE POLICY site_settings_public_read
   ON site_settings FOR SELECT
   USING (true);
 
--- NOTE: admin auth in this app is still client-side (localStorage), so admin writes
--- arrive on the anon key and this policy has to accept them. It is as tight as the
--- current auth model allows and no looser than the rest of the schema. Tighten to
--- `TO authenticated` once admins are real Supabase users.
+-- Only admins may edit. Admins are real Supabase Auth users with their role in
+-- app_metadata, so is_admin() is authoritative here — same pattern as categories,
+-- car_makes and every other admin-written table.
 DROP POLICY IF EXISTS site_settings_write ON site_settings;
-CREATE POLICY site_settings_write
+DROP POLICY IF EXISTS site_settings_admin_update ON site_settings;
+CREATE POLICY site_settings_admin_update
   ON site_settings FOR UPDATE
-  USING (true) WITH CHECK (true);
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
 
 INSERT INTO site_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
