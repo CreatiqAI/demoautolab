@@ -1,7 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Phone, MessageCircle, Mail, MapPin, Facebook, Instagram } from 'lucide-react';
+import { useSiteSettings, formatOfficeHour, toDialable } from '@/hooks/useSiteSettings';
 
 const Footer = () => {
+  const { settings } = useSiteSettings();
+  const cityLine = [settings.address_city, settings.address_state].filter(Boolean).join(', ');
+
   return (
     <footer className="bg-gray-900 text-white">
       {/* Main Footer */}
@@ -45,25 +49,37 @@ const Footer = () => {
           <div>
             <h4 className="font-heading text-sm font-bold uppercase tracking-widest text-white mb-6">Customer Service</h4>
             <div className="space-y-4">
-              <a href="tel:0342977668" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
-                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                  <Phone className="w-4 h-4" />
+              {settings.phone && (
+                <a href={`tel:${toDialable(settings.phone)}`} className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
+                  <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  {settings.phone}
+                </a>
+              )}
+              {settings.email && (
+                <a href={`mailto:${settings.email}`} className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
+                  <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  {settings.email}
+                </a>
+              )}
+              {cityLine && (
+                <div className="flex items-center gap-3 text-gray-400 text-sm">
+                  <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  {cityLine}
                 </div>
-                03-4297 7668
-              </a>
-              <a href="mailto:support@autolab.my" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
-                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                  <Mail className="w-4 h-4" />
+              )}
+              {settings.office_hours.length > 0 && (
+                <div className="pl-11 space-y-0.5">
+                  {settings.office_hours.map((hour, i) => (
+                    <p key={i} className="text-gray-500 text-xs">{formatOfficeHour(hour)}</p>
+                  ))}
                 </div>
-                support@autolab.my
-              </a>
-              <div className="flex items-center gap-3 text-gray-400 text-sm">
-                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                Cheras, Kuala Lumpur
-              </div>
-              <p className="text-gray-500 text-xs pl-11">Hours: Mon-Sat 9AM-6PM</p>
+              )}
             </div>
           </div>
 
@@ -71,24 +87,30 @@ const Footer = () => {
           <div>
             <h4 className="font-heading text-sm font-bold uppercase tracking-widest text-white mb-6">Follow Us</h4>
             <div className="space-y-4">
-              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
-                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                  <Facebook className="w-4 h-4" />
-                </div>
-                Facebook
-              </a>
-              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
-                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                  <Instagram className="w-4 h-4" />
-                </div>
-                Instagram
-              </a>
-              <a href="#" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
-                <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
-                  <MessageCircle className="w-4 h-4" />
-                </div>
-                WhatsApp
-              </a>
+              {settings.facebook_url && (
+                <a href={settings.facebook_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
+                  <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                    <Facebook className="w-4 h-4" />
+                  </div>
+                  Facebook
+                </a>
+              )}
+              {settings.instagram_url && (
+                <a href={settings.instagram_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
+                  <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                    <Instagram className="w-4 h-4" />
+                  </div>
+                  Instagram
+                </a>
+              )}
+              {settings.whatsapp && (
+                <a href={`https://wa.me/${toDialable(settings.whatsapp).replace(/^\+/, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm">
+                  <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center">
+                    <MessageCircle className="w-4 h-4" />
+                  </div>
+                  WhatsApp
+                </a>
+              )}
             </div>
           </div>
         </div>

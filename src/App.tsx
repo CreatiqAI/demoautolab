@@ -44,9 +44,9 @@ import Orders from './pages/admin/Orders';
 import ArchivedOrders from './pages/admin/ArchivedOrders';
 import Customers from './pages/admin/Customers';
 import Settings from './pages/admin/Settings';
+import SiteSettings from './pages/admin/SiteSettings';
 import UserManagement from './pages/admin/UserManagement';
 import WarehouseOperations from './pages/admin/WarehouseOperations';
-import KnowledgeBase from './pages/admin/KnowledgeBase';
 import InventoryAlerts from './pages/admin/InventoryAlerts';
 import VoucherManagement from './pages/admin/VoucherManagement';
 import ReviewModeration from './pages/admin/ReviewModeration';
@@ -79,6 +79,8 @@ import Salesmen from './pages/admin/Salesmen';
 import ReturnRequest from './pages/ReturnRequest';
 import MyReturns from './pages/MyReturns';
 import ReturnPolicy from './pages/ReturnPolicy';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 import AdminReturns from './pages/admin/Returns';
 
 // Warehouse Pages
@@ -153,6 +155,10 @@ const App = () => (
                   <Route path="/my-returns" element={<MyReturns />} />
                   <Route path="/return-policy" element={<ReturnPolicy />} />
 
+                  {/* Legal */}
+                  <Route path="/privacy" element={<Privacy />} />
+                  <Route path="/terms" element={<Terms />} />
+
                   {/* Warehouse Routes (Protected) */}
                   <Route path="/warehouse/dashboard" element={
                     <ProtectedAdminRoute>
@@ -192,9 +198,9 @@ const App = () => (
                     <Route path="secondhand-moderation" element={<SecondhandModeration />} />
                     <Route path="salesmen" element={<Salesmen />} />
                     <Route path="returns" element={<AdminReturns />} />
-                    <Route path="knowledge-base" element={<KnowledgeBase />} />
                     <Route path="users" element={<UserManagement />} />
                     <Route path="settings" element={<Settings />} />
+                    <Route path="site-settings" element={<SiteSettings />} />
                   </Route>
 
                   {/* Vendor protected console — partner accounts are admin-issued */}

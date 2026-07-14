@@ -116,7 +116,7 @@ const navigation: NavigationElement[] = [
     items: [
       { name: 'Staff Management', href: '/admin/users', icon: UserCog },
       { name: 'Audit Log', href: '/admin/audit-log', icon: Archive },
-      { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
+      { name: 'Site Settings', href: '/admin/site-settings', icon: BookOpen },
       { name: 'Settings', href: '/admin/settings', icon: Settings },
     ]
   },

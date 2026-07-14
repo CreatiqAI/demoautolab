@@ -15,8 +15,13 @@ import {
   AlertTriangle,
   HelpCircle
 } from 'lucide-react';
+import { useSiteSettings } from '@/hooks/useSiteSettings';
 
 export default function ReturnPolicy() {
+  const { settings } = useSiteSettings();
+  const returnWindowDays = settings.return_window_days;
+  const freeReturnShipping = settings.free_return_shipping;
+
   return (
     <div className="flex flex-col bg-gray-50">
       <Header />
@@ -49,7 +54,7 @@ export default function ReturnPolicy() {
               <div className="w-12 h-12 bg-lime-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Clock className="h-6 w-6 text-lime-600" />
               </div>
-              <h3 className="font-bold text-gray-900 mb-1">7-Day Return Window</h3>
+              <h3 className="font-bold text-gray-900 mb-1">{returnWindowDays}-Day Return Window</h3>
               <p className="text-sm text-gray-500">
                 From the date of delivery
               </p>
@@ -73,9 +78,11 @@ export default function ReturnPolicy() {
               <div className="w-12 h-12 bg-lime-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Truck className="h-6 w-6 text-lime-600" />
               </div>
-              <h3 className="font-bold text-gray-900 mb-1">Free Return Shipping</h3>
+              <h3 className="font-bold text-gray-900 mb-1">
+                {freeReturnShipping ? 'Free Return Shipping' : 'Return Shipping'}
+              </h3>
               <p className="text-sm text-gray-500">
-                For defective items
+                {freeReturnShipping ? 'For defective items' : 'Paid by the customer'}
               </p>
             </CardContent>
           </Card>
@@ -279,7 +286,7 @@ export default function ReturnPolicy() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-amber-600">•</span>
-                  Return requests must be submitted within 7 days of delivery date.
+                  Return requests must be submitted within {returnWindowDays} days of delivery date.
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-amber-600">•</span>
