@@ -17,7 +17,6 @@ import {
   CheckCircle,
   Warehouse,
   Truck,
-  BookOpen,
   Bell,
   Archive,
   Tag,
@@ -79,6 +78,7 @@ const navigation: NavigationElement[] = [
     icon: Package,
     items: [
       { name: 'Products', href: '/admin/products', icon: Package },
+      { name: 'Categories', href: '/admin/categories', icon: Layers },
       { name: 'Component Library', href: '/admin/component-library', icon: Layers },
       { name: 'Bulk Import', href: '/admin/bulk-import', icon: Upload },
       { name: 'Review Moderation', href: '/admin/review-moderation', icon: Star },
@@ -116,8 +116,7 @@ const navigation: NavigationElement[] = [
     items: [
       { name: 'Staff Management', href: '/admin/users', icon: UserCog },
       { name: 'Audit Log', href: '/admin/audit-log', icon: Archive },
-      { name: 'Site Settings', href: '/admin/site-settings', icon: BookOpen },
-      { name: 'Settings', href: '/admin/settings', icon: Settings },
+      { name: 'Site Settings', href: '/admin/site-settings', icon: Settings },
     ]
   },
 ];

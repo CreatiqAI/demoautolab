@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import Footer from '@/components/Footer'
 import { LegalDocument } from '@/components/LegalDocument'
+import { toSchemaOpeningHours } from '@/hooks/useSiteSettings'
 import type { SiteSettings } from '@/hooks/useSiteSettings'
 
 // Footer and the legal pages read everything from site_settings. Stub the hook so
@@ -114,5 +115,40 @@ describe('LegalDocument', () => {
       </BrowserRouter>,
     )
     expect(screen.getByText(/hasn't been published yet/i)).toBeInTheDocument()
+  })
+})
+
+// This feeds schema.org structured data. Wrong hours are worse than no hours,
+// so anything ambiguous must be dropped rather than guessed at.
+describe('toSchemaOpeningHours', () => {
+  it('converts a day range and 12-hour times', () => {
+    expect(
+      toSchemaOpeningHours([{ days: 'Monday – Friday', open: '9:30am', close: '6:00pm' }]),
+    ).toEqual(['Mo-Fr 09:30-18:00'])
+  })
+
+  it('handles a single day', () => {
+    expect(
+      toSchemaOpeningHours([{ days: 'Saturday', open: '9:30am', close: '1:30pm' }]),
+    ).toEqual(['Sa 09:30-13:30'])
+  })
+
+  it('drops closed days', () => {
+    expect(toSchemaOpeningHours([{ days: 'Sunday', open: null, close: null }])).toEqual([])
+  })
+
+  it('drops rows it cannot parse rather than emitting a guess', () => {
+    expect(
+      toSchemaOpeningHours([
+        { days: 'By appointment', open: 'whenever', close: 'late' },
+        { days: 'Monday', open: 'noon-ish', close: '6pm' },
+      ]),
+    ).toEqual([])
+  })
+
+  it('gets midnight and midday right', () => {
+    expect(toSchemaOpeningHours([{ days: 'Monday', open: '12:00am', close: '12:00pm' }])).toEqual([
+      'Mo 00:00-12:00',
+    ])
   })
 })

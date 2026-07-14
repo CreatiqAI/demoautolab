@@ -125,3 +125,46 @@ export function formatOfficeHour(h: OfficeHour): string {
 export function toDialable(phone: string): string {
   return phone.replace(/[^\d+]/g, '');
 }
+
+const DAY_CODES: Record<string, string> = {
+  monday: 'Mo', tuesday: 'Tu', wednesday: 'We', thursday: 'Th',
+  friday: 'Fr', saturday: 'Sa', sunday: 'Su',
+};
+
+/** "9:30am" -> "09:30". Returns null if it can't be parsed. */
+function to24h(time: string): string | null {
+  const m = time.trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = m[2] ?? '00';
+  const meridiem = m[3];
+  if (meridiem === 'pm' && hour !== 12) hour += 12;
+  if (meridiem === 'am' && hour === 12) hour = 0;
+  if (hour > 23) return null;
+  return `${String(hour).padStart(2, '0')}:${minute}`;
+}
+
+/**
+ * Converts the office hours into schema.org openingHours strings
+ * (e.g. "Mo-Fr 09:30-18:00"). Rows that are closed, or that we can't parse
+ * confidently, are dropped — emitting wrong structured data is worse than
+ * emitting none.
+ */
+export function toSchemaOpeningHours(hours: OfficeHour[]): string[] {
+  return hours.flatMap((h) => {
+    if (!h.open || !h.close) return [];
+
+    const open = to24h(h.open);
+    const close = to24h(h.close);
+    if (!open || !close) return [];
+
+    const days = (h.days.toLowerCase().match(/[a-z]+/g) ?? [])
+      .map((d) => DAY_CODES[d])
+      .filter(Boolean);
+    if (days.length === 0) return [];
+
+    // "Monday – Friday" -> a range; a single day stays a single day.
+    const span = days.length > 1 ? `${days[0]}-${days[days.length - 1]}` : days[0];
+    return [`${span} ${open}-${close}`];
+  });
+}

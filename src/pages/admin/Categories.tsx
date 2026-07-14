@@ -19,7 +19,7 @@ import type { Tables } from '@/integrations/supabase/types';
 
 type Category = Tables<'categories'>;
 
-export default function Settings() {
+export default function Categories() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
@@ -169,14 +169,16 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600">Product categories used across the catalog.</p>
+        <h1 className="text-3xl font-bold text-gray-900">Categories</h1>
+        <p className="text-gray-600">
+          How products are grouped in the catalog and the navigation menu.
+        </p>
       </div>
 
       <Alert>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Looking for your phone number, address, opening hours or policy pages? They now live in{' '}
+          Looking for your phone number, address, opening hours or policy pages? They live in{' '}
           <Link to="/admin/site-settings" className="font-medium underline underline-offset-2">
             Site Settings
           </Link>
@@ -188,8 +190,13 @@ export default function Settings() {
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle>Categories</CardTitle>
-              <CardDescription>Organize products into categories customers can browse.</CardDescription>
+              <CardTitle>
+                {categories.length} {categories.length === 1 ? 'category' : 'categories'}
+              </CardTitle>
+              <CardDescription>
+                Customers browse these in the catalog and the main menu. Renaming one updates it
+                everywhere; deleting one leaves its products uncategorised.
+              </CardDescription>
             </div>
 
             <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
