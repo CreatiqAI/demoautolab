@@ -38,6 +38,11 @@ npm-debug.log*
 supabase/.env
 src/config/api-keys.ts
 
+# Internal security/readiness audits — NEVER commit to this public repo
+# (they enumerate live, exploitable vulnerabilities)
+*-AUDIT.html
+PRODUCTION-AUDIT.html
+
 # Temporary/test files (should be in docs/archive or database/archive)
 *.sql
 !database/*.sql
