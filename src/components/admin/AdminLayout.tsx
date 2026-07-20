@@ -78,7 +78,6 @@ const navigation: NavigationElement[] = [
     icon: Package,
     items: [
       { name: 'Products', href: '/admin/products', icon: Package },
-      { name: 'Categories', href: '/admin/categories', icon: Layers },
       { name: 'Component Library', href: '/admin/component-library', icon: Layers },
       { name: 'Bulk Import', href: '/admin/bulk-import', icon: Upload },
       { name: 'Review Moderation', href: '/admin/review-moderation', icon: Star },

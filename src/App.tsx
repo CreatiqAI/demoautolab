@@ -43,7 +43,6 @@ import ProductsPro from './pages/admin/ProductsPro';
 import Orders from './pages/admin/Orders';
 import ArchivedOrders from './pages/admin/ArchivedOrders';
 import Customers from './pages/admin/Customers';
-import Categories from './pages/admin/Categories';
 import SiteSettings from './pages/admin/SiteSettings';
 import UserManagement from './pages/admin/UserManagement';
 import WarehouseOperations from './pages/admin/WarehouseOperations';
@@ -199,7 +198,8 @@ const App = () => (
                     <Route path="salesmen" element={<Salesmen />} />
                     <Route path="returns" element={<AdminReturns />} />
                     <Route path="users" element={<UserManagement />} />
-                    <Route path="categories" element={<Categories />} />
+                    {/* Categories page removed — categories are created inline from the product form. Redirect old links. */}
+                    <Route path="categories" element={<Navigate to="/admin/products" replace />} />
                     {/* Was the catch-all "Settings" page; kept so old links still land somewhere. */}
                     <Route path="settings" element={<Navigate to="/admin/site-settings" replace />} />
                     <Route path="site-settings" element={<SiteSettings />} />
