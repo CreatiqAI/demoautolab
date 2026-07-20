@@ -149,7 +149,7 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
         .from('customer_profiles')
         .select('id')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (customerProfile) {
         const carsToInsert = validCars.map((car, index) => ({

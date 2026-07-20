@@ -351,12 +351,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { isNewUser: false, error: { message: 'No user logged in' } };
       }
 
-      // Check if profile exists
+      // Check if profile exists (maybeSingle: no row is expected for brand-new
+      // users and for admin accounts, which have no customer profile — avoids 406)
       const { data: profile, error: profileError } = await supabase
         .from('customer_profiles')
         .select('id, full_name, phone')
         .eq('user_id', currentUser.id)
-        .single();
+        .maybeSingle();
 
       // Handle errors - treat 406 or any error as "new user" to allow registration
       if (profileError) {
@@ -406,7 +407,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('customer_profiles')
         .select('id')
         .eq('user_id', currentUser.id)
-        .single();
+        .maybeSingle();
 
       if (existingProfile) {
         // Update existing profile

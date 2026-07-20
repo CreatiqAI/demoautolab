@@ -127,9 +127,12 @@ export default function Settings() {
         .from('customer_profiles')
         .select('*')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) throw profileError;
+      // Admin accounts (and users mid-registration) have no customer profile —
+      // nothing to render here, and no row is not an error.
+      if (!profileData) return;
 
       setProfile({
         id: profileData.id,
@@ -170,7 +173,7 @@ export default function Settings() {
             .eq('customer_id', profileData.id)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
           if (merchantData) {
             setMerchantReg(merchantData as any);
@@ -200,7 +203,7 @@ export default function Settings() {
         .from('notification_preferences')
         .select('*')
         .eq('customer_id', profileData.id)
-        .single();
+        .maybeSingle();
 
       if (notifData) {
         setNotifications({

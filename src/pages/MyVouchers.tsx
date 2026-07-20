@@ -44,7 +44,7 @@ export default function MyVouchers() {
         .from('customer_profiles' as any)
         .select('id')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
       if (!profile) { setLoading(false); return; }
       const { data, error } = await (supabase.rpc as any)('get_available_vouchers_for_customer', { p_customer_id: (profile as any).id });
       if (error) throw error;

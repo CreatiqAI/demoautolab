@@ -155,9 +155,11 @@ export default function NotificationSettings() {
         .from('customer_profiles')
         .select('*')
         .eq('user_id', authUser.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) throw profileError;
+      // Admin accounts have no customer profile — nothing to configure here.
+      if (!profileData) return;
       setCustomerProfile(profileData);
 
       // Get notification preferences

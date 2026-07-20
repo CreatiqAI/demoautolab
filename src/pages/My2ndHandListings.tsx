@@ -118,7 +118,7 @@ export default function My2ndHandListings() {
         .from('customer_profiles')
         .select('customer_type, id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profile?.customer_type !== 'merchant') {
         toast({

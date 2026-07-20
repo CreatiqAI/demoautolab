@@ -167,7 +167,7 @@ export default function PremiumPartner() {
         .from('customer_profiles' as any)
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!profile || (profile as any).customer_type !== 'merchant') {
         toast({

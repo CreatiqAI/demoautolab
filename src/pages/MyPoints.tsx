@@ -95,7 +95,7 @@ export default function MyPoints({ embedded = false }: { embedded?: boolean }) {
       .from('customer_profiles')
       .select('*')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (!error && data) {
       setCustomerProfile(data);
@@ -118,7 +118,7 @@ export default function MyPoints({ embedded = false }: { embedded?: boolean }) {
         .from('customer_profiles')
         .select('id')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (!profile) return;
 
@@ -182,7 +182,7 @@ export default function MyPoints({ embedded = false }: { embedded?: boolean }) {
         .from('customer_profiles')
         .select('id')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (!profile) return;
 

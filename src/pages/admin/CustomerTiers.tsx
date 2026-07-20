@@ -93,7 +93,7 @@ export default function CustomerTiers() {
           .from('customer_profiles')
           .select('customer_type, email')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
       }
     };
