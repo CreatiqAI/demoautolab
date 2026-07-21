@@ -162,6 +162,15 @@ export default function AdminLayout() {
     navigate('/');
   };
 
+  // "Back to Store" must NOT drop the admin onto the storefront as a logged-in
+  // "customer" — admin and customer share one browser session, so we first end
+  // the admin session, then hard-navigate so the store loads fresh + anonymous.
+  const handleBackToStore = async () => {
+    localStorage.removeItem('admin_user');
+    await signOut();
+    window.location.href = '/';
+  };
+
   // Accordion behavior: only one group open at a time
   const toggleGroup = (groupName: string) => {
     setExpandedGroup(prev => prev === groupName ? null : groupName);
@@ -285,13 +294,13 @@ export default function AdminLayout() {
         </div>
         
         <div className="space-y-1">
-          <Link
-            to="/"
+          <button
+            onClick={handleBackToStore}
             className="group flex w-full items-center rounded-md px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
           >
             <Home className="mr-3 h-5 w-5 flex-shrink-0" />
             Back to Store
-          </Link>
+          </button>
           
           <button
             onClick={handleSignOut}
