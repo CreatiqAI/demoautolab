@@ -41,6 +41,7 @@ interface SelectedComponent extends ComponentSearchResult {
   is_foc?: boolean;          // given free (RM0) when the main item is in the order
   foc_quantity?: number;     // free units per main item / per set (default 1)
   is_foc_trigger?: boolean;  // the main item; buying it unlocks the FOC gifts
+  is_bundle_item?: boolean;  // part of the "buy the whole set" bundle
 }
 
 interface InstallationVideoForm {
@@ -79,6 +80,11 @@ interface ProductFormData {
   featured: boolean;
   /** New Arrivals window start (ISO) or null. Set = on the page for 30 days. */
   new_arrival_at: string | null;
+  // Bundle pricing: one fixed total for buying the flagged component set together.
+  bundle_enabled: boolean;
+  bundle_price: number | null;
+  bundle_merchant_price: number | null;
+  bundle_label: string;
   images: Array<{
     url: string;
     is_primary: boolean;
@@ -182,6 +188,10 @@ export default function ProductsPro() {
     active: true,
     featured: false,
     new_arrival_at: null,
+    bundle_enabled: false,
+    bundle_price: null,
+    bundle_merchant_price: null,
+    bundle_label: '',
     images: [],
     selectedComponents: [],
     installation: {
@@ -887,7 +897,8 @@ export default function ProductsPro() {
       remark: '',
       is_foc: false,
       foc_quantity: 1,
-      is_foc_trigger: false
+      is_foc_trigger: false,
+      is_bundle_item: false
     };
 
     setFormData(prev => ({
@@ -935,7 +946,11 @@ export default function ProductsPro() {
         slug: formData.slug,
         active: formData.active,
         featured: formData.featured,
-        new_arrival_at: formData.new_arrival_at
+        new_arrival_at: formData.new_arrival_at,
+        bundle_enabled: formData.bundle_enabled,
+        bundle_price: formData.bundle_enabled ? formData.bundle_price : null,
+        bundle_merchant_price: formData.bundle_enabled ? formData.bundle_merchant_price : null,
+        bundle_label: formData.bundle_label?.trim() || null
       };
 
       let product;
@@ -1064,7 +1079,8 @@ export default function ProductsPro() {
             remark: comp.remark || null,
             is_foc: comp.is_foc ?? false,
             foc_quantity: comp.is_foc ? Math.max(1, comp.foc_quantity ?? 1) : 1,
-            is_foc_trigger: comp.is_foc_trigger ?? false
+            is_foc_trigger: comp.is_foc_trigger ?? false,
+            is_bundle_item: comp.is_bundle_item ?? false
           }]);
 
         if (linkError) {
@@ -1174,6 +1190,10 @@ export default function ProductsPro() {
       active: true,
       featured: false,
       new_arrival_at: null,
+      bundle_enabled: false,
+      bundle_price: null,
+      bundle_merchant_price: null,
+      bundle_label: '',
       images: [],
       selectedComponents: [],
       installation: {
@@ -1206,6 +1226,7 @@ export default function ProductsPro() {
           is_foc,
           foc_quantity,
           is_foc_trigger,
+          is_bundle_item,
           component_library!inner(
             id, component_sku, name, description, component_type,
             stock_level, normal_price, merchant_price, default_image_url
@@ -1235,7 +1256,8 @@ export default function ProductsPro() {
         remark: pc.remark || '',
         is_foc: pc.is_foc ?? false,
         foc_quantity: pc.foc_quantity ?? 1,
-        is_foc_trigger: pc.is_foc_trigger ?? false
+        is_foc_trigger: pc.is_foc_trigger ?? false,
+        is_bundle_item: pc.is_bundle_item ?? false
       })) || [];
 
       // Format all media for the form (unified slots)
@@ -1285,6 +1307,10 @@ export default function ProductsPro() {
         active: product.active ?? true,
         featured: product.featured ?? false,
         new_arrival_at: (product as any).new_arrival_at ?? null,
+        bundle_enabled: (product as any).bundle_enabled ?? false,
+        bundle_price: (product as any).bundle_price ?? null,
+        bundle_merchant_price: (product as any).bundle_merchant_price ?? null,
+        bundle_label: (product as any).bundle_label ?? '',
         images: formattedImages,
         selectedComponents: components,
         installation: installationFormData
@@ -1313,6 +1339,7 @@ export default function ProductsPro() {
           is_foc,
           foc_quantity,
           is_foc_trigger,
+          is_bundle_item,
           component_library!inner(
             id, component_sku, name, description, component_type,
             stock_level, normal_price, merchant_price, default_image_url
@@ -1646,6 +1673,89 @@ export default function ProductsPro() {
                       </div>
                     )}
 
+                    {/* Bundle pricing — buy the flagged component set together for one fixed price */}
+                    <div className="mb-3 rounded-lg border border-lime-200 bg-lime-50/60 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="text-sm font-semibold text-[#0f172a]">🎁 Bundle pricing</span>
+                          <p className="text-[11px] text-slate-500">
+                            Special total when the whole flagged set is bought together. Flag components with “+ Bundle” below.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-slate-600">{formData.bundle_enabled ? 'On' : 'Off'}</span>
+                          <Switch
+                            checked={formData.bundle_enabled}
+                            onCheckedChange={(v) => setFormData(prev => ({ ...prev, bundle_enabled: v }))}
+                          />
+                        </div>
+                      </div>
+
+                      {formData.bundle_enabled && (() => {
+                        const bundleItems = formData.selectedComponents.filter(c => c.is_bundle_item);
+                        const sumNormal = bundleItems.reduce((s, c) => s + (c.normal_price || 0), 0);
+                        const sumMerchant = bundleItems.reduce((s, c) => s + (c.merchant_price || c.normal_price || 0), 0);
+                        const bp = Number(formData.bundle_price ?? 0);
+                        const bmp = Number(formData.bundle_merchant_price ?? formData.bundle_price ?? 0);
+                        const saveNormal = sumNormal - bp;
+                        const saveMerchant = sumMerchant - bmp;
+                        return (
+                          <div className="mt-3 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div>
+                                <Label className="text-xs">Bundle label</Label>
+                                <Input
+                                  value={formData.bundle_label}
+                                  onChange={(e) => setFormData(prev => ({ ...prev, bundle_label: e.target.value }))}
+                                  placeholder="Complete Bundle"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Bundle price · normal (RM)</Label>
+                                <Input
+                                  type="number" min={0} step="0.01"
+                                  value={formData.bundle_price ?? ''}
+                                  onChange={(e) => setFormData(prev => ({ ...prev, bundle_price: e.target.value === '' ? null : parseFloat(e.target.value) }))}
+                                  placeholder="0.00"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Bundle price · merchant (RM)</Label>
+                                <Input
+                                  type="number" min={0} step="0.01"
+                                  value={formData.bundle_merchant_price ?? ''}
+                                  onChange={(e) => setFormData(prev => ({ ...prev, bundle_merchant_price: e.target.value === '' ? null : parseFloat(e.target.value) }))}
+                                  placeholder="Falls back to normal"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="rounded-md bg-white border border-lime-200 px-3 py-2 text-xs">
+                              {bundleItems.length < 2 ? (
+                                <span className="text-amber-600 font-medium">
+                                  Flag at least 2 components as “+ Bundle” (below) for the bundle to apply.
+                                </span>
+                              ) : (
+                                <div className="flex flex-wrap gap-x-6 gap-y-1 text-slate-600">
+                                  <span><b>{bundleItems.length}</b> components in bundle</span>
+                                  <span>Individual: <b>RM{sumNormal.toFixed(2)}</b> · merchant RM{sumMerchant.toFixed(2)}</span>
+                                  <span className={saveNormal >= 0 ? 'text-lime-700 font-medium' : 'text-red-600 font-medium'}>
+                                    Normal saves RM{saveNormal.toFixed(2)}
+                                  </span>
+                                  <span className={saveMerchant >= 0 ? 'text-lime-700 font-medium' : 'text-red-600 font-medium'}>
+                                    Merchant saves RM{saveMerchant.toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 h-[calc(55vh-3rem)] lg:h-[55vh]">
                       {/* Left: Component Library */}
                       <div className="flex flex-col min-h-0 h-[35vh] sm:h-[40vh] lg:h-full">
@@ -1874,6 +1984,25 @@ export default function ProductsPro() {
                                           />
                                         </span>
                                       )}
+                                      {/* Bundle set membership — independent of the FOC role.
+                                          Only meaningful when this product's bundle price is on. */}
+                                      <button
+                                        type="button"
+                                        onClick={() => setFormData(prev => ({
+                                          ...prev,
+                                          selectedComponents: prev.selectedComponents.map(c =>
+                                            c.id === component.id ? { ...c, is_bundle_item: !c.is_bundle_item } : c
+                                          )
+                                        }))}
+                                        className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                                          component.is_bundle_item
+                                            ? 'bg-lime-600 text-white border-lime-600'
+                                            : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                        }`}
+                                        title="Include this component in the bundle set"
+                                      >
+                                        {component.is_bundle_item ? '🎁 In bundle' : '+ Bundle'}
+                                      </button>
                                     </div>
                                   </div>
                                 </div>

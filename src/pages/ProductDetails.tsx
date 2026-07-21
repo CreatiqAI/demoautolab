@@ -36,6 +36,7 @@ interface ComponentData {
   is_foc?: boolean;          // free gift when the main item is also bought
   foc_quantity?: number;     // free units per main item / per set (default 1)
   is_foc_trigger?: boolean;  // the main item; buying it unlocks the FOC gifts
+  is_bundle_item?: boolean;  // part of the product's "buy the whole set" bundle
 }
 
 interface CartItem {
@@ -63,6 +64,11 @@ interface Product {
   }>;
   vendor_id?: string | null;
   vendor?: { id: string; business_name: string } | null;
+  // Bundle pricing: one fixed total for buying the whole (admin-picked) set.
+  bundle_enabled?: boolean;
+  bundle_price?: number | null;
+  bundle_merchant_price?: number | null;
+  bundle_label?: string | null;
 }
 
 const ProductDetails = () => {
@@ -295,11 +301,62 @@ const ProductDetails = () => {
   // Free units of a given gift = its per-set quantity × number of sets bought.
   const focFreeQty = (component: ComponentData) => Math.max(1, component.foc_quantity ?? 1) * mainQty;
 
-  // Price a component is charged at, factoring in FOC eligibility.
-  const getEffectivePrice = (component: ComponentData) =>
-    (component.is_foc && triggerSelected)
-      ? 0
-      : getDisplayPrice(component.normal_price, component.merchant_price);
+  // --- Bundle pricing ---
+  // A product can define one fixed "buy the whole set" total (a separate price
+  // for normal vs merchant customers). The admin flags which components make up
+  // the set (is_bundle_item). When ALL bundle components are selected (qty >= 1),
+  // those lines are re-priced so their sum equals the bundle total; anything else
+  // stays at its individual price.
+  const bundleComponents = components.filter(c => c.is_bundle_item);
+  const bundleTotalRaw =
+    customerType === 'merchant'
+      ? (product?.bundle_merchant_price ?? product?.bundle_price)
+      : product?.bundle_price;
+  const bundleTotal = Number(bundleTotalRaw ?? 0);
+  const bundleAvailable =
+    !!product?.bundle_enabled && bundleComponents.length >= 2 && bundleTotal > 0;
+
+  // Sum of the bundle components at their individual (undiscounted) prices.
+  const bundleIndividualTotal = bundleComponents.reduce(
+    (sum, c) => sum + getDisplayPrice(c.normal_price, c.merchant_price),
+    0,
+  );
+  const bundleSavings = Math.max(0, bundleIndividualTotal - bundleTotal);
+
+  // Is every bundle component currently in the selection (qty >= 1)?
+  const bundleFullySelected =
+    bundleAvailable &&
+    bundleComponents.every(c =>
+      localCart.some(item => item.component.id === c.id && item.quantity >= 1),
+    );
+
+  // Distribute the fixed bundle total across the bundle components in proportion
+  // to their individual price; the last component absorbs the rounding remainder
+  // so the line prices sum to exactly the bundle total.
+  const bundleUnitPrices: Record<string, number> = (() => {
+    const map: Record<string, number> = {};
+    if (!bundleAvailable || bundleIndividualTotal <= 0) return map;
+    let allocated = 0;
+    bundleComponents.forEach((c, i) => {
+      const indiv = getDisplayPrice(c.normal_price, c.merchant_price);
+      const isLast = i === bundleComponents.length - 1;
+      const share = isLast
+        ? Math.round((bundleTotal - allocated) * 100) / 100
+        : Math.round(bundleTotal * (indiv / bundleIndividualTotal) * 100) / 100;
+      if (!isLast) allocated += share;
+      map[c.id] = Math.max(0, share);
+    });
+    return map;
+  })();
+
+  // Price a component is charged at, factoring in FOC + bundle eligibility.
+  const getEffectivePrice = (component: ComponentData) => {
+    if (component.is_foc && triggerSelected) return 0;
+    if (bundleFullySelected && component.is_bundle_item && bundleUnitPrices[component.id] != null) {
+      return bundleUnitPrices[component.id];
+    }
+    return getDisplayPrice(component.normal_price, component.merchant_price);
+  };
 
   // Auto-include free gifts when the main item is selected, scaling their quantity
   // to the number of sets; remove them when the main item leaves the selection.
@@ -445,6 +502,7 @@ const ProductDetails = () => {
           is_foc,
           foc_quantity,
           is_foc_trigger,
+          is_bundle_item,
           component_library!inner(
             id, component_sku, name, description, component_type,
             stock_level, normal_price, merchant_price, default_image_url
@@ -478,7 +536,8 @@ const ProductDetails = () => {
           remark: pc.remark || null,
           is_foc: pc.is_foc ?? false,
           foc_quantity: pc.foc_quantity ?? 1,
-          is_foc_trigger: pc.is_foc_trigger ?? false
+          is_foc_trigger: pc.is_foc_trigger ?? false,
+          is_bundle_item: pc.is_bundle_item ?? false
         };
       });
 
@@ -575,6 +634,38 @@ const ProductDetails = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightboxOpen, lightboxMedia.length, currentLightboxIndex]);
 
+  // One-tap: add the complete bundle straight to the cart at the bundle price
+  // (each component priced at its distributed share so the total = bundleTotal).
+  const handleAddBundleToCart = () => {
+    if (!user) {
+      toast({
+        title: 'Login Required',
+        description: 'Please sign in to add items to your cart',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!bundleAvailable) return;
+
+    bundleComponents.forEach(component => {
+      addToCart({
+        component_sku: component.component_sku,
+        name: component.name,
+        normal_price: bundleUnitPrices[component.id] ?? getDisplayPrice(component.normal_price, component.merchant_price),
+        quantity: 1,
+        product_name: product?.name || 'Unknown Product',
+        component_image: component.default_image_url,
+        is_foc: false,
+        is_foc_trigger: false,
+      });
+    });
+
+    toast({
+      title: 'Bundle added to cart!',
+      description: `${product?.bundle_label || 'Bundle'} · ${bundleComponents.length} items for ${formatPrice(bundleTotal)}`,
+    });
+  };
+
   const handleAddToCart = () => {
     if (!user) {
       toast({
@@ -596,12 +687,13 @@ const ProductDetails = () => {
 
     localCart.forEach(cartItem => {
       const isFreeGift = !!(cartItem.component.is_foc && triggerSelected);
-      const displayPrice = isFreeGift ? 0 : getDisplayPrice(cartItem.component.normal_price, cartItem.component.merchant_price);
+      // getEffectivePrice already resolves FOC (0) + bundle + individual pricing.
+      const unitPrice = getEffectivePrice(cartItem.component);
       const quantity = isFreeGift ? focFreeQty(cartItem.component) : cartItem.quantity;
       addToCart({
         component_sku: cartItem.component.component_sku,
         name: cartItem.component.name,
-        normal_price: displayPrice,
+        normal_price: unitPrice,
         quantity,
         product_name: product?.name || 'Unknown Product',
         component_image: cartItem.component.default_image_url,
@@ -848,6 +940,65 @@ const ProductDetails = () => {
                   </span>
                 </div>
 
+                {/* Complete Bundle offer — buy the whole set for one special price */}
+                {!loading && bundleAvailable && (
+                  <div className={cn(
+                    "mb-4 rounded-2xl border p-4 shadow-sm transition-colors",
+                    bundleFullySelected
+                      ? "border-lime-300 bg-lime-50"
+                      : "border-lime-200 bg-gradient-to-br from-lime-50 to-white"
+                  )}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm font-bold uppercase tracking-wider text-[#0f172a]">
+                            🎁 {product?.bundle_label || 'Complete Bundle'}
+                          </h3>
+                          {bundleSavings > 0 && (
+                            <span className="text-[10px] font-bold text-lime-700 bg-lime-100 border border-lime-200 rounded-full px-2 py-0.5">
+                              Save {formatPrice(bundleSavings)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Get all {bundleComponents.length} components together
+                          {bundleFullySelected && (
+                            <span className="text-lime-700 font-semibold"> · Applied ✓</span>
+                          )}
+                        </p>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          {bundleSavings > 0 && (
+                            <span className="text-sm text-slate-400 line-through">
+                              {formatPrice(bundleIndividualTotal)}
+                            </span>
+                          )}
+                          <span className="text-2xl font-bold text-[#0f172a]">
+                            {formatPrice(bundleTotal)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {user ? (
+                        <Button
+                          onClick={handleAddBundleToCart}
+                          disabled={cartLoading}
+                          className="flex-shrink-0 h-10 px-4 rounded bg-lime-600 text-white hover:bg-lime-700 transition-colors font-semibold text-xs shadow"
+                        >
+                          <ShoppingCart className="h-3.5 w-3.5 mr-2" />
+                          Add bundle
+                        </Button>
+                      ) : (
+                        <LoginPromptButton
+                          className="flex-shrink-0 h-10 px-4 rounded bg-lime-600 text-white hover:bg-lime-700 transition-colors font-semibold text-xs shadow"
+                          redirectTo={`/product/${id}`}
+                        >
+                          Login
+                        </LoginPromptButton>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {loading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
@@ -914,6 +1065,9 @@ const ProductDetails = () => {
                                     </h3>
                                     {component.remark && (
                                       <span className="text-xs text-amber-600 font-medium">{component.remark}</span>
+                                    )}
+                                    {component.is_bundle_item && bundleAvailable && (
+                                      <span className="ml-1 inline-block text-[10px] font-semibold text-lime-700 bg-lime-50 border border-lime-200 rounded px-1.5 py-0.5">Bundle</span>
                                     )}
                                     {isFreeGift && (
                                       <span className="ml-1 inline-block text-[10px] font-bold text-green-700 bg-green-100 border border-green-200 rounded px-1.5 py-0.5">🎁 FREE GIFT</span>
@@ -1028,6 +1182,11 @@ const ProductDetails = () => {
                       {localCart.length > 0 && (
                         <p className="text-2xl font-bold text-[#0f172a]">
                           {formatPrice(getLocalCartTotal())}
+                        </p>
+                      )}
+                      {bundleFullySelected && (
+                        <p className="text-xs font-semibold text-lime-700 mt-0.5">
+                          🎁 Bundle applied — you save {formatPrice(bundleSavings)}
                         </p>
                       )}
                     </div>
@@ -1286,6 +1445,14 @@ const ProductDetails = () => {
                 <>
                   <p className="text-[10px] font-medium text-slate-400">{getLocalCartTotalQuantity()} item{getLocalCartTotalQuantity() !== 1 ? 's' : ''}</p>
                   <p className="text-lg font-bold text-[#0f172a]">{formatPrice(getLocalCartTotal())}</p>
+                  {bundleFullySelected && (
+                    <p className="text-[10px] font-semibold text-lime-700">🎁 Bundle · save {formatPrice(bundleSavings)}</p>
+                  )}
+                </>
+              ) : bundleAvailable ? (
+                <>
+                  <p className="text-[10px] font-medium text-lime-700">🎁 {product?.bundle_label || 'Bundle'}</p>
+                  <p className="text-lg font-bold text-[#0f172a]">{formatPrice(bundleTotal)}</p>
                 </>
               ) : (
                 <p className="text-xs text-slate-400">No items selected</p>
