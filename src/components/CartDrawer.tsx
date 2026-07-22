@@ -11,7 +11,7 @@ import { Trash2, ShoppingBag, X, ArrowRight, Store, Building2, Gift } from 'luci
 import CheckoutModal from '@/components/CheckoutModal';
 import QuantityInput from '@/components/QuantityInput';
 import { groupCartItemsBySeller } from '@/lib/cartGrouping';
-import { buildCartRows, bundleMainQtyUpdates, bundleMainRemoval, type CartBundle } from '@/lib/cartBundles';
+import { buildCartRows, bundleMainQtyUpdates, bundleMainRemoval, pricedBundleSets, pricedBundleTotal, pricedBundleQtyUpdates, type CartBundle } from '@/lib/cartBundles';
 import { transformImage } from '@/lib/imageTransform';
 
 interface CartDrawerProps {
@@ -396,6 +396,58 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                 onQty: (q) => updateQuantity(item.id, q),
                                 onRemove: () => removeFromCart(item.id),
                               })}
+                            </div>
+                          );
+                        }
+
+                        // Priced "buy the whole set" bundle — one compact grouped line.
+                        if (row.kind === 'priced-bundle') {
+                          const memberIds = row.items.map((i) => i.id);
+                          const allSelected =
+                            memberIds.length > 0 && memberIds.every((id) => selectedItems.includes(id));
+                          const sets = pricedBundleSets(row.items);
+                          return (
+                            <div key={`pbundle-${row.bundleId}`} className="px-4 py-3 border-b border-gray-100 last:border-b-0">
+                              <div className="rounded-lg border border-lime-300 bg-lime-50/40 p-2 space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <Checkbox
+                                    checked={allSelected}
+                                    onCheckedChange={(checked) => handleSelectGroup(memberIds, checked as boolean)}
+                                    className="mt-0.5"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <Badge className="text-[10px] bg-lime-100 text-lime-800 border border-lime-200 hover:bg-lime-100">
+                                      <Gift className="h-3 w-3 mr-1" /> {row.label}
+                                    </Badge>
+                                  </div>
+                                  <span className="text-sm font-semibold flex-shrink-0">{formatPrice(pricedBundleTotal(row.items))}</span>
+                                </div>
+                                <div className="space-y-1 rounded-md border border-dashed border-lime-300 bg-white/60 p-2">
+                                  {row.items.map((m) => (
+                                    <div key={m.id} className="flex items-center gap-2">
+                                      <span className="flex-1 min-w-0 truncate text-[11px] text-gray-700">{m.name}</span>
+                                      <span className="text-[10px] text-gray-400 flex-shrink-0">×{m.quantity}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <QuantityInput
+                                    size="sm"
+                                    value={sets}
+                                    onChange={(q) =>
+                                      pricedBundleQtyUpdates(row.items, q).forEach((u) => updateQuantity(u.id, u.quantity))
+                                    }
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => memberIds.forEach((id) => removeFromCart(id))}
+                                    className="text-destructive hover:text-destructive p-1 h-7 w-7"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           );
                         }

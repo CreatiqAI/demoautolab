@@ -13,7 +13,7 @@ import Header from '@/components/Header';
 import CheckoutModal from '@/components/CheckoutModal';
 import QuantityInput from '@/components/QuantityInput';
 import { groupCartItemsBySeller } from '@/lib/cartGrouping';
-import { buildCartRows, bundleMainQtyUpdates, bundleMainRemoval, type CartBundle } from '@/lib/cartBundles';
+import { buildCartRows, bundleMainQtyUpdates, bundleMainRemoval, pricedBundleSets, pricedBundleTotal, pricedBundleUnit, pricedBundleQtyUpdates, type CartBundle } from '@/lib/cartBundles';
 import { transformImage } from '@/lib/imageTransform';
 
 export default function Cart() {
@@ -371,6 +371,85 @@ export default function Cart() {
                                 onQty: (q) => updateQuantity(item.id, q),
                                 onRemove: () => removeFromCart(item.id),
                               })}
+                            </div>
+                          );
+                        }
+
+                        // Priced "buy the whole set" bundle: one card, one price,
+                        // members listed underneath; qty scales all members together.
+                        if (row.kind === 'priced-bundle') {
+                          const memberIds = row.items.map((i) => i.id);
+                          const allSelected =
+                            memberIds.length > 0 && memberIds.every((id) => selectedItems.includes(id));
+                          const sets = pricedBundleSets(row.items);
+                          return (
+                            <div key={`pbundle-${row.bundleId}`} className="p-3 sm:p-5">
+                              <div className="rounded-xl border border-lime-300 bg-lime-50/40 p-3 space-y-3">
+                                <div className="flex items-start gap-3">
+                                  <Checkbox
+                                    checked={allSelected}
+                                    onCheckedChange={(checked) => handleSelectGroup(memberIds, checked as boolean)}
+                                    className="mt-1"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <Badge className="text-xs bg-lime-100 text-lime-800 border border-lime-200 hover:bg-lime-100">
+                                        <Gift className="h-3 w-3 mr-1" /> {row.label}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground">{row.items.length} items</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">From: {row.items[0]?.product_name}</p>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="text-sm sm:text-base font-semibold">{formatPrice(pricedBundleTotal(row.items))}</p>
+                                    <p className="text-[11px] text-muted-foreground">{formatPrice(pricedBundleUnit(row.items))} / set</p>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2 rounded-lg border border-dashed border-lime-300 bg-white/60 p-2 sm:p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-lime-700">Bundle includes</p>
+                                  {row.items.map((m) => (
+                                    <div key={m.id} className="flex items-center gap-2 sm:gap-3">
+                                      {m.component_image && (
+                                        <div className="w-10 h-10 bg-white rounded-md overflow-hidden flex-shrink-0 border">
+                                          <img
+                                            src={transformImage(m.component_image, { width: 80, quality: 70 })}
+                                            alt={m.name}
+                                            className="w-full h-full object-cover"
+                                            loading="lazy"
+                                            decoding="async"
+                                          />
+                                        </div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs sm:text-sm font-medium line-clamp-1">{m.name}</p>
+                                        <p className="text-[11px] text-muted-foreground">{m.component_sku}</p>
+                                      </div>
+                                      <span className="text-[11px] text-muted-foreground flex-shrink-0">×{m.quantity}</span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">Sets</span>
+                                    <QuantityInput
+                                      value={sets}
+                                      onChange={(q) =>
+                                        pricedBundleQtyUpdates(row.items, q).forEach((u) => updateQuantity(u.id, u.quantity))
+                                      }
+                                    />
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => memberIds.forEach((id) => removeFromCart(id))}
+                                    className="text-destructive hover:text-destructive p-1 sm:p-2 h-8 w-8"
+                                  >
+                                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           );
                         }

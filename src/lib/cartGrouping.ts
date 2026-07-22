@@ -20,6 +20,10 @@ export type GroupableCartItem = {
   is_foc_trigger?: boolean;
   vendor_id?: string | null;
   vendor_name?: string | null;
+  /** Shared id across the lines of one priced "buy the whole set" bundle. */
+  bundle_id?: string | null;
+  /** Bundle display label. */
+  bundle_label?: string | null;
 };
 
 export type CartSellerGroup<T extends GroupableCartItem> = {

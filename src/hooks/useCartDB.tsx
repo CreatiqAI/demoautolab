@@ -18,6 +18,10 @@ interface CartItem {
   vendor_id?: string | null;
   /** Display name of seller. NULL/undefined means "AutoLab". */
   vendor_name?: string | null;
+  /** Shared id across the lines of one priced "buy the whole set" bundle. */
+  bundle_id?: string | null;
+  /** Bundle display label (e.g. "Complete Bundle"). */
+  bundle_label?: string | null;
 }
 
 // A cart line is identified by its component, the product it came from, AND
@@ -146,6 +150,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             component_image: imageMap.get(item.component_sku) || item.default_image_url || undefined,
             vendor_id: vendorId,
             vendor_name: vendorId ? (vendorNameMap.get(vendorId) || null) : null,
+            bundle_id: item.bundle_id ?? null,
+            bundle_label: item.bundle_label ?? null,
           };
         }).sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
 
@@ -257,6 +263,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           p_guest_session: null,
           p_is_foc: isFoc,
           p_is_foc_trigger: newItem.is_foc_trigger ?? false,
+          p_bundle_id: newItem.bundle_id ?? null,
+          p_bundle_label: newItem.bundle_label ?? null,
         } as any);
 
       if (error) {

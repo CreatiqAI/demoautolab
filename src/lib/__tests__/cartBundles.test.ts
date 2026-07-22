@@ -5,6 +5,10 @@ import {
   bundleMainRemoval,
   focPerSet,
   bundleSets,
+  pricedBundleSets,
+  pricedBundleTotal,
+  pricedBundleUnit,
+  pricedBundleQtyUpdates,
   type CartBundle,
 } from '@/lib/cartBundles';
 import type { GroupableCartItem } from '@/lib/cartGrouping';
@@ -26,6 +30,29 @@ describe('buildCartRows', () => {
       line({ id: 'b', normal_price: 50, product_name: 'P2' }),
     ]);
     expect(rows.map(r => r.kind)).toEqual(['single', 'single']);
+  });
+
+  it('groups lines sharing a bundle_id into one priced-bundle row', () => {
+    const rows = buildCartRows([
+      line({ id: 'x', normal_price: 60, bundle_id: 'B1', bundle_label: 'Set' }),
+      line({ id: 'y', normal_price: 40, bundle_id: 'B1', bundle_label: 'Set' }),
+      line({ id: 'z', normal_price: 25, product_name: 'Other' }),
+    ]);
+    const pb = rows.find(r => r.kind === 'priced-bundle');
+    expect(pb).toBeTruthy();
+    if (pb && pb.kind === 'priced-bundle') {
+      expect(pb.label).toBe('Set');
+      expect(pb.items.map(i => i.id).sort()).toEqual(['x', 'y']);
+      expect(pricedBundleTotal(pb.items)).toBe(100);
+      expect(pricedBundleSets(pb.items)).toBe(1);
+      expect(pricedBundleUnit(pb.items)).toBe(100);
+      expect(pricedBundleQtyUpdates(pb.items, 3)).toEqual([
+        { id: 'x', quantity: 3 },
+        { id: 'y', quantity: 3 },
+      ]);
+    }
+    // The unrelated line stays single.
+    expect(rows.some(r => r.kind === 'single')).toBe(true);
   });
 
   it('groups a product with paid mains + free gifts into one bundle', () => {

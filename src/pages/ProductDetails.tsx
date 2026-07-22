@@ -647,6 +647,11 @@ const ProductDetails = () => {
     }
     if (!bundleAvailable) return;
 
+    // One shared id + label tags every line of this bundle so the cart groups them
+    // into a single bundle row at one price (instead of separate discounted items).
+    const bundleId = crypto.randomUUID();
+    const bundleLabelText = product?.bundle_label || 'Complete Bundle';
+
     bundleComponents.forEach(component => {
       addToCart({
         component_sku: component.component_sku,
@@ -657,6 +662,8 @@ const ProductDetails = () => {
         component_image: component.default_image_url,
         is_foc: false,
         is_foc_trigger: false,
+        bundle_id: bundleId,
+        bundle_label: bundleLabelText,
       });
     });
 

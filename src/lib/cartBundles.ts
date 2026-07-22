@@ -22,10 +22,12 @@ export type CartBundle<T extends GroupableCartItem> = {
   freebies: T[];
 };
 
-/** A display row: either a plain line or a FOC bundle (mains + shared gifts). */
+/** A display row: a plain line, a FOC bundle (mains + shared gifts), or a priced
+ *  "buy the whole set" bundle (its member lines shown under one fixed price). */
 export type CartRow<T extends GroupableCartItem> =
   | { kind: 'single'; item: T }
-  | { kind: 'bundle'; mains: T[]; freebies: T[] };
+  | { kind: 'bundle'; mains: T[]; freebies: T[] }
+  | { kind: 'priced-bundle'; bundleId: string; label: string; items: T[] };
 
 export type QtyUpdate = { id: string; quantity: number };
 
@@ -45,14 +47,37 @@ export function isFreeGift<T extends GroupableCartItem>(item: T): boolean {
  * gifts). Everything else becomes its own `single` row. First-seen order kept.
  */
 export function buildCartRows<T extends GroupableCartItem>(items: T[]): CartRow<T>[] {
-  const byProduct = new Map<string, T[]>();
+  const rows: CartRow<T>[] = [];
+
+  // First, pull out priced-bundle lines (they share a bundle_id) and emit one
+  // grouped row per bundle. These are excluded from the FOC/product grouping below.
+  const pricedBundles = new Map<string, T[]>();
+  const rest: T[] = [];
   for (const item of items) {
+    const bid = item.bundle_id;
+    if (bid) {
+      const list = pricedBundles.get(bid) ?? [];
+      list.push(item);
+      pricedBundles.set(bid, list);
+    } else {
+      rest.push(item);
+    }
+  }
+  for (const [bundleId, members] of pricedBundles) {
+    rows.push({
+      kind: 'priced-bundle',
+      bundleId,
+      label: members.find((m) => m.bundle_label)?.bundle_label || 'Bundle',
+      items: members,
+    });
+  }
+
+  const byProduct = new Map<string, T[]>();
+  for (const item of rest) {
     const list = byProduct.get(item.product_name) ?? [];
     list.push(item);
     byProduct.set(item.product_name, list);
   }
-
-  const rows: CartRow<T>[] = [];
   for (const list of byProduct.values()) {
     const freebies = list.filter((i) => isFreeGift(i));
     const paid = list.filter((i) => !isFreeGift(i));
@@ -145,4 +170,35 @@ export function bundleMainRemoval<T extends GroupableCartItem>(
     quantity: focPerSet(f.quantity, oldSets) * newSets,
   }));
   return { removeIds: [mainId], updates };
+}
+
+// ---------------------------------------------------------------------------
+// Priced "buy the whole set" bundles: all member lines share a bundle_id and
+// move together — one price, one quantity, removed as a unit.
+// ---------------------------------------------------------------------------
+
+/** Number of bundle sets = the (equal) per-member quantity; min guards drift. */
+export function pricedBundleSets<T extends GroupableCartItem>(items: T[]): number {
+  if (items.length === 0) return 0;
+  return Math.max(1, Math.min(...items.map((i) => i.quantity)));
+}
+
+/** Total price of one bundle row = sum of its member line prices. */
+export function pricedBundleTotal<T extends GroupableCartItem>(items: T[]): number {
+  return items.reduce((sum, i) => sum + (Number(i.normal_price) || 0) * (Number(i.quantity) || 0), 0);
+}
+
+/** Per-set price = the bundle total divided by the current number of sets. */
+export function pricedBundleUnit<T extends GroupableCartItem>(items: T[]): number {
+  const sets = pricedBundleSets(items);
+  return sets > 0 ? pricedBundleTotal(items) / sets : pricedBundleTotal(items);
+}
+
+/** Qty updates to set every member of the bundle to the same new set count. */
+export function pricedBundleQtyUpdates<T extends GroupableCartItem>(
+  items: T[],
+  newSets: number,
+): QtyUpdate[] {
+  const qty = Math.max(1, Math.round(newSets));
+  return items.map((i) => ({ id: i.id, quantity: qty }));
 }
