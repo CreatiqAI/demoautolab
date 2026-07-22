@@ -31,6 +31,8 @@ interface LedgerRow {
   payout_id: string | null;
   notes: string | null;
   created_at: string;
+  // Embedded order placed-date; a SALE only becomes payable 7 days after this.
+  orders?: { created_at: string } | null;
 }
 
 interface PayoutRow {
@@ -244,7 +246,7 @@ export default function VendorPayouts() {
       const [{ data: ledgerData }, { data: payoutData }] = await Promise.all([
         supabase
           .from('vendor_sales_ledger' as any)
-          .select('*')
+          .select('*, orders(created_at)')
           .eq('vendor_id', vendorId)
           .order('created_at', { ascending: false })
           .limit(500),
@@ -262,7 +264,17 @@ export default function VendorPayouts() {
   };
 
   // Pending balance = sum of unpaid (payout_id IS NULL) ledger rows.
+  // A SALE only becomes available for payout 7 days after the order was placed;
+  // refunds/adjustments apply immediately. Held sales stay in the balance but
+  // are not yet cashable (mirrors the server-side rule in the payout RPCs).
   const pendingTotals = useMemo(() => {
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    const isAvailable = (r: LedgerRow) =>
+      r.type !== 'SALE' ||
+      (r.orders?.created_at
+        ? Date.now() - new Date(r.orders.created_at).getTime() >= SEVEN_DAYS_MS
+        : false);
+
     const unpaid = ledger.filter((r) => !r.payout_id);
     const grossSales = unpaid
       .filter((r) => r.type === 'SALE')
@@ -274,7 +286,15 @@ export default function VendorPayouts() {
       .filter((r) => r.type === 'REFUND')
       .reduce((s, r) => s + Math.abs(Number(r.net_amount || 0)), 0);
     const netPayable = unpaid.reduce((s, r) => s + Number(r.net_amount || 0), 0);
-    return { grossSales, commission, refunds, netPayable, count: unpaid.length };
+    const available = unpaid.filter(isAvailable);
+    const availableNet = available.reduce((s, r) => s + Number(r.net_amount || 0), 0);
+    const heldNet = unpaid
+      .filter((r) => !isAvailable(r))
+      .reduce((s, r) => s + Number(r.net_amount || 0), 0);
+    return {
+      grossSales, commission, refunds, netPayable,
+      availableNet, heldNet, count: unpaid.length, availableCount: available.length,
+    };
   }, [ledger]);
 
   // Lifetime totals
@@ -317,13 +337,15 @@ export default function VendorPayouts() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending balance</CardTitle>
+            <CardTitle className="text-sm font-medium">Available for payout</CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatRM(pendingTotals.netPayable)}</div>
+            <div className="text-2xl font-bold">{formatRM(pendingTotals.availableNet)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {pendingTotals.count > 0
+              {pendingTotals.heldNet > 0
+                ? `${formatRM(pendingTotals.heldNet)} held — cashable 7 days after each order is placed`
+                : pendingTotals.count > 0
                 ? `${pendingTotals.count} unpaid ${pendingTotals.count === 1 ? 'entry' : 'entries'}`
                 : 'All earnings settled'}
             </p>
