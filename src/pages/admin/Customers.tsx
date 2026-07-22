@@ -70,8 +70,9 @@ interface MerchantApplication {
   code_id: string;
   company_name: string;
   business_registration_no: string | null;
-  tax_id: string | null;
-  business_type: string;
+  tax_id: string | null; // now stores TIN No for new registrations
+  business_type: string | null; // legacy; removed from the registration form
+  man_power: string | null;
   address: string | null;
   status: string;
   created_at: string;
@@ -2123,10 +2124,12 @@ export default function Customers() {
                         <div className="font-medium text-purple-900">Company Name</div>
                         <div>{merchantDetails.company_name}</div>
                       </div>
-                      <div className="bg-purple-50 p-3 rounded-lg">
-                        <div className="font-medium text-purple-900">Business Type</div>
-                        <div>{merchantDetails.business_type}</div>
-                      </div>
+                      {merchantDetails.business_type && (
+                        <div className="bg-purple-50 p-3 rounded-lg">
+                          <div className="font-medium text-purple-900">Business Type</div>
+                          <div>{merchantDetails.business_type}</div>
+                        </div>
+                      )}
                       {merchantDetails.business_registration_no && (
                         <div className="bg-purple-50 p-3 rounded-lg">
                           <div className="font-medium text-purple-900">Business Reg No.</div>
@@ -2135,8 +2138,14 @@ export default function Customers() {
                       )}
                       {merchantDetails.tax_id && (
                         <div className="bg-purple-50 p-3 rounded-lg">
-                          <div className="font-medium text-purple-900">Tax ID</div>
+                          <div className="font-medium text-purple-900">TIN No</div>
                           <div>{merchantDetails.tax_id}</div>
+                        </div>
+                      )}
+                      {merchantDetails.man_power && (
+                        <div className="bg-purple-50 p-3 rounded-lg">
+                          <div className="font-medium text-purple-900">Man Power</div>
+                          <div>{merchantDetails.man_power}</div>
                         </div>
                       )}
                     </div>
@@ -2340,7 +2349,12 @@ export default function Customers() {
                   </h4>
                   <div className="space-y-2 text-sm">
                     <div><span className="font-medium">Company Name:</span> {selectedApplication.company_name}</div>
-                    <div><span className="font-medium">Business Type:</span> {selectedApplication.business_type}</div>
+                    {selectedApplication.business_type && (
+                      <div><span className="font-medium">Business Type:</span> {selectedApplication.business_type}</div>
+                    )}
+                    {selectedApplication.man_power && (
+                      <div><span className="font-medium">Man Power:</span> {selectedApplication.man_power}</div>
+                    )}
                     <div><span className="font-medium">Referral Code:</span>
                       <Badge variant="outline" className="ml-2">
                         {selectedApplication.referral_code || 'N/A'}
@@ -2364,7 +2378,7 @@ export default function Customers() {
                     </div>
                   </div>
                   <div>
-                    <span className="font-medium">Tax ID:</span>
+                    <span className="font-medium">TIN No:</span>
                     <div className="mt-1 text-muted-foreground">
                       {selectedApplication.tax_id || 'Not provided'}
                     </div>

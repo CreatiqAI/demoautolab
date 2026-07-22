@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Store, ArrowLeft, CheckCircle2, Upload, X, Plus, Globe, FileText, Building, Image, Loader2 } from 'lucide-react';
+import { Store, ArrowLeft, CheckCircle2, Upload, X, Plus, Globe, FileText, Building, Image, Loader2, Users } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -20,7 +20,6 @@ interface MerchantRegisterFormProps {
 }
 
 export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegisterFormProps) {
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   // Local blob previews for just-picked workshop photos — the merchant-documents
@@ -39,18 +38,15 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
     phone: '',
     email: '',
     dateOfBirth: '',
-    password: '',
-    confirmPassword: '',
     companyName: '',
     businessRegistrationNo: '',
-    taxId: '',
-    businessType: '',
+    tinNo: '',
+    manPower: '',
     address: '',
     // Additional fields
     companyProfileUrl: '',
     socialMediaLinks: [] as SocialMediaLink[],
     ssmDocumentUrl: '',
-    bankProofUrl: '',
     paymentSlipUrl: '',
     workshopPhotos: [] as string[]
   });
@@ -152,27 +148,6 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
       toast.success('SSM document uploaded');
     } else {
       toast.error('Failed to upload SSM document');
-    }
-    setUploading(false);
-  };
-
-  // Handle bank proof upload
-  const handleBankProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File size must be less than 10MB');
-      return;
-    }
-
-    setUploading(true);
-    const url = await uploadFile(file, 'bank-proof');
-    if (url) {
-      setMerchantForm({ ...merchantForm, bankProofUrl: url });
-      toast.success('Bank proof uploaded');
-    } else {
-      toast.error('Failed to upload bank proof');
     }
     setUploading(false);
   };
@@ -285,28 +260,28 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
       return;
     }
 
-    if (merchantForm.password.length < 8) {
-      toast.error('Password must be at least 8 characters long');
-      return;
-    }
-
-    if (merchantForm.password !== merchantForm.confirmPassword) {
-      toast.error('Passwords do not match');
+    if (!merchantForm.email || !merchantForm.email.includes('@')) {
+      toast.error('Please provide a valid email address');
       return;
     }
 
     if (!merchantForm.companyName.trim()) {
-      toast.error('Company name is required');
-      return;
-    }
-
-    if (!merchantForm.businessType) {
-      toast.error('Please select a business type');
+      toast.error('Name of corporation is required');
       return;
     }
 
     if (!merchantForm.businessRegistrationNo.trim()) {
-      toast.error('Business registration number is required');
+      toast.error('Registration number is required');
+      return;
+    }
+
+    if (!merchantForm.tinNo.trim()) {
+      toast.error('TIN number is required');
+      return;
+    }
+
+    if (!merchantForm.manPower) {
+      toast.error('Please select your man power (number of staff)');
       return;
     }
 
@@ -315,13 +290,13 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
       return;
     }
 
-    if (!merchantForm.ssmDocumentUrl) {
-      toast.error('SSM document is required');
+    if (!merchantForm.dateOfBirth) {
+      toast.error('Date of birth is required');
       return;
     }
 
-    if (!merchantForm.bankProofUrl) {
-      toast.error('Bank proof is required');
+    if (!merchantForm.ssmDocumentUrl) {
+      toast.error('SSM document is required');
       return;
     }
 
@@ -330,18 +305,8 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
       return;
     }
 
-    if (!merchantForm.dateOfBirth) {
-      toast.error('Date of birth is required');
-      return;
-    }
-
     if (!merchantForm.paymentSlipUrl) {
       toast.error('Payment slip is required');
-      return;
-    }
-
-    if (!merchantForm.email || !merchantForm.email.includes('@')) {
-      toast.error('Please provide a valid email address');
       return;
     }
 
@@ -351,15 +316,20 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
     try {
       const authEmail = merchantForm.email;
 
+      // No password: merchants sign in via phone OTP (auth_method 'phone_otp' routes
+      // login to the OTP flow — see lookup_account_by_phone). We still need a password
+      // for Supabase signUp, so generate a random one the applicant never uses.
+      const randomPassword = `otp_${normalizedPhone}_${crypto.randomUUID()}`;
+
       // First, create the user account using Supabase auth directly
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: authEmail,
-        password: merchantForm.password,
+        password: randomPassword,
         options: {
           data: {
             phone: normalizedPhone,
             full_name: merchantForm.username,
-            auth_method: 'merchant_registration'
+            auth_method: 'phone_otp'
           }
         }
       });
@@ -434,8 +404,8 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
           code_id: null, // No longer using merchant_codes table
           company_name: merchantForm.companyName,
           business_registration_no: merchantForm.businessRegistrationNo,
-          tax_id: merchantForm.taxId || null,
-          business_type: merchantForm.businessType,
+          tax_id: merchantForm.tinNo || null, // tax_id column now holds the TIN No
+          man_power: merchantForm.manPower || null,
           address: merchantForm.address,
           status: 'PENDING',
           // Contact info
@@ -444,7 +414,6 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
           company_profile_url: merchantForm.companyProfileUrl || null,
           social_media_links: merchantForm.socialMediaLinks.filter(l => l.url),
           ssm_document_url: merchantForm.ssmDocumentUrl,
-          bank_proof_url: merchantForm.bankProofUrl,
           payment_slip_url: merchantForm.paymentSlipUrl,
           workshop_photos: merchantForm.workshopPhotos,
           referral_code: salesmanCode.toUpperCase() || null, // Use the salesman code used for access
@@ -584,7 +553,7 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="email">Email Address *</Label>
+                        <Label htmlFor="email">Email (for e-invoice) *</Label>
                         <Input
                           id="email"
                           type="email"
@@ -597,7 +566,7 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="dob">Date of Birth *</Label>
+                      <Label htmlFor="dob">Date of Birth (for promotions) *</Label>
                       <Input
                         id="dob"
                         type="date"
@@ -607,43 +576,9 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="password">Password *</Label>
-                        <div className="relative">
-                          <Input
-                            id="password"
-                            type={showPassword ? 'text' : 'password'}
-                            value={merchantForm.password}
-                            onChange={(e) => setMerchantForm({...merchantForm, password: e.target.value})}
-                            required
-                            minLength={8}
-                            className="pr-10"
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                            onClick={() => setShowPassword(!showPassword)}
-                          >
-                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="confirm-password">Confirm Password *</Label>
-                        <Input
-                          id="confirm-password"
-                          type={showPassword ? 'text' : 'password'}
-                          value={merchantForm.confirmPassword}
-                          onChange={(e) => setMerchantForm({...merchantForm, confirmPassword: e.target.value})}
-                          required
-                          minLength={8}
-                        />
-                      </div>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      No password needed — you'll sign in with a one-time code (OTP) sent to your phone number.
+                    </p>
                   </div>
 
                   {/* Business Information */}
@@ -653,42 +588,21 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
                       Business Information
                     </h3>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="company-name">Business Name *</Label>
-                        <Input
-                          id="company-name"
-                          type="text"
-                          placeholder="Your business name"
-                          value={merchantForm.companyName}
-                          onChange={(e) => setMerchantForm({...merchantForm, companyName: e.target.value})}
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="business-type">Business Type *</Label>
-                        <Select
-                          value={merchantForm.businessType}
-                          onValueChange={(value) => setMerchantForm({...merchantForm, businessType: value})}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Wholesaler">Wholesaler</SelectItem>
-                            <SelectItem value="Retailer">Retailer</SelectItem>
-                            <SelectItem value="Workshop">Workshop</SelectItem>
-                            <SelectItem value="Dealer">Dealer</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company-name">Name of Corporation *</Label>
+                      <Input
+                        id="company-name"
+                        type="text"
+                        placeholder="Your company / corporation name"
+                        value={merchantForm.companyName}
+                        onChange={(e) => setMerchantForm({...merchantForm, companyName: e.target.value})}
+                        required
+                      />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="business-reg">Business Registration No. *</Label>
+                        <Label htmlFor="business-reg">Registration No. *</Label>
                         <Input
                           id="business-reg"
                           type="text"
@@ -700,15 +614,38 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="tax-id">Tax ID / GST No.</Label>
+                        <Label htmlFor="tin-no">TIN No. *</Label>
                         <Input
-                          id="tax-id"
+                          id="tin-no"
                           type="text"
-                          placeholder="Optional"
-                          value={merchantForm.taxId}
-                          onChange={(e) => setMerchantForm({...merchantForm, taxId: e.target.value})}
+                          placeholder="Tax Identification No."
+                          value={merchantForm.tinNo}
+                          onChange={(e) => setMerchantForm({...merchantForm, tinNo: e.target.value})}
+                          required
                         />
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="man-power" className="flex items-center gap-1">
+                        <Users className="h-4 w-4" />
+                        Man Power (number of staff) *
+                      </Label>
+                      <Select
+                        value={merchantForm.manPower}
+                        onValueChange={(value) => setMerchantForm({...merchantForm, manPower: value})}
+                      >
+                        <SelectTrigger id="man-power">
+                          <SelectValue placeholder="Select number of staff" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1-5">1 – 5</SelectItem>
+                          <SelectItem value="6-10">6 – 10</SelectItem>
+                          <SelectItem value="11-20">11 – 20</SelectItem>
+                          <SelectItem value="21-50">21 – 50</SelectItem>
+                          <SelectItem value="50+">50+</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
@@ -738,9 +675,12 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
                     </div>
 
                     {/* Social Media Links */}
+                    {/* Header is a plain div, not a <Label>: a <label> forwards clicks to
+                        its descendant button, so wrapping the Add button in one made a
+                        single click add two rows / stray clicks add rows. */}
                     <div className="space-y-2">
-                      <Label className="flex items-center justify-between">
-                        <span>Social Media Links</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Social Media Links</span>
                         <Button
                           type="button"
                           variant="outline"
@@ -751,7 +691,7 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
                           <Plus className="h-4 w-4 mr-1" />
                           Add
                         </Button>
-                      </Label>
+                      </div>
                       {merchantForm.socialMediaLinks.map((link, index) => (
                         <div key={index} className="flex gap-2">
                           <Select
@@ -822,42 +762,6 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
                               type="file"
                               accept=".pdf,image/*"
                               onChange={handleSSMUpload}
-                              className="hidden"
-                              disabled={uploading}
-                            />
-                          </label>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Bank Proof */}
-                    <div className="space-y-2">
-                      <Label>Business Bank Proof *</Label>
-                      <div className="border-2 border-dashed rounded-lg p-4">
-                        {merchantForm.bankProofUrl ? (
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle2 className="h-5 w-5 text-green-500" />
-                              <span className="text-sm">Bank proof uploaded</span>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setMerchantForm({...merchantForm, bankProofUrl: ''})}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <label className="flex flex-col items-center cursor-pointer">
-                            <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                            <span className="text-sm text-muted-foreground">Upload Bank Statement/Proof</span>
-                            <span className="text-xs text-muted-foreground">(PDF or Image, max 10MB)</span>
-                            <input
-                              type="file"
-                              accept=".pdf,image/*"
-                              onChange={handleBankProofUpload}
                               className="hidden"
                               disabled={uploading}
                             />

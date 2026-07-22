@@ -144,8 +144,11 @@ const Auth = ({ initialMode = 'login' }: { initialMode?: 'login' | 'register' | 
         return;
       }
 
-      if (acct.account_type === 'merchant') {
-        // Merchant (B2B) → send OTP and go to the verify step.
+      // Merchants and passwordless (phone-OTP) accounts sign in via OTP. A merchant
+      // application that's still PENDING keeps customer_type 'normal' (so they shop as
+      // B2C) but registered passwordless, so login_method comes back as 'otp'.
+      if (acct.login_method === 'otp' || acct.account_type === 'merchant') {
+        // Send OTP and go to the verify step.
         const { error } = await sendPhoneOTP(normalizedPhone, { testMode: testOtpMode });
         if (error) {
           toast.error(error.message || 'Failed to send OTP. Please try again.');
@@ -153,7 +156,7 @@ const Auth = ({ initialMode = 'login' }: { initialMode?: 'login' | 'register' | 
           return;
         }
         toast.success(testOtpMode ? 'Test mode: Use OTP 123456' : 'OTP sent to your phone!');
-        setResolved({ email: acct.email, account_type: 'merchant' });
+        setResolved({ email: acct.email, account_type: acct.account_type === 'merchant' ? 'merchant' : 'normal' });
         setMerchantOtpForm({ phone: customerForm.phone, otp: '' });
         setOtpSent(true);
         setResendTimer(60);
