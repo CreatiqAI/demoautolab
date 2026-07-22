@@ -428,10 +428,6 @@ export default function Cart() {
                         <span>Shipping</span>
                         <span className="text-muted-foreground">Calculated at checkout</span>
                       </div>
-                      <div className="flex justify-between text-xs sm:text-sm">
-                        <span>Tax</span>
-                        <span className="text-muted-foreground">Calculated at checkout</span>
-                      </div>
                     </>
                   )}
                 </div>

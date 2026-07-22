@@ -364,8 +364,8 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess: _onOrde
   };
 
   const getTax = () => {
-    // 6% SST on (subtotal + AutoLab shipping). Vendor COD fees are not in the order.
-    return (getSubtotal() + getOnlineShippingFee()) * 0.06;
+    // SST removed — no tax is charged on orders.
+    return 0;
   };
 
   const getTotal = () => {
@@ -424,8 +424,7 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess: _onOrde
       // If there's no AutoLab portion, vouchers cannot be used.
       const autolabSubtotal = autolabGroup?.subtotal ?? 0;
       const autolabShipping = getAutoLabFee();
-      const autolabTax = (autolabSubtotal + autolabShipping) * 0.06;
-      const orderAmount = autolabSubtotal + autolabShipping + autolabTax;
+      const orderAmount = autolabSubtotal + autolabShipping; // SST removed
 
       const { data, error } = await supabase.rpc('validate_voucher', {
         p_voucher_code: codeToValidate.trim(),
@@ -1103,11 +1102,6 @@ const CheckoutModal = ({ isOpen, onClose, selectedItems, onOrderSuccess: _onOrde
                   </span>
                 </div>
               )}
-              <div className="flex justify-between text-sm">
-                <span>SST (6%)</span>
-                <span className="font-medium">{formatPrice(getTax())}</span>
-              </div>
-
               {voucherDiscount > 0 && (
                 <div className="flex justify-between text-sm text-green-600">
                   <span className="flex items-center gap-1">

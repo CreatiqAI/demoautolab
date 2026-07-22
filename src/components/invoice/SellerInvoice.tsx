@@ -493,7 +493,6 @@ export function SellerInvoice({ order, slice }: SellerInvoiceProps) {
                   All items remain the property of the company until fully paid
                 </li>
                 <li>No return or exchange of goods after inspection</li>
-                <li>All prices are subject to 10% service tax</li>
                 <li>
                   Stock borrowed for more than seven (7) days will be billed in
                   full of <strong>AUTO LABS SDN BHD</strong>

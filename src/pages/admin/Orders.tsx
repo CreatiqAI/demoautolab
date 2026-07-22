@@ -875,7 +875,9 @@ export default function Orders() {
                 <span className="text-muted-foreground">Delivery</span>
                 <span className="tabular-nums">{order.delivery_fee > 0 ? formatCurrency(order.delivery_fee) : 'Pay on delivery'}</span>
               </div>
-              <div className="flex justify-between"><span className="text-muted-foreground">SST</span><span className="tabular-nums">{formatCurrency(order.tax)}</span></div>
+              {order.tax > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">SST</span><span className="tabular-nums">{formatCurrency(order.tax)}</span></div>
+              )}
               <div className="flex justify-between pt-2 mt-1 border-t font-medium"><span>Total</span><span className="tabular-nums">{formatCurrency(order.total)}</span></div>
               <p className="text-xs text-muted-foreground pt-1">
                 {order.payment_state} via {order.payment_method.replace(/-/g, ' ')}

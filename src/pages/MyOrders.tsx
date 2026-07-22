@@ -1374,7 +1374,9 @@ export default function MyOrders() {
                     <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(selectedOrder.discount)}</span></div>
                   )}
                   <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span>{selectedOrder.delivery_fee > 0 ? formatCurrency(selectedOrder.delivery_fee) : 'Pay on delivery'}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">SST (6%)</span><span>{formatCurrency(selectedOrder.tax)}</span></div>
+                  {selectedOrder.tax > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">SST (6%)</span><span>{formatCurrency(selectedOrder.tax)}</span></div>
+                  )}
                   <div className="flex justify-between pt-3 mt-2 border-t font-medium"><span>Total</span><span>{formatCurrency(selectedOrder.total)}</span></div>
                   <p className="text-xs text-muted-foreground pt-1">via {selectedOrder.payment_method.replace('-', ' ')}</p>
                 </div>

@@ -574,10 +574,12 @@ export default function ArchivedOrders() {
                     <span>Delivery Fee:</span>
                     <span>{selectedOrder.delivery_fee > 0 ? formatCurrency(selectedOrder.delivery_fee) : 'Pay on delivery'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>SST (6%):</span>
-                    <span>{formatCurrency(selectedOrder.tax)}</span>
-                  </div>
+                  {selectedOrder.tax > 0 && (
+                    <div className="flex justify-between">
+                      <span>SST (6%):</span>
+                      <span>{formatCurrency(selectedOrder.tax)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between font-semibold text-base border-t pt-2">
                     <span>Total:</span>
                     <span>{formatCurrency(selectedOrder.total)}</span>
