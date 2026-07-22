@@ -113,9 +113,13 @@ export default function MerchantRegisterForm({ onBackToLogin }: MerchantRegister
       const fileExt = file.name.split('.').pop();
       const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
+      // No upsert: applicants are anonymous (anon role) and the filename is already
+      // randomized, so a plain insert is enough. `upsert: true` turns this into an
+      // INSERT ... ON CONFLICT DO UPDATE, which makes Postgres RLS also require an
+      // UPDATE policy for the anon role — none exists → 400 Bad Request on every file.
       const { error } = await supabase.storage
         .from('merchant-documents')
-        .upload(fileName, file, { upsert: true });
+        .upload(fileName, file, { contentType: file.type || undefined });
 
       if (error) {
         return null;
