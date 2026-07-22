@@ -996,6 +996,32 @@ const ProductDetails = () => {
                         </LoginPromptButton>
                       )}
                     </div>
+
+                    {/* What's included in the bundle */}
+                    <div className="mt-3 border-t border-lime-200/70 pt-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                        What's included ({bundleComponents.length})
+                      </p>
+                      <ul className="space-y-1.5">
+                        {bundleComponents.map((c) => (
+                          <li key={c.id} className="flex items-center gap-2 text-xs text-slate-700">
+                            {c.default_image_url ? (
+                              <img
+                                src={transformImage(c.default_image_url, { width: 64, quality: 70 })}
+                                alt={c.name}
+                                className="h-8 w-8 rounded object-cover border border-slate-200 flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="h-8 w-8 rounded bg-slate-100 border border-slate-200 flex-shrink-0" />
+                            )}
+                            <span className="flex-1 min-w-0 truncate">{c.name}</span>
+                            <span className="text-slate-400 line-through">
+                              {formatPrice(getDisplayPrice(c.normal_price, c.merchant_price))}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 )}
 
