@@ -91,6 +91,8 @@ interface ReferredMerchant {
   approved_at: string | null;
   registered_at: string;
   orders: ReferralOrder[];
+  /** Completed refunds for this merchant's orders — deduct from commission. */
+  refunds: { amount: number; date: string }[];
 }
 
 interface SalesmanFormData {
@@ -215,11 +217,32 @@ export default function Salesmen() {
         );
       }
 
+      // 3. Completed refunds for those merchants — these DEDUCT from commission,
+      //    since the customer got their money back for that (part of the) order.
+      const refundRows = await fetchAllRows(() => supabase
+        .from('returns' as any)
+        .select('refund_amount, refund_status, orders!inner(customer_profile_id)')
+        .eq('refund_status', 'COMPLETED')
+        .order('id', { ascending: true }));
+
+      const salesmanRefundTotals = new Map<string, number>();
+      for (const r of (refundRows as any[] | null) ?? []) {
+        const cid = r.orders?.customer_profile_id;
+        const salesmanId = cid ? customerToSalesman.get(cid) : undefined;
+        if (!salesmanId) continue;
+        salesmanRefundTotals.set(
+          salesmanId,
+          (salesmanRefundTotals.get(salesmanId) ?? 0) + Math.abs(Number(r.refund_amount) || 0)
+        );
+      }
+
       const result: Record<string, number> = {};
       for (const s of list) {
         const orderTotal = salesmanOrderTotals.get(s.id) ?? 0;
+        const refundTotal = salesmanRefundTotals.get(s.id) ?? 0;
         const rate = Number(s.commission_rate) || 0;
-        result[s.id] = (orderTotal * rate) / 100;
+        // Net of refunds, never below zero.
+        result[s.id] = (Math.max(0, orderTotal - refundTotal) * rate) / 100;
       }
       setCalculatedCommissions(result);
     } catch {
@@ -470,6 +493,22 @@ export default function Salesmen() {
         ordersByCustomer.set(o.customer_profile_id, list);
       }
 
+      // Completed refunds for these merchants' orders — deducted from commission.
+      const refundRows = await fetchAllRows(() => supabase
+        .from('returns' as any)
+        .select('refund_amount, refund_processed_at, created_at, refund_status, orders!inner(customer_profile_id)')
+        .eq('refund_status', 'COMPLETED')
+        .in('orders.customer_profile_id', customerIds)
+        .order('id', { ascending: true }));
+      const refundsByCustomer = new Map<string, { amount: number; date: string }[]>();
+      for (const r of (refundRows as any[] | null) ?? []) {
+        const cid = r.orders?.customer_profile_id;
+        if (!cid) continue;
+        const list = refundsByCustomer.get(cid) ?? [];
+        list.push({ amount: Math.abs(Number(r.refund_amount) || 0), date: r.refund_processed_at || r.created_at || '' });
+        refundsByCustomer.set(cid, list);
+      }
+
       const merged: ReferredMerchant[] = registrations.map(r => {
         const profile = profileById.get(r.customer_id);
         return {
@@ -483,6 +522,7 @@ export default function Salesmen() {
           approved_at: r.approved_at,
           registered_at: r.created_at,
           orders: ordersByCustomer.get(r.customer_id) ?? [],
+          refunds: refundsByCustomer.get(r.customer_id) ?? [],
         };
       });
       setReferrals(merged);
@@ -525,6 +565,14 @@ export default function Salesmen() {
   const filterOrdersForMonth = (orders: ReferralOrder[]) => {
     if (referralsMonth === 'all') return orders;
     return orders.filter(o => o.created_at.slice(0, 7) === referralsMonth);
+  };
+
+  // Refunds deducted in the selected period (by refund completion date).
+  const refundedForMonth = (refunds: { amount: number; date: string }[]) => {
+    const inPeriod = referralsMonth === 'all'
+      ? refunds
+      : refunds.filter(f => (f.date || '').slice(0, 7) === referralsMonth);
+    return inPeriod.reduce((s, f) => s + f.amount, 0);
   };
 
   const filteredSalesmen = salesmen.filter(salesman => {
@@ -1068,7 +1116,9 @@ export default function Salesmen() {
             const periodCommission = referrals.reduce((sum, r) => {
               if (r.status !== 'APPROVED') return sum;
               const orders = filterOrdersForMonth(r.orders);
-              return sum + (orders.reduce((s, o) => s + o.total, 0) * rate) / 100;
+              const gross = orders.reduce((s, o) => s + o.total, 0);
+              const net = Math.max(0, gross - refundedForMonth(r.refunds));
+              return sum + (net * rate) / 100;
             }, 0);
             const periodOrderCount = referrals.reduce(
               (sum, r) => sum + filterOrdersForMonth(r.orders).length,
@@ -1076,6 +1126,10 @@ export default function Salesmen() {
             );
             const periodOrderValue = referrals.reduce(
               (sum, r) => sum + filterOrdersForMonth(r.orders).reduce((s, o) => s + o.total, 0),
+              0
+            );
+            const periodRefunded = referrals.reduce(
+              (sum, r) => sum + refundedForMonth(r.refunds),
               0
             );
             return (
@@ -1119,8 +1173,20 @@ export default function Salesmen() {
                     <div className="text-xl font-semibold text-emerald-700">
                       {formatCurrency(periodCommission)}
                     </div>
+                    {periodRefunded > 0 && (
+                      <div className="text-[11px] text-red-600 mt-0.5">
+                        net of {formatCurrency(periodRefunded)} refunded
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {periodRefunded > 0 && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-center justify-between">
+                    <span>Refund deductions ({referralsMonth === 'all' ? 'all time' : 'this period'}) — commission removed on refunded orders</span>
+                    <span className="font-semibold">− {formatCurrency(periodRefunded)}</span>
+                  </div>
+                )}
 
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
@@ -1137,7 +1203,9 @@ export default function Salesmen() {
                       {referrals.map(r => {
                         const periodOrders = filterOrdersForMonth(r.orders);
                         const value = periodOrders.reduce((s, o) => s + o.total, 0);
-                        const commission = r.status === 'APPROVED' ? (value * rate) / 100 : 0;
+                        const refunded = refundedForMonth(r.refunds);
+                        const netValue = Math.max(0, value - refunded);
+                        const commission = r.status === 'APPROVED' ? (netValue * rate) / 100 : 0;
                         const isExpanded = expandedMerchants.has(r.registration_id);
                         return (
                           <Fragment key={r.registration_id}>
@@ -1180,7 +1248,12 @@ export default function Salesmen() {
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-right">{periodOrders.length}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(value)}</TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(value)}
+                                {refunded > 0 && (
+                                  <div className="text-[11px] text-red-600">− {formatCurrency(refunded)} refunded</div>
+                                )}
+                              </TableCell>
                               <TableCell className="text-right font-medium">
                                 {r.status === 'APPROVED' ? (
                                   <span className="text-emerald-700">{formatCurrency(commission)}</span>

@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Eye, ArrowLeft, Package, Truck, CheckCircle, Clock, XCircle, CreditCard, Receipt, ShoppingBag, Lock, Unlock, Calendar, TrendingUp, ExternalLink, RotateCcw, MessageCircle, Ban, AlertTriangle, Loader2, FileDown, Printer, X, MapPin, PackageOpen } from 'lucide-react';
+import { Eye, ArrowLeft, Package, Truck, CheckCircle, Clock, XCircle, CreditCard, Receipt, ShoppingBag, Lock, Unlock, Calendar, TrendingUp, ExternalLink, RotateCcw, MessageCircle, Ban, AlertTriangle, Loader2, FileDown, Printer, X, MapPin } from 'lucide-react';
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -885,18 +885,8 @@ export default function MyOrders() {
 
                         <div className="flex items-center gap-2 sm:gap-3">
                           <span className="font-semibold text-sm sm:text-base text-gray-900">{formatCurrency(order.total)}</span>
-                          {order.status === 'COMPLETED' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 px-2 sm:px-3"
-                              onClick={(e) => { e.stopPropagation(); navigate(`/return-request?order=${order.id}`); }}
-                              title="Request a return or refund"
-                            >
-                              <PackageOpen className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline ml-1.5">Return</span>
-                            </Button>
-                          )}
+                          {/* Returns are recorded by AutoLab staff — customers request
+                              via support, so no self-service return button here. */}
                           <Button
                             variant="outline"
                             size="sm"

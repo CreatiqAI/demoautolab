@@ -6,6 +6,8 @@ import {
   useReturns,
   Return,
   ReturnStatus,
+  ReturnReason,
+  RETURN_REASONS,
   getReturnStatusLabel,
   getReturnStatusColor,
   getReturnReasonLabel,
@@ -130,7 +132,7 @@ export default function AdminReturns() {
   // Create return form
   const [createReturnForm, setCreateReturnForm] = useState({
     orderNo: '',
-    reason: 'DEFECTIVE' as 'DEFECTIVE' | 'WRONG_ITEM',
+    reason: 'DEFECTIVE' as ReturnReason,
     reasonDetails: '',
     refundMethod: 'ORIGINAL_PAYMENT' as 'ORIGINAL_PAYMENT' | 'EXCHANGE',
     returnInstructions: `Please ship the item(s) back to:\nAUTO LABS SDN BHD\n17, Jalan 7/95B, Cheras Utama\n56100 Cheras, WP Kuala Lumpur\n\nPlease include:\n- RMA number written on the outside of the package\n- Original packaging if available`,
@@ -138,6 +140,9 @@ export default function AdminReturns() {
   });
   const [foundOrder, setFoundOrder] = useState<any>(null);
   const [searchingOrder, setSearchingOrder] = useState(false);
+  // Which order items are being returned, and how many of each. Keyed by
+  // order_item_id. Populated (all selected, full qty) when an order is found.
+  const [returnItemSel, setReturnItemSel] = useState<Record<string, { selected: boolean; quantity: number }>>({});
 
   // Refund form
   const [refundAmount, setRefundAmount] = useState('');
@@ -512,7 +517,10 @@ export default function AdminReturns() {
             </Button>
           )}
 
-          {['ITEM_RECEIVED', 'INSPECTING'].includes(item.status) && (
+          {/* Admin-created returns are APPROVED and refunded directly; customer
+              returns are refunded once the item is received/inspected. Hide once
+              the refund is already completed. */}
+          {['APPROVED', 'ITEM_RECEIVED', 'INSPECTING'].includes(item.status) && (item as any).refund_status !== 'COMPLETED' && (
             <Button
               size="sm"
               variant="ghost"
@@ -1152,7 +1160,7 @@ export default function AdminReturns() {
       </Dialog>
 
       {/* Create Return Dialog */}
-      <Dialog open={showCreateReturnDialog} onOpenChange={(open) => { setShowCreateReturnDialog(open); if (!open) { setFoundOrder(null); setCreateReturnForm(prev => ({ ...prev, orderNo: '', reasonDetails: '' })); } }}>
+      <Dialog open={showCreateReturnDialog} onOpenChange={(open) => { setShowCreateReturnDialog(open); if (!open) { setFoundOrder(null); setReturnItemSel({}); setCreateReturnForm(prev => ({ ...prev, orderNo: '', reasonDetails: '' })); } }}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Return (Admin)</DialogTitle>
@@ -1185,6 +1193,13 @@ export default function AdminReturns() {
                         setFoundOrder(null);
                       } else {
                         setFoundOrder(data);
+                        // Default: every line selected at its full ordered quantity;
+                        // the admin unticks / lowers qty for a partial return.
+                        const init: Record<string, { selected: boolean; quantity: number }> = {};
+                        for (const it of ((data as any).order_items || [])) {
+                          init[it.id] = { selected: true, quantity: it.quantity };
+                        }
+                        setReturnItemSel(init);
                       }
                     } catch (err: any) {
                       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -1211,8 +1226,9 @@ export default function AdminReturns() {
                   <Select value={createReturnForm.reason} onValueChange={(v: any) => setCreateReturnForm(prev => ({ ...prev, reason: v }))}>
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="DEFECTIVE">Defective / Damaged</SelectItem>
-                      <SelectItem value="WRONG_ITEM">Wrong Item Received</SelectItem>
+                      {RETURN_REASONS.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1240,17 +1256,65 @@ export default function AdminReturns() {
 
                 <div>
                   <Label>Items to Return</Label>
+                  <p className="text-xs text-gray-500 mt-0.5">Tick each item being returned and set the returned quantity.</p>
                   <div className="mt-2 space-y-2">
-                    {(foundOrder.order_items || []).map((item: any) => (
-                      <div key={item.id} className="flex items-center justify-between p-2 bg-white border rounded text-sm">
-                        <div>
-                          <div className="font-medium">{item.component_name}</div>
-                          <div className="text-xs text-gray-500">{item.component_sku} | Qty: {item.quantity} | RM {parseFloat(item.unit_price).toFixed(2)}</div>
+                    {(foundOrder.order_items || []).map((item: any) => {
+                      const sel = returnItemSel[item.id] ?? { selected: false, quantity: item.quantity };
+                      const maxQty = item.quantity;
+                      return (
+                        <div key={item.id} className="flex items-center justify-between gap-3 p-2 bg-white border rounded text-sm">
+                          <div className="flex items-start gap-2 min-w-0">
+                            <Checkbox
+                              checked={sel.selected}
+                              onCheckedChange={(checked) =>
+                                setReturnItemSel(prev => ({
+                                  ...prev,
+                                  [item.id]: { selected: checked as boolean, quantity: prev[item.id]?.quantity ?? maxQty },
+                                }))
+                              }
+                              className="mt-0.5"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-medium truncate">{item.component_name}</div>
+                              <div className="text-xs text-gray-500">{item.component_sku} · Ordered {item.quantity} · RM {parseFloat(item.unit_price).toFixed(2)} each</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <span className="text-xs text-gray-400">Qty</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={maxQty}
+                              value={sel.quantity}
+                              disabled={!sel.selected}
+                              onChange={(e) => {
+                                const q = Math.max(1, Math.min(maxQty, parseInt(e.target.value || '1', 10) || 1));
+                                setReturnItemSel(prev => ({
+                                  ...prev,
+                                  [item.id]: { selected: prev[item.id]?.selected ?? true, quantity: q },
+                                }));
+                              }}
+                              className="h-8 w-16"
+                            />
+                          </div>
                         </div>
-                        <Checkbox defaultChecked />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
+                  {/* Refund preview */}
+                  {(() => {
+                    const total = (foundOrder.order_items || []).reduce((sum: number, it: any) => {
+                      const sel = returnItemSel[it.id];
+                      return sel?.selected ? sum + parseFloat(it.unit_price) * sel.quantity : sum;
+                    }, 0);
+                    const count = (foundOrder.order_items || []).filter((it: any) => returnItemSel[it.id]?.selected).length;
+                    return (
+                      <div className="mt-2 flex items-center justify-between text-sm font-medium">
+                        <span className="text-gray-500">{count} item{count !== 1 ? 's' : ''} selected</span>
+                        <span>Refund: RM {total.toFixed(2)}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </>
             )}
@@ -1262,14 +1326,21 @@ export default function AdminReturns() {
               disabled={!foundOrder || submitting}
               onClick={async () => {
                 if (!foundOrder) return;
+                // Only the ticked items, at the returned quantity the admin set.
+                const items = (foundOrder.order_items || [])
+                  .filter((item: any) => returnItemSel[item.id]?.selected)
+                  .map((item: any) => ({
+                    order_item_id: item.id,
+                    component_sku: item.component_sku,
+                    component_name: item.component_name,
+                    quantity: returnItemSel[item.id].quantity,
+                    unit_price: parseFloat(item.unit_price),
+                  }));
+                if (items.length === 0) {
+                  toast({ title: 'No items selected', description: 'Select at least one item to return.', variant: 'destructive' });
+                  return;
+                }
                 setSubmitting(true);
-                const items = (foundOrder.order_items || []).map((item: any) => ({
-                  order_item_id: item.id,
-                  component_sku: item.component_sku,
-                  component_name: item.component_name,
-                  quantity: item.quantity,
-                  unit_price: parseFloat(item.unit_price),
-                }));
                 const result = await adminCreateReturn({
                   order_id: foundOrder.id,
                   customer_id: foundOrder.user_id,
@@ -1284,6 +1355,7 @@ export default function AdminReturns() {
                 if (result) {
                   setShowCreateReturnDialog(false);
                   setFoundOrder(null);
+                  setReturnItemSel({});
                   fetchReturns();
                 }
               }}

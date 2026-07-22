@@ -75,7 +75,6 @@ import PointsRewards from './pages/admin/PointsRewards';
 import Salesmen from './pages/admin/Salesmen';
 
 // Returns Pages
-import ReturnRequest from './pages/ReturnRequest';
 import MyReturns from './pages/MyReturns';
 import ReturnPolicy from './pages/ReturnPolicy';
 import Privacy from './pages/Privacy';
@@ -150,7 +149,8 @@ const App = () => (
                   <Route path="/my-2ndhand-listings" element={<My2ndHandListings />} />
                   <Route path="/notification-settings" element={<NotificationSettings />} />
                   {/* Returns Routes */}
-                  <Route path="/return-request" element={<ReturnRequest />} />
+                  {/* Returns are admin-only now — customers can't self-serve. */}
+                  <Route path="/return-request" element={<Navigate to="/my-orders" replace />} />
                   <Route path="/my-returns" element={<MyReturns />} />
                   <Route path="/return-policy" element={<ReturnPolicy />} />
 
