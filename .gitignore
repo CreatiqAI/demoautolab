@@ -54,3 +54,7 @@ PRODUCTION-AUDIT.html
 execute-*.js
 test-*.js
 !playwright.config.ts
+
+# n8n workflow export contains service_role + platform API keys — never commit
+public/AutoLab*.json
+*n8n*secret*
